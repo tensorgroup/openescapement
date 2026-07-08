@@ -4,7 +4,17 @@ Deterministic governance for AI usage — policy-as-artifacts for agentic develo
 
 ## Current State
 
-**Pre-code.** The repo currently holds the product spec; we are actively speccing what to build. No stack, build system, or code structure exists yet — do not assume one.
+v0.1 of the `esc` CLI is implemented (see design doc + plan under `docs/superpowers/`). The registry, dashboard, MCP server, and telemetry pillars are future work.
+
+## Stack & Commands
+
+- Go 1.24, module `github.com/tensorgroup/openescapement`, binary `esc` (`cmd/esc`)
+- **Single external dependency policy:** `gopkg.in/yaml.v3` only — everything else stdlib; system `git` via `os/exec`. This is a security posture, not a preference; adding a dep needs explicit justification.
+- Test: `go test ./...` (integration tests build real temp git repos — no mocks). Lint: `go vet ./...`; format: `gofmt -w .`
+- Layout: `internal/pack` (manifest/fragments), `internal/source` (git fetch + signature verify), `internal/config`, `internal/lockfile`, `internal/render` (compose, managed blocks, governance, mcp merge, constraints), `internal/engine` (plan/apply/status/diff), `internal/cli`
+- Errors: sentinel errors in `internal/esc` map to exit codes — 0 ok, 1 drift/constraint, 2 usage, 3 integrity/signature, 4 other
+- Invariants to preserve: bytes outside a managed block are never modified; nothing is written after a verification or constraint failure; all writes atomic; renderer output deterministic (golden-testable)
+- `ESC_CACHE_DIR` overrides the pack cache (tests rely on this)
 
 ## Key Documents
 
