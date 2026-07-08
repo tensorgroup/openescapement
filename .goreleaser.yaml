@@ -1,0 +1,85 @@
+# Release configuration — see docs/roadmap/release-automation.md.
+# Validate with: go run github.com/goreleaser/goreleaser/v2@latest check
+version: 2
+
+project_name: esc
+
+builds:
+  - id: esc
+    main: ./cmd/esc
+    binary: esc
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/tensorgroup/openescapement/internal/cli.Version={{ .Version }}
+      - -X github.com/tensorgroup/openescapement/internal/cli.Commit={{ .FullCommit }}
+      - -X github.com/tensorgroup/openescapement/internal/cli.Date={{ .CommitDate }}
+    # Commit time, not build time — keeps archives byte-reproducible.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: esc
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+sboms:
+  - id: archives
+    artifacts: archive
+    documents:
+      - "${artifact}.cyclonedx.sbom.json"
+    args: ["$artifact", "--output", "cyclonedx-json=$document"]
+
+# Keyless signing (OIDC from the Actions job); cosign v3 bundle format.
+signs:
+  - id: checksums
+    cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    artifacts: checksum
+    args: ["sign-blob", "--bundle=${signature}", "${artifact}", "--yes"]
+  - id: archives
+    cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    artifacts: archive
+    args: ["sign-blob", "--bundle=${signature}", "${artifact}", "--yes"]
+
+homebrew_casks:
+  - name: esc
+    repository:
+      owner: tensorgroup
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    # Skip (instead of fail) when the tap token secret isn't configured yet.
+    skip_upload: "{{ if .Env.HOMEBREW_TAP_GITHUB_TOKEN }}false{{ else }}true{{ end }}"
+    homepage: https://github.com/tensorgroup/openescapement
+    description: Deterministic governance for AI usage
+    license: Apache-2.0
+    url:
+      verified: github.com/tensorgroup/openescapement
+    hooks:
+      post:
+        # Binaries are cosign-signed but not Apple-notarized; clear quarantine.
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/esc"]
+          end
+
+changelog:
+  use: github-native
+
+release:
+  prerelease: auto
