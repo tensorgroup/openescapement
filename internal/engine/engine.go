@@ -87,8 +87,10 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 			return nil, err
 		}
 		// Lock integrity: same source+ref must resolve to same content.
-		if locked := lock.Pack(ref.Source, ref.Ref); locked != nil {
-			if locked.Hash != hash || (locked.Commit != "" && fetched.Commit != "" && locked.Commit != fetched.Commit) {
+		// Applies to git sources only — local plain dirs are unversioned
+		// development mode, and their edits surface as ordinary drift.
+		if locked := lock.Pack(ref.Source, ref.Ref); locked != nil && locked.Commit != "" && fetched.Commit != "" {
+			if locked.Hash != hash || locked.Commit != fetched.Commit {
 				return nil, fmt.Errorf("%w: pack %s@%s content changed since lock (locked %s, got %s) — a moved tag or tampered source; investigate before re-locking",
 					esc.ErrLockMismatch, ref.Source, ref.Ref, locked.Hash, hash)
 			}
@@ -222,4 +224,3 @@ func prospectiveContent(root string, a Artifact, packs []*pack.Pack) ([]byte, er
 	}
 	return existing, nil
 }
-

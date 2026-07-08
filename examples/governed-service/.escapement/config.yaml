@@ -1,0 +1,9 @@
+schema: 1
+packs:
+  # Local path for the example; real repos point at a git source + signed tag:
+  #   - source: github.com/acme/policy-packs//org
+  #     ref: v1.0.0
+  - source: ../packs/acme-org
+    ref: ""
+    trust: unsigned
+allowed_signers_file: .escapement/allowed_signers

@@ -14,9 +14,9 @@ import (
 
 func TestParseSource(t *testing.T) {
 	cases := []struct {
-		in            string
-		local         bool
-		url, subdir   string
+		in          string
+		local       bool
+		url, subdir string
 	}{
 		{"github.com/acme/policy-packs//org", false, "https://github.com/acme/policy-packs", "org"},
 		{"github.com/acme/policy-packs", false, "https://github.com/acme/policy-packs", ""},
@@ -71,8 +71,8 @@ func initGitRepo(t *testing.T, files map[string]string, tag string) string {
 
 func packFiles() map[string]string {
 	return map[string]string{
-		"org/pack.yaml":       "schema: 1\nname: acme-org\nversion: 1.0.0\nrules: [rules/a.md]\n",
-		"org/rules/a.md":      "## A\nrule a\n",
+		"org/pack.yaml":  "schema: 1\nname: acme-org\nversion: 1.0.0\nrules: [rules/a.md]\n",
+		"org/rules/a.md": "## A\nrule a\n",
 	}
 }
 

@@ -1,0 +1,28 @@
+name: escapement-check
+description: Verify AI policy artifacts are in sync with pinned rule packs (esc status --check)
+branding:
+  icon: check-circle
+  color: green
+inputs:
+  working-directory:
+    description: Directory containing .escapement/config.yaml
+    required: false
+    default: "."
+  version:
+    description: escapement version to install (a tag of tensorgroup/openescapement, or "latest")
+    required: false
+    default: latest
+runs:
+  using: composite
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: stable
+    - name: Install esc
+      shell: bash
+      run: go install github.com/tensorgroup/openescapement/cmd/esc@${{ inputs.version }}
+    - name: Check policy drift
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: esc status --check

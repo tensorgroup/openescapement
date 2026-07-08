@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "packs": [
+    {
+      "source": "../packs/acme-org",
+      "ref": "",
+      "hash": "sha256:04d25f5dcf88a5a83653618a1ef7a73d499eb2afdf80d99c6022b4360a4aba09"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".claude/skills/esc-acme-org-acme-vault",
+      "kind": "dir",
+      "hash": "sha256:7933a1090d5df5918ef30e0d78f10e5cae916085900081766b5e001dc44c35a8"
+    },
+    {
+      "path": ".mcp.json",
+      "kind": "json-keys",
+      "hash": "sha256:b5817aada177a43a2880791616237d1bfd80444e0832c250704e8d5162b628e7",
+      "keys": [
+        "acme-paved-path"
+      ]
+    },
+    {
+      "path": "AGENTS.md",
+      "kind": "block",
+      "hash": "sha256:e5abb502c886ee2c2f46029101848bbdfbf8383d58afc229d91049a1c1020c97"
+    },
+    {
+      "path": "CLAUDE.md",
+      "kind": "block",
+      "hash": "sha256:e5abb502c886ee2c2f46029101848bbdfbf8383d58afc229d91049a1c1020c97"
+    },
+    {
+      "path": "GEMINI.md",
+      "kind": "block",
+      "hash": "sha256:e5abb502c886ee2c2f46029101848bbdfbf8383d58afc229d91049a1c1020c97"
+    },
+    {
+      "path": "GOVERNANCE.md",
+      "kind": "file",
+      "hash": "sha256:d7b602a460219a3d43e097419918ff242d54d92a7cb4d0740c4ae68764d9991b"
+    }
+  ]
+}

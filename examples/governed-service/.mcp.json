@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "acme-paved-path": {
+      "args": [
+        "-y",
+        "@acme/paved-path-mcp"
+      ],
+      "command": "npx"
+    }
+  }
+}

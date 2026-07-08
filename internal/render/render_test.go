@@ -80,11 +80,11 @@ func TestGovernance(t *testing.T) {
 	g := Governance(testPacks())
 	for _, want := range []string{
 		"# Governance", "acme-org", "1.4.0",
-		"## For humans",             // governance-targeted fragment included
-		"| Tailscale",               // catalog table
-		"| banned",                  // status column
-		"hosting-exposure",          // category
-		"## Secrets",                // untargeted fragments included for humans too
+		"## For humans",    // governance-targeted fragment included
+		"| Tailscale",      // catalog table
+		"| banned",         // status column
+		"hosting-exposure", // category
+		"## Secrets",       // untargeted fragments included for humans too
 	} {
 		if !strings.Contains(g, want) {
 			t.Errorf("governance missing %q:\n%s", want, g)

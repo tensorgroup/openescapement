@@ -1,0 +1,71 @@
+schema: 1
+name: acme-org
+version: 0.1.0
+description: Example org-wide AI governance baseline (copy and adapt)
+
+rules:
+  - rules/secrets.md
+  - rules/authn.md
+  - rules/hosting.md
+  - rules/sdlc.md
+  - rules/agent-behavior.md
+  - rules/paved-path.md
+
+skills:
+  - skills/acme-vault
+
+mcp:
+  servers:
+    acme-paved-path:
+      command: npx
+      args: ["-y", "@acme/paved-path-mcp"]
+
+catalog:
+  # Hosting & exposure
+  - name: Tailscale
+    category: hosting-exposure
+    status: preferred
+    notes: Join the org tailnet — https://tailscale.acme.example
+  - name: Headscale
+    category: hosting-exposure
+    status: allowed
+    notes: Self-hosted tailnet for lab clusters
+  - name: Cloudflare Tunnel
+    category: hosting-exposure
+    status: review-required
+    notes: "Request review in #platform-team"
+  - name: Raw port forwarding
+    category: hosting-exposure
+    status: banned
+    notes: No direct exposure of local services to the internet
+  # App hosting
+  - name: Acme Kubernetes (paved road)
+    category: app-hosting
+    status: preferred
+    notes: https://platform.acme.example/docs
+  - name: Vercel
+    category: app-hosting
+    status: allowed
+    notes: Static and preview deployments
+  - name: Lovable
+    category: app-hosting
+    status: allowed
+    notes: POCs only — production must move to an approved platform
+  - name: Model-vendor hosting (Claude artifacts, OpenAI apps)
+    category: app-hosting
+    status: review-required
+    notes: Fine for demos; data-handling review before real user data
+  # Models
+  - name: Anthropic Claude (API)
+    category: model
+    status: preferred
+    notes: Via the org gateway — key issuance at https://keys.acme.example
+  - name: Self-hosted open-weights models
+    category: model
+    status: review-required
+    notes: "Talk to #ml-platform about GPU pool and eval requirements"
+
+constraints:
+  max_file_bytes: 32768
+  forbidden_patterns:
+    - "(ignore|disregard) (the )?(above|previous|governance)"

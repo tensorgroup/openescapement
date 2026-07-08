@@ -305,6 +305,36 @@ func TestInitAndRenderStdout(t *testing.T) {
 	}
 }
 
+func TestLocalPackEditsDoNotTripLockIntegrity(t *testing.T) {
+	packDir := t.TempDir()
+	writeFiles(t, packDir, map[string]string{
+		"pack.yaml":  "schema: 1\nname: local\nversion: 0.0.1\nrules: [rules/a.md]\n",
+		"rules/a.md": "## A\nfirst\n",
+	})
+	root := t.TempDir()
+	writeFiles(t, root, map[string]string{
+		".escapement/config.yaml": `schema: 1
+packs:
+  - source: ` + packDir + `
+    ref: ""
+    trust: unsigned
+`,
+	})
+	t.Setenv("ESC_CACHE_DIR", t.TempDir())
+	if code, out := run(t, root, "sync"); code != 0 {
+		t.Fatalf("first sync: %d\n%s", code, out)
+	}
+	// Edit the local pack: sync must accept (dev mode), not exit 3.
+	os.WriteFile(filepath.Join(packDir, "rules/a.md"), []byte("## A\nsecond\n"), 0o644)
+	if code, out := run(t, root, "sync"); code != 0 {
+		t.Fatalf("sync after local pack edit: %d\n%s", code, out)
+	}
+	claude, _ := os.ReadFile(filepath.Join(root, "CLAUDE.md"))
+	if !strings.Contains(string(claude), "second") {
+		t.Error("local pack edit not picked up")
+	}
+}
+
 func TestUnsignedSourceRejectedByDefault(t *testing.T) {
 	repo := newPackRepo(t, "1.0.0")
 	root := t.TempDir()
