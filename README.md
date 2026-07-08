@@ -28,11 +28,25 @@ And rule packs don't just constrain — they **teach**. A pack carries paved-pat
 
 An [escapement](https://en.wikipedia.org/wiki/Escapement) is the mechanism in a clock that converts an unregulated power source into precise, countable ticks. That is exactly what this does for AI agents: enormous unregulated capability in, deterministic and auditable behavior out. Not a firewall, not a scanner — a regulator.
 
+## Install
+
+```sh
+# Verified install (downloads, cosign-verifies, and installs the latest release):
+curl -sSfL https://raw.githubusercontent.com/tensorgroup/openescapement/main/install.sh | bash
+
+# Homebrew:
+brew install tensorgroup/tap/esc
+
+# Or build from source:
+go install github.com/tensorgroup/openescapement/cmd/esc@latest
+```
+
+Release binaries are cosign-signed with SLSA build-level-3 provenance — see
+[VERIFYING.md](VERIFYING.md).
+
 ## Quickstart
 
 ```sh
-go install github.com/tensorgroup/openescapement/cmd/esc@latest
-
 cd your-repo
 esc init                       # scaffold .escapement/config.yaml
 # point it at a pack (see examples/packs/acme-org for a complete starter):
