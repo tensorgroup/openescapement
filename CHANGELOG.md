@@ -7,8 +7,15 @@ tagged releases begin.
 
 ## [Unreleased]
 
+### Added
+- Release automation: goreleaser builds for linux/darwin/windows, cosign keyless
+  signing, SLSA v1 build-level-3 provenance, CycloneDX SBOMs, Homebrew cask,
+  verified `install.sh`, and `VERIFYING.md`.
+- `esc version` now prints commit and build date alongside the version.
+- CI workflow: test matrix (linux + macos), race detector on engine/cli,
+  gofmt/vet gates, goreleaser snapshot check.
+
 Planned — see `docs/roadmap/`:
-- Release automation: signed binaries via goreleaser + cosign, SLSA provenance
 - v0.2: MCP server surface (live policy queries, connection telemetry, agent-initiated registration)
 - Dashboards & metrics: tool/LLM usage, token consumption per model, pack customization vs. defaults, sync freshness
 

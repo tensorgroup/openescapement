@@ -1,6 +1,6 @@
 # Release Automation — goreleaser + Signing
 
-**Status:** TODO / design. Blocks the first tagged release (`v0.1.0`).
+**Status:** Implemented (pending first tagged release). Plan: docs/superpowers/plans/2026-07-08-release-automation.md
 **Why now:** the product's whole pitch is a trustworthy distribution path. Shipping unsigned binaries from a security-governance tool is a contradiction reviewers will notice. This is table stakes, not polish.
 
 ## Goal
@@ -21,7 +21,7 @@
 - **Checksums:** `checksums.txt` (sha256) as a release artifact.
 
 ### 2. Signing & provenance
-- **cosign keyless signing** of checksums and archives (OIDC via GitHub Actions — no long-lived keys to leak). Publish `.sig` + `.pem` per artifact.
+- **cosign keyless signing** of checksums and archives (OIDC via GitHub Actions — no long-lived keys to leak). Publish a sigstore bundle (`<artifact>.sigstore.json`) per artifact.
 - **SLSA provenance:** adopt `slsa-framework/slsa-github-generator` (or goreleaser's built-in SLSA) to emit a provenance attestation. Target SLSA build level 3.
 - **SBOM:** goreleaser `sboms` (syft) → CycloneDX SBOM per release. Cheap, and a frequent enterprise checklist item.
 
@@ -37,7 +37,7 @@
 
 ### 5. Install paths
 - **`go install github.com/tensorgroup/openescapement/cmd/esc@latest`** — already works; document as the baseline.
-- **Homebrew tap** (`tensorgroup/homebrew-tap`) via goreleaser `brews:` — the darwin-heavy ICP expects `brew install esc`.
+- **Homebrew tap** (`tensorgroup/homebrew-tap`) via goreleaser `homebrew_casks:` — the darwin-heavy ICP expects `brew install esc`.
 - **`install.sh`** convenience script that downloads the right archive, verifies the cosign signature, and drops `esc` on PATH. Ship the verify step *in the installer* — dogfood our own trust story.
 - Publish a **`VERIFYING.md`** with copy-paste `cosign verify-blob` / `slsa-verifier` commands.
 
@@ -48,10 +48,23 @@
 - [ ] Tagging a release produces signed, reproducible binaries for all five targets
 - [ ] `cosign verify-blob` succeeds against published artifacts using the documented command
 - [ ] `slsa-verifier verify-artifact` passes
-- [ ] `esc version` prints version + commit + date
+- [x] `esc version` prints version + commit + date
 - [ ] `brew install` and `install.sh` both land a working, signature-verified binary
-- [ ] README install section updated; `SECURITY.md` "binary signing lands with first release" caveat removed
+- [x] README install section updated; `SECURITY.md` "binary signing lands with first release" caveat removed
 
 ## Notes
 - Keyless cosign avoids key custody entirely — the right default for a small team. Revisit a KMS-backed key only if an offline/air-gapped signing requirement appears.
 - Windows support is build-target-only for now; we don't test Windows path behavior in v0.1. Flag if a Windows user appears.
+- Implementation deviations: cosign v3 emits a single sigstore bundle
+  (`<artifact>.sigstore.json`) per artifact instead of separate `.sig` + `.pem`;
+  goreleaser's `brews:` is deprecated, so the tap ships a Cask
+  (`homebrew_casks:`) with a quarantine-clearing post-install hook.
+- Manual prerequisites before tagging v0.1.0:
+  1. Create the `tensorgroup/homebrew-tap` repo (empty is fine).
+  2. Add a `HOMEBREW_TAP_GITHUB_TOKEN` repo secret (fine-grained PAT,
+     contents: write on the tap). Until it exists, releases succeed but skip
+     the cask upload.
+  3. `git tag v0.1.0 && git push origin v0.1.0`.
+- Acceptance items that can only be checked against a published release
+  (cosign verify-blob, slsa-verifier, brew/install.sh end-to-end) are exercised
+  by the release workflow's `verify` job and must be confirmed on v0.1.0.

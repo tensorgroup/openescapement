@@ -366,3 +366,19 @@ func TestVersionRefMismatch(t *testing.T) {
 		t.Errorf("version/ref mismatch: exit %d\n%s", code, out)
 	}
 }
+
+func TestVersionOutput(t *testing.T) {
+	origVersion, origCommit, origDate := Version, Commit, Date
+	Version, Commit, Date = "1.2.3-test", "abcdef1", "2026-01-02T03:04:05Z"
+	t.Cleanup(func() { Version, Commit, Date = origVersion, origCommit, origDate })
+
+	var stdout, stderr bytes.Buffer
+	code := Run(t.TempDir(), []string{"version"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0 (stderr: %s)", code, stderr.String())
+	}
+	want := "esc 1.2.3-test (commit abcdef1, built 2026-01-02T03:04:05Z)\n"
+	if got := stdout.String(); got != want {
+		t.Errorf("version output = %q, want %q", got, want)
+	}
+}

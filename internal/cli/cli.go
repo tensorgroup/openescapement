@@ -17,8 +17,13 @@ import (
 	"github.com/tensorgroup/openescapement/internal/lockfile"
 )
 
-// Version is stamped at release time via -ldflags.
-var Version = "0.1.0-dev"
+// Version, Commit, and Date are stamped at release time via -ldflags
+// (see .goreleaser.yaml). Defaults identify from-source dev builds.
+var (
+	Version = "0.1.0-dev"
+	Commit  = "unknown"
+	Date    = "unknown"
+)
 
 const usage = `esc — deterministic governance for your AI usage
 
@@ -60,7 +65,7 @@ func Run(root string, args []string, stdout, stderr io.Writer) int {
 	case "render":
 		err = cmdRender(ctx, root, args[1:], stdout)
 	case "version":
-		fmt.Fprintf(stdout, "esc %s\n", Version)
+		fmt.Fprintf(stdout, "esc %s (commit %s, built %s)\n", Version, Commit, Date)
 		return 0
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usage)
