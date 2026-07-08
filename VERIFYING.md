@@ -30,12 +30,22 @@ verified the same way.
 ## 2. Verify your download against the checksums
 
 ```sh
-sha256sum --check --ignore-missing checksums.txt   # macOS: shasum -a 256 -c
+sha256sum --check --ignore-missing checksums.txt
+```
+
+On macOS, `shasum -a 256 -c` has no `--ignore-missing` equivalent and will
+error on any listed artifact you haven't downloaded. To check just the file(s)
+you have, filter the checksums file first:
+
+```sh
+grep <artifact> checksums.txt | shasum -a 256 -c
 ```
 
 ## 3. Verify SLSA provenance
 
 ```sh
+TAG=v0.1.0
+BASE=https://github.com/tensorgroup/openescapement/releases/download/$TAG
 curl -sSfLO "$BASE/multiple.intoto.jsonl"
 curl -sSfLO "$BASE/esc_0.1.0_linux_amd64.tar.gz"
 
