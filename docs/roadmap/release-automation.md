@@ -21,7 +21,7 @@
 - **Checksums:** `checksums.txt` (sha256) as a release artifact.
 
 ### 2. Signing & provenance
-- **cosign keyless signing** of checksums and archives (OIDC via GitHub Actions — no long-lived keys to leak). Publish `.sig` + `.pem` per artifact.
+- **cosign keyless signing** of checksums and archives (OIDC via GitHub Actions — no long-lived keys to leak). Publish a sigstore bundle (`<artifact>.sigstore.json`) per artifact.
 - **SLSA provenance:** adopt `slsa-framework/slsa-github-generator` (or goreleaser's built-in SLSA) to emit a provenance attestation. Target SLSA build level 3.
 - **SBOM:** goreleaser `sboms` (syft) → CycloneDX SBOM per release. Cheap, and a frequent enterprise checklist item.
 
@@ -37,7 +37,7 @@
 
 ### 5. Install paths
 - **`go install github.com/tensorgroup/openescapement/cmd/esc@latest`** — already works; document as the baseline.
-- **Homebrew tap** (`tensorgroup/homebrew-tap`) via goreleaser `brews:` — the darwin-heavy ICP expects `brew install esc`.
+- **Homebrew tap** (`tensorgroup/homebrew-tap`) via goreleaser `homebrew_casks:` — the darwin-heavy ICP expects `brew install esc`.
 - **`install.sh`** convenience script that downloads the right archive, verifies the cosign signature, and drops `esc` on PATH. Ship the verify step *in the installer* — dogfood our own trust story.
 - Publish a **`VERIFYING.md`** with copy-paste `cosign verify-blob` / `slsa-verifier` commands.
 

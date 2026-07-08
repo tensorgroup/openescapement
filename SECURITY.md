@@ -17,6 +17,10 @@ The primary threat is **compromise of the policy-distribution path** — an atta
 - **Constraint gate**: pack `forbidden_patterns`/`max_file_bytes` are validated against *all* rendered content — agent files, skill files, and MCP entries — before writing.
 - **No standing write path**: no daemon or server pushes into repos; only `esc`, run by someone with write access, changes files.
 
+## Release integrity
+
+- **Binary releases are signed**: cosign keyless signatures (sigstore bundles) plus SLSA build-level-3 provenance on every artifact. See [VERIFYING.md](VERIFYING.md) for verification commands.
+
 ## Known limitations (v0.1)
 
 Tracked for hardening; documented rather than hidden:
@@ -24,4 +28,3 @@ Tracked for hardening; documented rather than hidden:
 - **First-sync TOFU.** The content hash of a pack is trusted on first sync (signatures are still verified). Integrity pinning kicks in on subsequent syncs. Pin to signed tags, not branches, for the strongest guarantee.
 - **Branch/SHA refs bypass version-tag checks.** Branch refs are a moving target by design; prefer immutable signed tags.
 - **MCP command entries are not sandboxed.** A pack can declare MCP servers that your agent runtime may launch. `esc` refuses to overwrite servers it doesn't own and surfaces what it adds, but review pack-provided MCP entries as you would any dependency.
-- **Binary releases are signed**: cosign keyless signatures (sigstore bundles) plus SLSA build-level-3 provenance on every artifact. See [VERIFYING.md](VERIFYING.md) for verification commands.
