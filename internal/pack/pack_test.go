@@ -1,0 +1,185 @@
+package pack
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/tensorgroup/openescapement/internal/esc"
+)
+
+// writePack creates a pack directory from a map of relative path -> content.
+func writePack(t *testing.T, files map[string]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	for rel, content := range files {
+		p := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+const validManifest = `schema: 1
+name: acme-org
+version: 1.4.0
+description: Acme baseline
+rules:
+  - rules/secrets.md
+  - rules/hosting.md
+skills:
+  - skills/vault-usage
+mcp:
+  servers:
+    acme-paved-path:
+      command: npx
+      args: ["-y", "@acme/paved-path-mcp"]
+catalog:
+  - name: Tailscale
+    category: hosting-exposure
+    status: preferred
+    notes: Org tailnet
+  - name: Raw port forwarding
+    category: hosting-exposure
+    status: banned
+constraints:
+  max_file_bytes: 20000
+  forbidden_patterns:
+    - "ignore (the )?(above|governance)"
+`
+
+func validFiles() map[string]string {
+	return map[string]string{
+		"pack.yaml":                   validManifest,
+		"rules/secrets.md":            "---\ntargets: [claude, agents]\n---\n## Secrets\nUse Vault.\n",
+		"rules/hosting.md":            "## Hosting\nTailscale preferred.\n",
+		"skills/vault-usage/SKILL.md": "---\nname: vault-usage\ndescription: how to use vault\n---\nUse vault.\n",
+	}
+}
+
+func TestLoadManifest(t *testing.T) {
+	dir := writePack(t, validFiles())
+	p, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	m := p.Manifest
+	if m.Name != "acme-org" || m.Version != "1.4.0" || m.Schema != 1 {
+		t.Errorf("manifest basics wrong: %+v", m)
+	}
+	if len(m.Rules) != 2 || len(m.Skills) != 1 {
+		t.Errorf("rules/skills wrong: %+v", m)
+	}
+	if len(m.Catalog) != 2 || m.Catalog[0].Status != "preferred" {
+		t.Errorf("catalog wrong: %+v", m.Catalog)
+	}
+	if m.Constraints.MaxFileBytes != 20000 || len(m.Constraints.ForbiddenPatterns) != 1 {
+		t.Errorf("constraints wrong: %+v", m.Constraints)
+	}
+	if _, ok := m.MCP.Servers["acme-paved-path"]; !ok {
+		t.Errorf("mcp servers wrong: %+v", m.MCP)
+	}
+	if len(p.Fragments) != 2 {
+		t.Fatalf("fragments: got %d want 2", len(p.Fragments))
+	}
+	if p.Fragments[0].Body != "## Secrets\nUse Vault.\n" {
+		t.Errorf("fragment body not byte-exact: %q", p.Fragments[0].Body)
+	}
+}
+
+func TestLoadManifestErrors(t *testing.T) {
+	cases := []struct {
+		name   string
+		mutate func(map[string]string)
+	}{
+		{"missing name", func(f map[string]string) {
+			f["pack.yaml"] = "schema: 1\nversion: 1.0.0\nrules: [rules/secrets.md]\n"
+		}},
+		{"missing version", func(f map[string]string) {
+			f["pack.yaml"] = "schema: 1\nname: x\nrules: [rules/secrets.md]\n"
+		}},
+		{"bad schema", func(f map[string]string) {
+			f["pack.yaml"] = "schema: 99\nname: x\nversion: 1.0.0\n"
+		}},
+		{"missing rule file", func(f map[string]string) { delete(f, "rules/hosting.md") }},
+		{"missing skill dir", func(f map[string]string) { delete(f, "skills/vault-usage/SKILL.md") }},
+		{"unknown manifest field", func(f map[string]string) {
+			f["pack.yaml"] = "schema: 1\nname: x\nversion: 1.0.0\nbogus: true\n"
+		}},
+		{"unknown fragment target", func(f map[string]string) {
+			f["rules/secrets.md"] = "---\ntargets: [clade]\n---\nbody\n"
+		}},
+		{"invalid catalog status", func(f map[string]string) {
+			f["pack.yaml"] = "schema: 1\nname: x\nversion: 1.0.0\ncatalog:\n  - name: T\n    category: c\n    status: great\n"
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			files := validFiles()
+			tc.mutate(files)
+			dir := writePack(t, files)
+			_, err := Load(dir)
+			if !errors.Is(err, esc.ErrManifest) {
+				t.Fatalf("want ErrManifest, got %v", err)
+			}
+		})
+	}
+}
+
+func TestFragmentFrontmatter(t *testing.T) {
+	files := validFiles()
+	files["rules/secrets.md"] = "---\ntargets: [claude]\n---\nbody line\n"
+	files["rules/hosting.md"] = "no frontmatter body\n"
+	dir := writePack(t, files)
+	p, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := p.Fragments[0].Targets; len(got) != 1 || got[0] != "claude" {
+		t.Errorf("targets: %v", got)
+	}
+	if p.Fragments[0].Body != "body line\n" {
+		t.Errorf("body: %q", p.Fragments[0].Body)
+	}
+	// No frontmatter: applies to all agent-file targets.
+	if got := p.Fragments[1].Targets; len(got) != 0 {
+		t.Errorf("no-frontmatter targets should be empty (=all): %v", got)
+	}
+	if p.Fragments[1].Body != "no frontmatter body\n" {
+		t.Errorf("body: %q", p.Fragments[1].Body)
+	}
+}
+
+func TestDirHashDeterministic(t *testing.T) {
+	files := validFiles()
+	d1 := writePack(t, files)
+	d2 := writePack(t, files)
+	h1, err := DirHash(d1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h2, err := DirHash(d2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h1 != h2 {
+		t.Errorf("same content, different hash: %s vs %s", h1, h2)
+	}
+	files["rules/secrets.md"] += "x"
+	d3 := writePack(t, files)
+	h3, err := DirHash(d3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h3 == h1 {
+		t.Error("changed content, same hash")
+	}
+	if len(h1) < 10 || h1[:7] != "sha256:" {
+		t.Errorf("hash format: %s", h1)
+	}
+}
