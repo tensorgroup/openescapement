@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -364,5 +365,17 @@ func TestVersionRefMismatch(t *testing.T) {
 	code, out := run(t, root, "sync")
 	if code == 0 || !strings.Contains(out, "does not match manifest version") {
 		t.Errorf("version/ref mismatch: exit %d\n%s", code, out)
+	}
+}
+
+func TestVersionOutput(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run(t.TempDir(), []string{"version"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0 (stderr: %s)", code, stderr.String())
+	}
+	want := fmt.Sprintf("esc %s (commit %s, built %s)\n", Version, Commit, Date)
+	if got := stdout.String(); got != want {
+		t.Errorf("version output = %q, want %q", got, want)
 	}
 }
