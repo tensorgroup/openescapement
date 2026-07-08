@@ -12,6 +12,7 @@ import (
 	"github.com/tensorgroup/openescapement/internal/render"
 )
 
+// State classifies one artifact's condition relative to the plan.
 type State string
 
 const (
@@ -22,12 +23,14 @@ const (
 	ConstraintViolated State = "constraint-violated"
 )
 
+// Finding is one classified artifact (or pack pin) in a status report.
 type Finding struct {
 	Path   string
 	State  State
 	Detail string
 }
 
+// StatusResult is the full drift report for a governed repo.
 type StatusResult struct {
 	Findings []Finding
 	Plan     *PlanResult
@@ -88,7 +91,7 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 	}
 
 	switch a.Kind {
-	case "block":
+	case KindBlock:
 		content, err := os.ReadFile(abs)
 		if err != nil {
 			return Finding{a.Path, Missing, "file does not exist — run `esc sync`"}
@@ -105,7 +108,7 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 			return Finding{a.Path, InSync, ""}
 		}
 		return staleOrModified(actual, "managed block was hand-edited (hash mismatch)")
-	case "file":
+	case KindFile:
 		content, err := os.ReadFile(abs)
 		if err != nil {
 			return Finding{a.Path, Missing, "file does not exist — run `esc sync`"}
@@ -115,7 +118,7 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 			return Finding{a.Path, InSync, ""}
 		}
 		return staleOrModified(actual, "file was hand-edited (hash mismatch)")
-	case "dir":
+	case KindDir:
 		if info, err := os.Stat(abs); err != nil || !info.IsDir() {
 			return Finding{a.Path, Missing, "skill directory missing — run `esc sync`"}
 		}
@@ -127,7 +130,7 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 			return Finding{a.Path, InSync, ""}
 		}
 		return staleOrModified(actual, "skill directory was modified")
-	case "json-keys":
+	case KindJSONKeys:
 		content, err := os.ReadFile(abs)
 		if err != nil {
 			return Finding{a.Path, Missing, "file does not exist — run `esc sync`"}

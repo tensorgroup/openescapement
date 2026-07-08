@@ -18,10 +18,18 @@ import (
 	"github.com/tensorgroup/openescapement/internal/source"
 )
 
+// Artifact kinds — the four output mechanisms.
+const (
+	KindBlock    = "block"     // managed block inside a team-owned file
+	KindFile     = "file"      // whole file owned by escapement
+	KindDir      = "dir"       // whole directory owned by escapement
+	KindJSONKeys = "json-keys" // owned keys inside a shared JSON file
+)
+
 // Artifact is one desired output on disk.
 type Artifact struct {
 	Path string // relative to repo root
-	Kind string // block | file | dir | json-keys
+	Kind string // one of the Kind* constants
 	Hash string // canonical hash of the managed content
 	Keys []string
 	// Body is the managed-block body (kind=block) or full content (kind=file).
@@ -32,6 +40,8 @@ type Artifact struct {
 	Servers map[string]map[string]any
 }
 
+// PlanResult is the desired state computed from config + packs, plus any
+// constraint violations that must block Apply.
 type PlanResult struct {
 	Config     *config.Config
 	Packs      []lockfile.LockPack
@@ -117,12 +127,12 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 		case render.TargetClaude, render.TargetAgents, render.TargetGemini:
 			body := render.Compose(res.PackObjs, t)
 			res.Artifacts = append(res.Artifacts, Artifact{
-				Path: render.TargetFile[t], Kind: "block", Hash: render.BodyHash(body), Body: body,
+				Path: render.TargetFile[t], Kind: KindBlock, Hash: render.BodyHash(body), Body: body,
 			})
 		case render.TargetGovernance:
 			content := render.Governance(res.PackObjs)
 			res.Artifacts = append(res.Artifacts, Artifact{
-				Path: render.TargetFile[t], Kind: "file", Hash: esc.HashBytes([]byte(content)), Body: content,
+				Path: render.TargetFile[t], Kind: KindFile, Hash: esc.HashBytes([]byte(content)), Body: content,
 			})
 		case render.TargetSkills:
 			for _, p := range res.PackObjs {
@@ -135,7 +145,7 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 					name := "esc-" + p.Manifest.Name + "-" + filepath.Base(rel)
 					res.Artifacts = append(res.Artifacts, Artifact{
 						Path: filepath.ToSlash(filepath.Join(".claude", "skills", name)),
-						Kind: "dir", Hash: h, SrcDir: src,
+						Kind: KindDir, Hash: h, SrcDir: src,
 					})
 				}
 			}
@@ -157,7 +167,7 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 				}
 				sort.Strings(keys)
 				res.Artifacts = append(res.Artifacts, Artifact{
-					Path: ".mcp.json", Kind: "json-keys", Hash: h, Keys: keys, Servers: servers,
+					Path: ".mcp.json", Kind: KindJSONKeys, Hash: h, Keys: keys, Servers: servers,
 				})
 			}
 		default:
@@ -165,20 +175,45 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 		}
 	}
 
-	// Constraint validation against prospective merged files.
+	// Constraint validation against everything that will land on disk —
+	// merged agent files, skill file contents, and owned MCP entries. Skills
+	// and MCP configs are the highest-risk payloads; they don't get a pass.
 	var cs []pack.Constraints
 	for _, p := range res.PackObjs {
 		cs = append(cs, p.Manifest.Constraints)
 	}
 	for _, a := range res.Artifacts {
-		if a.Kind != "block" && a.Kind != "file" {
-			continue
+		switch a.Kind {
+		case KindBlock, KindFile:
+			merged, err := prospectiveContent(root, a, res.PackObjs)
+			if err != nil {
+				return nil, err
+			}
+			res.Violations = append(res.Violations, render.Validate(a.Path, merged, cs)...)
+		case KindDir:
+			err := filepath.WalkDir(a.SrcDir, func(path string, d os.DirEntry, err error) error {
+				if err != nil || d.IsDir() {
+					return err
+				}
+				content, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				rel, _ := filepath.Rel(a.SrcDir, path)
+				label := a.Path + "/" + filepath.ToSlash(rel)
+				res.Violations = append(res.Violations, render.Validate(label, content, cs)...)
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
+		case KindJSONKeys:
+			canon, err := render.CanonicalServers(a.Servers)
+			if err != nil {
+				return nil, err
+			}
+			res.Violations = append(res.Violations, render.Validate(a.Path, canon, cs)...)
 		}
-		merged, err := prospectiveContent(root, a, res.PackObjs)
-		if err != nil {
-			return nil, err
-		}
-		res.Violations = append(res.Violations, render.Validate(a.Path, merged, cs)...)
 	}
 	return res, nil
 }
@@ -217,9 +252,9 @@ func prospectiveContent(root string, a Artifact, packs []*pack.Pack) ([]byte, er
 		return nil, err
 	}
 	switch a.Kind {
-	case "block":
+	case KindBlock:
 		return render.Splice(existing, a.Body, render.BlockMeta{Packs: render.PackLabels(packs)})
-	case "file":
+	case KindFile:
 		return []byte(a.Body), nil
 	}
 	return existing, nil

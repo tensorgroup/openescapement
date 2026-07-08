@@ -156,7 +156,7 @@ Records, per pack: resolved commit SHA, content hash (SHA-256 over sorted relati
 | `esc sync` | Fetch pinned packs → verify signatures + lockfile → parse → compose → render → validate constraints → write atomically → update lock |
 | `esc status [--check]` | Same pipeline read-only; classify artifacts: in-sync / modified / missing / stale (config pin ≠ lock) / constraint-violated. `--check` exits non-zero on any finding |
 | `esc diff [--against REF]` | No flag: unified diff of expected vs actual artifacts (drift detail). `--against`: diff rendered policy text between locked version and REF (pre-update review) |
-| `esc update [SOURCE] [--ref REF]` | Bump config pin, refresh lock (does not write artifacts; `sync` does) |
+| `esc update [--source SRC] --ref REF` | Bump config pin, refresh lock (does not write artifacts; `sync` does) |
 | `esc render --stdout` | Render to stdout without writing (debugging, previews) |
 | `esc version` | Version + build provenance |
 

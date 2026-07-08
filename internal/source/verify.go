@@ -15,6 +15,9 @@ func VerifyRef(ctx context.Context, repoDir, ref, allowedSignersFile string) err
 	if allowedSignersFile == "" {
 		return fmt.Errorf("%w: source is signed-mode but no allowed_signers_file configured", esc.ErrSignature)
 	}
+	if !validRef.MatchString(ref) {
+		return fmt.Errorf("%w: ref %q contains disallowed characters", esc.ErrSignature, ref)
+	}
 	abs, err := filepath.Abs(allowedSignersFile)
 	if err != nil {
 		return fmt.Errorf("%w: %v", esc.ErrSignature, err)

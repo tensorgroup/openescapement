@@ -17,7 +17,7 @@ import (
 func DriftDiff(ctx context.Context, root string, plan *PlanResult) (string, error) {
 	var out strings.Builder
 	for _, a := range plan.Artifacts {
-		if a.Kind != "block" && a.Kind != "file" {
+		if a.Kind != KindBlock && a.Kind != KindFile {
 			continue
 		}
 		expected, err := prospectiveContent(root, a, plan.PackObjs)
@@ -40,12 +40,18 @@ func DriftDiff(ctx context.Context, root string, plan *PlanResult) (string, erro
 	return out.String(), nil
 }
 
-// PolicyDiff renders the policy text of every agent-file target from two
-// plans (current pins vs alternate ref) and diffs them.
+// PolicyDiff renders the policy text of the configured agent-file targets
+// from two plans (current pins vs alternate ref) and diffs them.
 func PolicyDiff(ctx context.Context, cur, next *PlanResult) (string, error) {
 	var out strings.Builder
-	targets := []string{render.TargetClaude, render.TargetAgents, render.TargetGemini, render.TargetGovernance}
+	targets := cur.Config.Targets
+	if len(targets) == 0 {
+		targets = []string{render.TargetClaude, render.TargetAgents, render.TargetGemini, render.TargetGovernance}
+	}
 	for _, t := range targets {
+		if render.TargetFile[t] == "" {
+			continue // skills/mcp targets have no single policy text to diff
+		}
 		var a, b string
 		if t == render.TargetGovernance {
 			a, b = render.Governance(cur.PackObjs), render.Governance(next.PackObjs)
@@ -74,9 +80,7 @@ func PlanWithRef(ctx context.Context, root, sourceFilter, ref string) (*PlanResu
 	if err != nil {
 		return nil, err
 	}
-	// Plan reads config from disk; use a temp root overlay instead? Simpler:
-	// mutate in memory by planning manually is invasive — write nothing.
-	// We re-implement the tiny bit: copy config, swap ref, and run planFromConfig.
+	// In-memory copy only — the on-disk config is never touched by diff.
 	alt := *cfg
 	alt.Packs = append([]config.PackRef(nil), cfg.Packs...)
 	alt.Packs[idx].Ref = ref

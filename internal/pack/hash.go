@@ -3,6 +3,7 @@ package pack
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -12,11 +13,16 @@ import (
 
 // DirHash computes a deterministic content hash of every regular file under
 // dir (sorted relative paths, path and content both hashed). .git is skipped.
+// Symlinks fail closed: a pack must not be able to reference files outside
+// itself, and link targets would make hashes host-dependent.
 func DirHash(dir string) (string, error) {
 	var files []string
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			return fmt.Errorf("symlink %s: symlinks are not allowed in packs", path)
 		}
 		if d.IsDir() {
 			if d.Name() == ".git" {

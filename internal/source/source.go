@@ -65,6 +65,10 @@ func ParseSource(s string) (*Parsed, error) {
 
 var unsafeChars = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
+// validRef constrains git refs to a conservative charset. The leading
+// character excludes "-" so a ref can never be parsed as a git option.
+var validRef = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._/-]*$`)
+
 func cacheKey(url string) string {
 	sum := sha256.Sum256([]byte(url))
 	base := unsafeChars.ReplaceAllString(strings.TrimPrefix(strings.TrimPrefix(url, "https://"), "git@"), "-")
@@ -107,12 +111,19 @@ func Fetch(ctx context.Context, ref config.PackRef, cacheDir, repoRoot string) (
 	if ref.Ref == "" {
 		return nil, fmt.Errorf("%w: source %s: ref is required for git sources", esc.ErrFetch, ref.Source)
 	}
+	// Reject option-shaped values before anything reaches git's argv.
+	if !validRef.MatchString(ref.Ref) {
+		return nil, fmt.Errorf("%w: source %s: ref %q contains disallowed characters", esc.ErrFetch, ref.Source, ref.Ref)
+	}
+	if strings.HasPrefix(parsed.URL, "-") {
+		return nil, fmt.Errorf("%w: source %q looks like a command-line option", esc.ErrFetch, ref.Source)
+	}
 	checkout := filepath.Join(cacheDir, cacheKey(parsed.URL))
 	if _, statErr := os.Stat(filepath.Join(checkout, ".git")); statErr != nil {
 		if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 			return nil, fmt.Errorf("%w: %v", esc.ErrFetch, err)
 		}
-		if _, err := git(ctx, "", "clone", "--quiet", parsed.URL, checkout); err != nil {
+		if _, err := git(ctx, "", "clone", "--quiet", "--", parsed.URL, checkout); err != nil {
 			return nil, fmt.Errorf("%w: cloning %s: %v", esc.ErrFetch, parsed.URL, err)
 		}
 	} else {

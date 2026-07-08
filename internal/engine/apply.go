@@ -12,6 +12,18 @@ import (
 	"github.com/tensorgroup/openescapement/internal/render"
 )
 
+// containedPath resolves rel under root and guarantees the result cannot
+// escape root — the last line of defense against pack-controlled path
+// components, regardless of what upstream validation missed.
+func containedPath(root, rel string) (string, error) {
+	abs := filepath.Join(root, filepath.FromSlash(rel))
+	check, err := filepath.Rel(root, abs)
+	if err != nil || check == ".." || strings.HasPrefix(check, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("artifact path %q escapes the repository root", rel)
+	}
+	return abs, nil
+}
+
 // Apply writes the planned artifacts and the lockfile. It refuses to write
 // anything when the plan has constraint violations.
 func Apply(root string, p *PlanResult) error {
@@ -30,9 +42,12 @@ func Apply(root string, p *PlanResult) error {
 	var arts []lockfile.LockArtifact
 	desiredDirs := map[string]bool{}
 	for _, a := range p.Artifacts {
-		abs := filepath.Join(root, filepath.FromSlash(a.Path))
+		abs, err := containedPath(root, a.Path)
+		if err != nil {
+			return err
+		}
 		switch a.Kind {
-		case "block":
+		case KindBlock:
 			existing, err := os.ReadFile(abs)
 			if err != nil && !os.IsNotExist(err) {
 				return err
@@ -44,19 +59,16 @@ func Apply(root string, p *PlanResult) error {
 			if err := atomicWrite(abs, out); err != nil {
 				return err
 			}
-		case "file":
+		case KindFile:
 			if err := atomicWrite(abs, []byte(a.Body)); err != nil {
 				return err
 			}
-		case "dir":
+		case KindDir:
 			desiredDirs[a.Path] = true
-			if err := os.RemoveAll(abs); err != nil {
+			if err := stageDir(a.SrcDir, abs); err != nil {
 				return err
 			}
-			if err := copyDir(a.SrcDir, abs); err != nil {
-				return err
-			}
-		case "json-keys":
+		case KindJSONKeys:
 			existing, err := os.ReadFile(abs)
 			if err != nil && !os.IsNotExist(err) {
 				return err
@@ -77,13 +89,22 @@ func Apply(root string, p *PlanResult) error {
 		arts = append(arts, lockfile.LockArtifact{Path: a.Path, Kind: a.Kind, Hash: a.Hash, Keys: a.Keys})
 	}
 
-	// Remove owned skill dirs that no longer exist in any pack.
+	// Remove owned skill dirs that no longer exist in any pack. Only paths
+	// carrying the escapement ownership prefix are ever removed.
 	if prevLock != nil {
 		for _, prev := range prevLock.Artifacts {
-			if prev.Kind == "dir" && !desiredDirs[prev.Path] {
-				if err := os.RemoveAll(filepath.Join(root, filepath.FromSlash(prev.Path))); err != nil {
-					return err
-				}
+			if prev.Kind != KindDir || desiredDirs[prev.Path] {
+				continue
+			}
+			abs, err := containedPath(root, prev.Path)
+			if err != nil {
+				return err
+			}
+			if !strings.Contains(abs, string(filepath.Separator)+"esc-") {
+				return fmt.Errorf("refusing to remove %q: not an escapement-owned directory", prev.Path)
+			}
+			if err := os.RemoveAll(abs); err != nil {
+				return err
 			}
 		}
 	}
@@ -116,10 +137,37 @@ func atomicWrite(path string, content []byte) error {
 	return os.Rename(tmp.Name(), path)
 }
 
+// stageDir replaces dst with a copy of src, staging the copy next to dst
+// first so a mid-copy failure never leaves dst half-written or deleted.
+func stageDir(src, dst string) error {
+	parent := filepath.Dir(dst)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.MkdirTemp(parent, ".esc-stage-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	staged := filepath.Join(tmp, filepath.Base(dst))
+	if err := copyDir(src, staged); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(dst); err != nil {
+		return err
+	}
+	return os.Rename(staged, dst)
+}
+
+// copyDir copies a tree, preserving file modes. Symlinks fail closed — packs
+// must not reference anything outside themselves.
 func copyDir(src, dst string) error {
 	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			return fmt.Errorf("symlink %s: symlinks are not allowed in packs", path)
 		}
 		rel, err := filepath.Rel(src, path)
 		if err != nil {
@@ -129,10 +177,14 @@ func copyDir(src, dst string) error {
 		if d.IsDir() {
 			return os.MkdirAll(target, 0o755)
 		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
 		content, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(target, content, 0o644)
+		return os.WriteFile(target, content, info.Mode().Perm())
 	})
 }

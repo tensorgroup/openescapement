@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/tensorgroup/openescapement/internal/config"
 	"github.com/tensorgroup/openescapement/internal/engine"
@@ -41,7 +42,9 @@ func Run(root string, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stderr, usage)
 		return 2
 	}
-	ctx := context.Background()
+	// Bound all git/network work so a hostile or dead remote can't hang CI.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
 	var err error
 	switch args[0] {
 	case "init":
@@ -257,7 +260,7 @@ func cmdRender(ctx context.Context, root string, args []string, stdout io.Writer
 		return err
 	}
 	for _, a := range plan.Artifacts {
-		if a.Kind != "block" && a.Kind != "file" {
+		if a.Kind != engine.KindBlock && a.Kind != engine.KindFile {
 			continue
 		}
 		fmt.Fprintf(stdout, "===== %s =====\n%s\n", a.Path, a.Body)

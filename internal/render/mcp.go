@@ -10,7 +10,9 @@ import (
 
 // MergeMCP merges pack-declared servers into an existing .mcp.json, removing
 // keys in prevOwned that are no longer declared. Keys not owned by escapement
-// are never touched. Returns the merged document and the sorted owned keys.
+// are never touched — a pack that collides with a user's existing server
+// entry is an error, not a silent overwrite. Returns the merged document and
+// the sorted owned keys.
 func MergeMCP(existing []byte, servers map[string]map[string]any, prevOwned []string) ([]byte, []string, error) {
 	doc := map[string]any{}
 	if len(existing) > 0 {
@@ -18,27 +20,43 @@ func MergeMCP(existing []byte, servers map[string]map[string]any, prevOwned []st
 			return nil, nil, fmt.Errorf("parsing existing .mcp.json: %w", err)
 		}
 	}
-	cur, _ := doc["mcpServers"].(map[string]any)
-	if cur == nil {
-		cur = map[string]any{}
+	cur := map[string]any{}
+	if raw, present := doc["mcpServers"]; present {
+		obj, ok := raw.(map[string]any)
+		if !ok {
+			return nil, nil, fmt.Errorf(".mcp.json: mcpServers is not an object; refusing to overwrite it")
+		}
+		cur = obj
 	}
+	owned := map[string]bool{}
 	for _, k := range prevOwned {
+		owned[k] = true
 		if _, still := servers[k]; !still {
 			delete(cur, k)
 		}
 	}
-	owned := make([]string, 0, len(servers))
+	keys := make([]string, 0, len(servers))
 	for k, v := range servers {
+		if _, exists := cur[k]; exists && !owned[k] {
+			return nil, nil, fmt.Errorf(".mcp.json: server %q already exists and is not managed by escapement; rename or remove it before syncing", k)
+		}
 		cur[k] = v
-		owned = append(owned, k)
+		keys = append(keys, k)
 	}
-	sort.Strings(owned)
+	sort.Strings(keys)
 	doc["mcpServers"] = cur
 	out, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
 		return nil, nil, err
 	}
-	return append(out, '\n'), owned, nil
+	return append(out, '\n'), keys, nil
+}
+
+// CanonicalServers serializes server entries deterministically (JSON with
+// sorted keys) — the canonical form used for hashing and for constraint
+// validation of MCP payloads.
+func CanonicalServers(servers any) ([]byte, error) {
+	return json.Marshal(servers)
 }
 
 // OwnedMCPHash returns the canonical hash of the owned server entries as
@@ -57,7 +75,7 @@ func OwnedMCPHash(merged []byte, owned []string) (string, error) {
 			subset[k] = v
 		}
 	}
-	canon, err := json.Marshal(subset) // map keys marshal sorted
+	canon, err := CanonicalServers(subset)
 	if err != nil {
 		return "", err
 	}
@@ -65,12 +83,22 @@ func OwnedMCPHash(merged []byte, owned []string) (string, error) {
 }
 
 // DesiredMCPHash is OwnedMCPHash for the pack-declared servers themselves.
+// The values are JSON round-tripped first so YAML-decoded and JSON-decoded
+// numbers hash identically.
 func DesiredMCPHash(servers map[string]map[string]any) (string, error) {
 	subset := map[string]any{}
 	for k, v := range servers {
 		subset[k] = v
 	}
-	canon, err := json.Marshal(subset)
+	canon, err := CanonicalServers(subset)
+	if err != nil {
+		return "", err
+	}
+	var roundTripped map[string]any
+	if err := json.Unmarshal(canon, &roundTripped); err != nil {
+		return "", err
+	}
+	canon, err = CanonicalServers(roundTripped)
 	if err != nil {
 		return "", err
 	}
