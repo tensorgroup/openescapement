@@ -305,6 +305,27 @@ func TestInitAndRenderStdout(t *testing.T) {
 	}
 }
 
+func TestUnsignedSourceRejectedByDefault(t *testing.T) {
+	repo := newPackRepo(t, "1.0.0")
+	root := t.TempDir()
+	// No trust: unsigned and no valid signers → signed mode, must fail closed.
+	writeFiles(t, root, map[string]string{
+		".escapement/config.yaml": `schema: 1
+packs:
+  - source: file://` + repo + `//org
+    ref: v1.0.0
+`,
+	})
+	t.Setenv("ESC_CACHE_DIR", t.TempDir())
+	code, out := run(t, root, "sync")
+	if code != 3 {
+		t.Fatalf("unsigned source without trust flag: want exit 3, got %d:\n%s", code, out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "GOVERNANCE.md")); !os.IsNotExist(err) {
+		t.Error("artifacts written despite signature failure")
+	}
+}
+
 func TestVersionRefMismatch(t *testing.T) {
 	repo := newPackRepo(t, "1.0.0")
 	// Tag v9.0.0 pointing at manifest that says 1.0.0.
