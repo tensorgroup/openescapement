@@ -26,6 +26,13 @@ type Decision struct {
 // never blocks or fails the invoking command: all errors log an `error`
 // outcome plus one short stderr line and return nil.
 func Maybe(ctx context.Context, root string, stdin *os.File, stderr io.Writer) *Decision {
+	return MaybeIO(ctx, root, isInteractive(stdin), stdin, stderr)
+}
+
+// MaybeIO is Maybe with the interactivity decision and prompt reader made
+// explicit, so tests can drive the prompt without a real TTY. in is only read
+// when interactive is true.
+func MaybeIO(ctx context.Context, root string, interactive bool, in io.Reader, stderr io.Writer) *Decision {
 	entries, err := LoadLog(root)
 	if err != nil {
 		return nil
@@ -69,11 +76,11 @@ func Maybe(ctx context.Context, root string, stdin *os.File, stderr io.Writer) *
 	}
 	entry.Outcome = OutcomeOKUpdates
 	printNotice(stderr, statuses)
-	if !isInteractive(stdin) {
+	if !interactive {
 		_ = appendLog(root, entry) // non-TTY: notice only, never a prompt
 		return nil
 	}
-	accept := readPromptDecision(stdin, stderr)
+	accept := readPromptDecision(in, stderr)
 	if accept {
 		entry.Prompt = "accepted"
 	} else {

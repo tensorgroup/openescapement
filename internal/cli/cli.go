@@ -137,13 +137,27 @@ func cmdInit(root string, stdout io.Writer) error {
 	return nil
 }
 
+// maybeUpdates is the update-check seam: production wires the real TTY-backed
+// throttle; tests inject updatecheck.MaybeIO with a deterministic interactivity
+// flag and prompt reader so no test can ever block on real stdin.
+var maybeUpdates = func(ctx context.Context, root string, stderr io.Writer) *updatecheck.Decision {
+	return updatecheck.Maybe(ctx, root, os.Stdin, stderr)
+}
+
 // checkForUpdates runs the overdue throttle before a command's main logic. On
 // an interactive accept it re-pins each stale tag pack to its latest tag and
-// syncs (a bare sync would keep the old pin for tag-pinned packs). It never
-// fails the invoking command.
+// syncs (a bare sync would keep the old pin for tag-pinned packs). If that
+// sync fails, the original config is restored so an automatic prompt can never
+// strand a pin that was never verified. It never fails the invoking command.
 func checkForUpdates(ctx context.Context, root string, stderr io.Writer) {
-	d := updatecheck.Maybe(ctx, root, os.Stdin, stderr)
+	d := maybeUpdates(ctx, root, stderr)
 	if d == nil || !d.Accepted {
+		return
+	}
+	cfgPath := config.Path(root)
+	orig, err := os.ReadFile(cfgPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "esc: applying updates failed: %v\n", err)
 		return
 	}
 	if err := bumpPins(root, d.Packs); err != nil {
@@ -151,8 +165,33 @@ func checkForUpdates(ctx context.Context, root string, stderr io.Writer) {
 		return
 	}
 	if err := cmdSync(ctx, root, stderr); err != nil {
-		fmt.Fprintf(stderr, "esc: update sync failed: %v\n", err)
+		if rerr := restoreFile(cfgPath, orig); rerr != nil {
+			fmt.Fprintf(stderr, "esc: update sync failed: %v (config restore also failed: %v)\n", err, rerr)
+			return
+		}
+		fmt.Fprintf(stderr, "esc: update aborted, config restored: %v\n", err)
 	}
+}
+
+// restoreFile atomically writes content back to path (temp file + rename in
+// the destination directory, matching the repo's atomic-write invariant).
+func restoreFile(path string, content []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".esc-restore-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(content); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
 // bumpPins re-pins each stale tag pack in config.yaml to its latest tag.
