@@ -82,7 +82,8 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 	// Update-freshness findings (inert unless a pack declares update_check).
 	if cadence, _ := updatecheck.Cadence(plan.PackObjs); cadence > 0 {
 		entries, _ := updatecheck.LoadLog(root)
-		if ls := updatecheck.LastSuccess(entries); ls != nil {
+		ls := updatecheck.LastSuccess(entries)
+		if ls != nil {
 			for _, ps := range ls.Packs {
 				if ps.Updates {
 					res.Findings = append(res.Findings, Finding{
@@ -95,7 +96,6 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 			}
 		}
 		last := updatecheck.LastEntry(entries)
-		ls := updatecheck.LastSuccess(entries)
 		overdue := ls == nil || time.Since(ls.Time) > cadence
 		attemptFailed := last != nil && last.Outcome == updatecheck.OutcomeError
 		if overdue && attemptFailed {

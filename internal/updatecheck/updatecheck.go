@@ -162,6 +162,9 @@ func semverLess(a, b semver) bool {
 }
 
 // maxStableSemver returns the greatest non-prerelease tag name, or ok=false.
+// Map iteration order is randomized by Go, so ties (e.g. "v2.0.0" and
+// "2.0.0" both parsing to the same semver) are broken deterministically via
+// preferName rather than by whichever name the iteration visits last.
 func maxStableSemver(tags map[string]string) (string, bool) {
 	var best semver
 	var bestName string
@@ -171,9 +174,30 @@ func maxStableSemver(tags map[string]string) (string, bool) {
 		if !ok || v.pre != "" {
 			continue // skip non-semver and prerelease tags
 		}
-		if !found || semverLess(best, v) {
+		switch {
+		case !found:
 			best, bestName, found = v, name, true
+		case semverLess(best, v):
+			best, bestName = v, name
+		case semverLess(v, best):
+			// current name is strictly greater; keep it
+		case preferName(name, bestName):
+			// equal semver: deterministic tie-break
+			best, bestName = v, name
 		}
 	}
 	return bestName, found
+}
+
+// preferName reports whether candidate should win a tie over current for two
+// tag names that parsed to the same semver: a "v"-prefixed name is preferred,
+// and otherwise the lexicographically smaller name wins. Either rule alone
+// makes the winner a pure function of the tag names, independent of map
+// iteration order.
+func preferName(candidate, current string) bool {
+	cv, cu := strings.HasPrefix(candidate, "v"), strings.HasPrefix(current, "v")
+	if cv != cu {
+		return cv
+	}
+	return candidate < current
 }

@@ -267,6 +267,50 @@ func TestAcceptSyncFailureRestoresConfig(t *testing.T) {
 	}
 }
 
+// TestAcceptSyncFailureNoChangeSkipsRestoreMessage covers the case where the
+// accepted decision only carries stale branch packs: bumpPins is a no-op
+// (branch pins aren't re-pinned), so a subsequent sync failure must not
+// report "config restored" — there was nothing to restore.
+func TestAcceptSyncFailureNoChangeSkipsRestoreMessage(t *testing.T) {
+	repo := packRepoWithCheck(t, "1.0.0", "7d")
+	root := newGoverned(t, repo, "v1.0.0")
+	if code, out := run(t, root, "sync"); code != 0 {
+		t.Fatalf("sync: %d\n%s", code, out)
+	}
+	cfgPath := filepath.Join(root, ".escapement", "config.yaml")
+	before, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := "file://" + repo + "//org"
+	old := maybeUpdates
+	maybeUpdates = func(ctx context.Context, root string, stderr io.Writer) *updatecheck.Decision {
+		return &updatecheck.Decision{Accepted: true, Packs: []updatecheck.PackStatus{
+			{Source: src, Kind: "branch", Pinned: "main", Latest: "abc123def456", Updates: true},
+		}}
+	}
+	t.Cleanup(func() { maybeUpdates = old })
+	gone := repo + ".gone"
+	if err := os.Rename(repo, gone); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Rename(gone, repo) })
+	_, out := run(t, root, "status")
+	if strings.Contains(out, "config restored") {
+		t.Errorf("no-op bumpPins must not report a spurious restore:\n%s", out)
+	}
+	if !strings.Contains(out, "update sync failed") {
+		t.Errorf("sync failure should still be reported:\n%s", out)
+	}
+	after, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Errorf("config.yaml must be untouched when bumpPins made no change:\nbefore: %q\nafter:  %q", before, after)
+	}
+}
+
 // bumpPins is the accept-path helper (esc update --ref equivalent): it must
 // re-pin only stale tag packs, leaving branch pins untouched for a plain sync
 // to pick up. Unit-tested directly to pin the tag/branch discrimination.
@@ -286,8 +330,12 @@ func TestBumpPinsRePinsTagOnlyAndSkipsBranches(t *testing.T) {
 		{Source: "github.com/acme/policy-packs//org", Kind: "tag", Pinned: "v1.0.0", Latest: "v2.0.0", Updates: true},
 		{Source: "github.com/acme/other//org", Kind: "branch", Pinned: "main", Latest: "abc123def456", Updates: true},
 	}
-	if err := bumpPins(root, statuses); err != nil {
+	changed, err := bumpPins(root, statuses)
+	if err != nil {
 		t.Fatalf("bumpPins: %v", err)
+	}
+	if !changed {
+		t.Error("bumpPins: want changed=true when a tag pack was re-pinned")
 	}
 	cfg, err := config.Load(root)
 	if err != nil {
@@ -320,8 +368,12 @@ func TestBumpPinsNoStaleTagsLeavesConfigUntouched(t *testing.T) {
 	statuses := []updatecheck.PackStatus{
 		{Source: "github.com/acme/policy-packs//org", Kind: "tag", Pinned: "v1.0.0", Latest: "v1.0.0", Updates: false},
 	}
-	if err := bumpPins(root, statuses); err != nil {
+	changed, err := bumpPins(root, statuses)
+	if err != nil {
 		t.Fatalf("bumpPins: %v", err)
+	}
+	if changed {
+		t.Error("bumpPins: want changed=false when no tag pack is stale")
 	}
 	after, err := os.ReadFile(cfgPath)
 	if err != nil {

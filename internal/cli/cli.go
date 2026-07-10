@@ -160,11 +160,18 @@ func checkForUpdates(ctx context.Context, root string, stderr io.Writer) {
 		fmt.Fprintf(stderr, "esc: applying updates failed: %v\n", err)
 		return
 	}
-	if err := bumpPins(root, d.Packs); err != nil {
+	changed, err := bumpPins(root, d.Packs)
+	if err != nil {
 		fmt.Fprintf(stderr, "esc: applying updates failed: %v\n", err)
 		return
 	}
 	if err := cmdSync(ctx, root, stderr); err != nil {
+		if !changed {
+			// bumpPins never touched config.yaml, so there is nothing to
+			// restore — reporting a restore would be spurious.
+			fmt.Fprintf(stderr, "esc: update sync failed: %v\n", err)
+			return
+		}
 		if rerr := restoreFile(cfgPath, orig); rerr != nil {
 			fmt.Fprintf(stderr, "esc: update sync failed: %v (config restore also failed: %v)\n", err, rerr)
 			return
@@ -195,13 +202,15 @@ func restoreFile(path string, content []byte) error {
 }
 
 // bumpPins re-pins each stale tag pack in config.yaml to its latest tag.
-// Branch pins are left unchanged — a plain sync picks up the new tip.
-func bumpPins(root string, statuses []updatecheck.PackStatus) error {
+// Branch pins are left unchanged — a plain sync picks up the new tip. The
+// returned changed is true iff config.yaml was modified and saved, so callers
+// can tell a genuine rewrite apart from a no-op (e.g. only branch pins were
+// stale).
+func bumpPins(root string, statuses []updatecheck.PackStatus) (changed bool, err error) {
 	cfg, err := config.Load(root)
 	if err != nil {
-		return err
+		return false, err
 	}
-	changed := false
 	for _, s := range statuses {
 		if !s.Updates || s.Kind != "tag" {
 			continue
@@ -214,9 +223,12 @@ func bumpPins(root string, statuses []updatecheck.PackStatus) error {
 		}
 	}
 	if !changed {
-		return nil
+		return false, nil
 	}
-	return cfg.Save(root)
+	if err := cfg.Save(root); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func cmdSync(ctx context.Context, root string, stdout io.Writer) error {

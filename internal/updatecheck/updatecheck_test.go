@@ -39,6 +39,19 @@ func TestSemverOrdering(t *testing.T) {
 	}
 }
 
+// TestMaxStableSemverTieBreakDeterministic pins the winner when two tag names
+// parse to the same semver (a "v"-prefixed name and a bare one): map
+// iteration order must never decide the result.
+func TestMaxStableSemverTieBreakDeterministic(t *testing.T) {
+	tags := map[string]string{"v2.0.0": "a", "2.0.0": "b"}
+	for i := 0; i < 20; i++ {
+		got, ok := maxStableSemver(tags)
+		if !ok || got != "v2.0.0" {
+			t.Fatalf("maxStableSemver tie-break = %q,%v; want v2.0.0 (v-prefix preferred), iteration %d", got, ok, i)
+		}
+	}
+}
+
 // gitCommit stages all files and commits, returning nothing.
 func gitCommit(t *testing.T, dir, msg string) {
 	t.Helper()

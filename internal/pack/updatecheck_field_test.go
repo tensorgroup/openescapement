@@ -9,11 +9,12 @@ import (
 
 func TestParseEvery(t *testing.T) {
 	ok := map[string]time.Duration{
-		"7d":  7 * 24 * time.Hour,
-		"1d":  24 * time.Hour,
-		"24h": 24 * time.Hour,
-		"90m": 90 * time.Minute,
-		"30s": 30 * time.Second,
+		"7d":    7 * 24 * time.Hour,
+		"1d":    24 * time.Hour,
+		"24h":   24 * time.Hour,
+		"90m":   90 * time.Minute,
+		"30s":   30 * time.Second,
+		"3650d": 3650 * 24 * time.Hour,
 	}
 	for in, want := range ok {
 		got, err := ParseEvery(in)
@@ -21,7 +22,7 @@ func TestParseEvery(t *testing.T) {
 			t.Errorf("ParseEvery(%q) = %v, %v; want %v", in, got, err, want)
 		}
 	}
-	for _, bad := range []string{"", "0d", "-1h", "7", "d", "7w", "1.5d", "abc"} {
+	for _, bad := range []string{"", "0d", "-1h", "7", "d", "7w", "1.5d", "abc", "99999999999d"} {
 		if _, err := ParseEvery(bad); err == nil {
 			t.Errorf("ParseEvery(%q): want error", bad)
 		}

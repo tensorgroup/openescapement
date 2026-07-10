@@ -5,6 +5,7 @@ package pack
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -168,6 +169,10 @@ func (m *Manifest) validate(dir string) error {
 	return nil
 }
 
+// maxDaysDuration is the largest day count that can be multiplied by 24h
+// without overflowing a time.Duration (int64 nanoseconds).
+const maxDaysDuration = int64(math.MaxInt64) / int64(24*time.Hour)
+
 // ParseEvery parses an update-check cadence. Go's time.ParseDuration has no
 // day unit, so "<n>d" is handled explicitly; all other units delegate to the
 // stdlib. The result must be strictly positive.
@@ -181,7 +186,18 @@ func ParseEvery(s string) (time.Duration, error) {
 		if err != nil || n <= 0 {
 			return 0, fmt.Errorf("invalid day duration %q (use e.g. 7d)", s)
 		}
-		return time.Duration(n) * 24 * time.Hour, nil
+		// n*24h is computed in int64 nanoseconds, which overflows (and can
+		// wrap to an arbitrary, even positive, value) well before n reaches
+		// the top of the int range. Bound n against the largest day count
+		// that cannot overflow, rather than trusting the sign of the result.
+		if int64(n) > maxDaysDuration {
+			return 0, fmt.Errorf("invalid day duration %q: too large", s)
+		}
+		d := time.Duration(n) * 24 * time.Hour
+		if d <= 0 {
+			return 0, fmt.Errorf("invalid day duration %q (use e.g. 7d)", s)
+		}
+		return d, nil
 	}
 	d, err := time.ParseDuration(s)
 	if err != nil {
