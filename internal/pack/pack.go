@@ -5,10 +5,13 @@ package pack
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -26,6 +29,7 @@ type Manifest struct {
 	MCP         MCPSpec        `yaml:"mcp"`
 	Catalog     []CatalogEntry `yaml:"catalog"`
 	Constraints Constraints    `yaml:"constraints"`
+	UpdateCheck *UpdateCheck   `yaml:"update_check,omitempty"`
 }
 
 // MCPSpec declares MCP server entries a pack injects into .mcp.json.
@@ -46,6 +50,15 @@ type CatalogEntry struct {
 type Constraints struct {
 	MaxFileBytes      int      `yaml:"max_file_bytes"`
 	ForbiddenPatterns []string `yaml:"forbidden_patterns"`
+}
+
+// UpdateCheck declares how often clients should probe this pack's source for
+// newer versions. Endpoint is parsed for forward-compatibility (a future
+// control-plane check surface) but is NEVER contacted in v0.1 — the client
+// always uses `git ls-remote` against the pack's git source.
+type UpdateCheck struct {
+	Every    string `yaml:"every"`
+	Endpoint string `yaml:"endpoint,omitempty"`
 }
 
 // Pack is a fully loaded, validated rule pack.
@@ -145,5 +158,53 @@ func (m *Manifest) validate(dir string) error {
 			return fail("catalog entry %q: invalid status %q (want preferred|allowed|review-required|banned)", c.Name, c.Status)
 		}
 	}
+	if m.UpdateCheck != nil {
+		if _, err := ParseEvery(m.UpdateCheck.Every); err != nil {
+			return fail("update_check.every: %v", err)
+		}
+		if e := m.UpdateCheck.Endpoint; e != "" && !strings.HasPrefix(e, "https://") {
+			return fail("update_check.endpoint %q: must be an https:// URL", e)
+		}
+	}
 	return nil
+}
+
+// maxDaysDuration is the largest day count that can be multiplied by 24h
+// without overflowing a time.Duration (int64 nanoseconds).
+const maxDaysDuration = int64(math.MaxInt64) / int64(24*time.Hour)
+
+// ParseEvery parses an update-check cadence. Go's time.ParseDuration has no
+// day unit, so "<n>d" is handled explicitly; all other units delegate to the
+// stdlib. The result must be strictly positive.
+func ParseEvery(s string) (time.Duration, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, fmt.Errorf("empty duration")
+	}
+	if strings.HasSuffix(s, "d") {
+		n, err := strconv.Atoi(strings.TrimSuffix(s, "d"))
+		if err != nil || n <= 0 {
+			return 0, fmt.Errorf("invalid day duration %q (use e.g. 7d)", s)
+		}
+		// n*24h is computed in int64 nanoseconds, which overflows (and can
+		// wrap to an arbitrary, even positive, value) well before n reaches
+		// the top of the int range. Bound n against the largest day count
+		// that cannot overflow, rather than trusting the sign of the result.
+		if int64(n) > maxDaysDuration {
+			return 0, fmt.Errorf("invalid day duration %q: too large", s)
+		}
+		d := time.Duration(n) * 24 * time.Hour
+		if d <= 0 {
+			return 0, fmt.Errorf("invalid day duration %q (use e.g. 7d)", s)
+		}
+		return d, nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, fmt.Errorf("invalid duration %q (use e.g. 7d, 24h, 90m)", s)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("duration must be positive: %q", s)
+	}
+	return d, nil
 }

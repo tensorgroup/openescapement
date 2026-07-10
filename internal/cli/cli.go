@@ -15,6 +15,7 @@ import (
 	"github.com/tensorgroup/openescapement/internal/engine"
 	"github.com/tensorgroup/openescapement/internal/esc"
 	"github.com/tensorgroup/openescapement/internal/lockfile"
+	"github.com/tensorgroup/openescapement/internal/updatecheck"
 )
 
 // Version, Commit, and Date are stamped at release time via -ldflags
@@ -61,9 +62,9 @@ func Run(root string, args []string, stdout, stderr io.Writer) int {
 	case "diff":
 		return cmdDiff(ctx, root, args[1:], stdout, stderr)
 	case "update":
-		err = cmdUpdate(ctx, root, args[1:], stdout)
+		err = cmdUpdate(ctx, root, args[1:], stdout, stderr)
 	case "render":
-		err = cmdRender(ctx, root, args[1:], stdout)
+		err = cmdRender(ctx, root, args[1:], stdout, stderr)
 	case "version":
 		fmt.Fprintf(stdout, "esc %s (commit %s, built %s)\n", Version, Commit, Date)
 		return 0
@@ -126,8 +127,108 @@ func cmdInit(root string, stdout io.Writer) error {
 			return err
 		}
 	}
+	gitignore := filepath.Join(root, config.Dir, ".gitignore")
+	if _, err := os.Stat(gitignore); os.IsNotExist(err) {
+		if err := os.WriteFile(gitignore, []byte("update-log.jsonl\n"), 0o644); err != nil {
+			return err
+		}
+	}
 	fmt.Fprintf(stdout, "Initialized %s\nAdd pack sources to the config, then run `esc sync`.\n", cfgPath)
 	return nil
+}
+
+// maybeUpdates is the update-check seam: production wires the real TTY-backed
+// throttle; tests inject updatecheck.MaybeIO with a deterministic interactivity
+// flag and prompt reader so no test can ever block on real stdin.
+var maybeUpdates = func(ctx context.Context, root string, stderr io.Writer) *updatecheck.Decision {
+	return updatecheck.Maybe(ctx, root, os.Stdin, stderr)
+}
+
+// checkForUpdates runs the overdue throttle before a command's main logic. On
+// an interactive accept it re-pins each stale tag pack to its latest tag and
+// syncs (a bare sync would keep the old pin for tag-pinned packs). If that
+// sync fails, the original config is restored so an automatic prompt can never
+// strand a pin that was never verified. It never fails the invoking command.
+func checkForUpdates(ctx context.Context, root string, stderr io.Writer) {
+	d := maybeUpdates(ctx, root, stderr)
+	if d == nil || !d.Accepted {
+		return
+	}
+	cfgPath := config.Path(root)
+	orig, err := os.ReadFile(cfgPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "esc: applying updates failed: %v\n", err)
+		return
+	}
+	changed, err := bumpPins(root, d.Packs)
+	if err != nil {
+		fmt.Fprintf(stderr, "esc: applying updates failed: %v\n", err)
+		return
+	}
+	if err := cmdSync(ctx, root, stderr); err != nil {
+		if !changed {
+			// bumpPins never touched config.yaml, so there is nothing to
+			// restore — reporting a restore would be spurious.
+			fmt.Fprintf(stderr, "esc: update sync failed: %v\n", err)
+			return
+		}
+		if rerr := restoreFile(cfgPath, orig); rerr != nil {
+			fmt.Fprintf(stderr, "esc: update sync failed: %v (config restore also failed: %v)\n", err, rerr)
+			return
+		}
+		fmt.Fprintf(stderr, "esc: update aborted, config restored: %v\n", err)
+	}
+}
+
+// restoreFile atomically writes content back to path (temp file + rename in
+// the destination directory, matching the repo's atomic-write invariant).
+func restoreFile(path string, content []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".esc-restore-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(content); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
+
+// bumpPins re-pins each stale tag pack in config.yaml to its latest tag.
+// Branch pins are left unchanged — a plain sync picks up the new tip. The
+// returned changed is true iff config.yaml was modified and saved, so callers
+// can tell a genuine rewrite apart from a no-op (e.g. only branch pins were
+// stale).
+func bumpPins(root string, statuses []updatecheck.PackStatus) (changed bool, err error) {
+	cfg, err := config.Load(root)
+	if err != nil {
+		return false, err
+	}
+	for _, s := range statuses {
+		if !s.Updates || s.Kind != "tag" {
+			continue
+		}
+		for i := range cfg.Packs {
+			if cfg.Packs[i].Source == s.Source {
+				cfg.Packs[i].Ref = s.Latest
+				changed = true
+			}
+		}
+	}
+	if !changed {
+		return false, nil
+	}
+	if err := cfg.Save(root); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func cmdSync(ctx context.Context, root string, stdout io.Writer) error {
@@ -138,6 +239,7 @@ func cmdSync(ctx context.Context, root string, stdout io.Writer) error {
 	if err := engine.Apply(root, plan); err != nil {
 		return err
 	}
+	updatecheck.RecordSync(ctx, root, plan.PackObjs)
 	fmt.Fprintf(stdout, "Synced %d pack(s), %d artifact(s):\n", len(plan.Packs), len(plan.Artifacts))
 	for _, a := range plan.Artifacts {
 		fmt.Fprintf(stdout, "  %-10s %s\n", a.Kind, a.Path)
@@ -152,6 +254,7 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
+	checkForUpdates(ctx, root, stderr)
 	st, err := engine.Status(ctx, root)
 	if err != nil {
 		return exitCode(err, stderr)
@@ -182,6 +285,7 @@ func cmdDiff(ctx context.Context, root string, args []string, stdout, stderr io.
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
+	checkForUpdates(ctx, root, stderr)
 	cur, err := engine.Plan(ctx, root)
 	if err != nil {
 		return exitCode(err, stderr)
@@ -206,7 +310,7 @@ func cmdDiff(ctx context.Context, root string, args []string, stdout, stderr io.
 	return 0
 }
 
-func cmdUpdate(ctx context.Context, root string, args []string, stdout io.Writer) error {
+func cmdUpdate(ctx context.Context, root string, args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("update", flag.ContinueOnError)
 	fs.SetOutput(stdout)
 	src := fs.String("source", "", "which configured pack source to update")
@@ -214,6 +318,7 @@ func cmdUpdate(ctx context.Context, root string, args []string, stdout io.Writer
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	checkForUpdates(ctx, root, stderr)
 	if *ref == "" {
 		return errors.New("update: --ref is required")
 	}
@@ -250,13 +355,14 @@ func cmdUpdate(ctx context.Context, root string, args []string, stdout io.Writer
 	return nil
 }
 
-func cmdRender(ctx context.Context, root string, args []string, stdout io.Writer) error {
+func cmdRender(ctx context.Context, root string, args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("render", flag.ContinueOnError)
 	fs.SetOutput(stdout)
 	toStdout := fs.Bool("stdout", false, "print rendered targets to stdout")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	checkForUpdates(ctx, root, stderr)
 	if !*toStdout {
 		return errors.New("render: only --stdout is supported (sync writes files)")
 	}

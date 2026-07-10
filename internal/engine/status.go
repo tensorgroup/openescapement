@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/tensorgroup/openescapement/internal/esc"
 	"github.com/tensorgroup/openescapement/internal/lockfile"
 	"github.com/tensorgroup/openescapement/internal/pack"
 	"github.com/tensorgroup/openescapement/internal/render"
+	"github.com/tensorgroup/openescapement/internal/updatecheck"
 )
 
 // State classifies one artifact's condition relative to the plan.
@@ -21,6 +23,8 @@ const (
 	Missing            State = "missing"
 	Stale              State = "stale"
 	ConstraintViolated State = "constraint-violated"
+	PackStale          State = "pack-stale"
+	CheckOverdue       State = "check-overdue"
 )
 
 // Finding is one classified artifact (or pack pin) in a status report.
@@ -73,6 +77,34 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 	}
 	for _, v := range plan.Violations {
 		res.Findings = append(res.Findings, Finding{Path: v.Path, State: ConstraintViolated, Detail: v.Rule})
+	}
+
+	// Update-freshness findings (inert unless a pack declares update_check).
+	if cadence, _ := updatecheck.Cadence(plan.PackObjs); cadence > 0 {
+		entries, _ := updatecheck.LoadLog(root)
+		ls := updatecheck.LastSuccess(entries)
+		if ls != nil {
+			for _, ps := range ls.Packs {
+				if ps.Updates {
+					res.Findings = append(res.Findings, Finding{
+						Path:  ps.Source,
+						State: PackStale,
+						Detail: fmt.Sprintf("update available: %s -> %s (run `esc update` then `esc sync`)",
+							ps.Pinned, ps.Latest),
+					})
+				}
+			}
+		}
+		last := updatecheck.LastEntry(entries)
+		overdue := ls == nil || time.Since(ls.Time) > cadence
+		attemptFailed := last != nil && last.Outcome == updatecheck.OutcomeError
+		if overdue && attemptFailed {
+			res.Findings = append(res.Findings, Finding{
+				Path:   "update-check",
+				State:  CheckOverdue,
+				Detail: "no successful update check within cadence and the latest attempt failed",
+			})
+		}
 	}
 	return res, nil
 }
