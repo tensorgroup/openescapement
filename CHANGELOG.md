@@ -13,6 +13,7 @@ tagged releases begin.
   verified `install.sh`, and `VERIFYING.md`.
 - `esc version` now prints commit and build date alongside the version.
 - CI workflow: test matrix (linux + macos), race detector on engine/cli,
+  gofmt/vet gates, goreleaser snapshot check.
 - Update-check (client): packs may declare `update_check: { every: <7d|24h|90m>, endpoint: <https URL> }`.
   Overdue `esc sync`/`status`/`diff`/`update`/`render` invocations run a lightweight
   `git ls-remote` staleness probe (10s timeout, never blocks the command), record it to
@@ -20,7 +21,6 @@ tagged releases begin.
   interactive TTY — offer to re-pin and sync. `esc status --check` reports `pack-stale`
   and `check-overdue` findings (exit 1). Inert unless a pack opts in. The `endpoint` field
   is parsed for forward-compatibility but not contacted in v0.1.
-  gofmt/vet gates, goreleaser snapshot check.
 
 Planned — see `docs/roadmap/`:
 - v0.2: MCP server surface (live policy queries, connection telemetry, agent-initiated registration)
