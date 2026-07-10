@@ -190,6 +190,8 @@ func LsRemoteTags(ctx context.Context, url string) (map[string]string, error) {
 }
 
 // LsRemoteHash returns the commit hash url resolves ref to, or "" if absent.
+// Annotated tags are peeled to their commit so the result agrees with
+// LsRemoteTags.
 func LsRemoteHash(ctx context.Context, url, ref string) (string, error) {
 	if strings.HasPrefix(url, "-") {
 		return "", fmt.Errorf("%w: source %q looks like a command-line option", esc.ErrFetch, url)
@@ -197,15 +199,25 @@ func LsRemoteHash(ctx context.Context, url, ref string) (string, error) {
 	if !validRef.MatchString(ref) {
 		return "", fmt.Errorf("%w: ref %q contains disallowed characters", esc.ErrFetch, ref)
 	}
-	out, err := git(ctx, "", "ls-remote", "--", url, ref)
+	// A name-pattern query does not emit the ^{} peeled line, so ask for
+	// both patterns explicitly. The ^{} suffix is appended to the
+	// already-validated ref, so the injection guard above still holds.
+	out, err := git(ctx, "", "ls-remote", "--", url, ref, ref+"^{}")
 	if err != nil {
 		return "", fmt.Errorf("%w: ls-remote %s %s: %v", esc.ErrFetch, url, ref, err)
 	}
+	hash := ""
 	for _, line := range strings.Split(out, "\n") {
 		fields := strings.Fields(line)
-		if len(fields) == 2 {
-			return fields[0], nil
+		if len(fields) != 2 {
+			continue
+		}
+		if strings.HasSuffix(fields[1], "^{}") {
+			return fields[0], nil // peeled commit of an annotated tag wins
+		}
+		if hash == "" {
+			hash = fields[0]
 		}
 	}
-	return "", nil
+	return hash, nil
 }
