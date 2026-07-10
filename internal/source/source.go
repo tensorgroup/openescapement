@@ -156,3 +156,56 @@ func DefaultCacheDir() (string, error) {
 	}
 	return filepath.Join(base, "escapement"), nil
 }
+
+// LsRemoteTags returns tag name -> commit hash for all tags at url, without
+// fetching any content. It reuses the same arg-injection hygiene as Fetch.
+func LsRemoteTags(ctx context.Context, url string) (map[string]string, error) {
+	if strings.HasPrefix(url, "-") {
+		return nil, fmt.Errorf("%w: source %q looks like a command-line option", esc.ErrFetch, url)
+	}
+	out, err := git(ctx, "", "ls-remote", "--tags", "--", url)
+	if err != nil {
+		return nil, fmt.Errorf("%w: ls-remote %s: %v", esc.ErrFetch, url, err)
+	}
+	tags := map[string]string{}
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			continue
+		}
+		hash, ref := fields[0], fields[1]
+		name := strings.TrimPrefix(ref, "refs/tags/")
+		if name == ref {
+			continue // not a tag ref
+		}
+		// Annotated tags emit both refs/tags/X (tag object) and
+		// refs/tags/X^{} (the commit). Prefer the dereferenced commit.
+		deref := strings.HasSuffix(name, "^{}")
+		name = strings.TrimSuffix(name, "^{}")
+		if _, seen := tags[name]; !seen || deref {
+			tags[name] = hash
+		}
+	}
+	return tags, nil
+}
+
+// LsRemoteHash returns the commit hash url resolves ref to, or "" if absent.
+func LsRemoteHash(ctx context.Context, url, ref string) (string, error) {
+	if strings.HasPrefix(url, "-") {
+		return "", fmt.Errorf("%w: source %q looks like a command-line option", esc.ErrFetch, url)
+	}
+	if !validRef.MatchString(ref) {
+		return "", fmt.Errorf("%w: ref %q contains disallowed characters", esc.ErrFetch, ref)
+	}
+	out, err := git(ctx, "", "ls-remote", "--", url, ref)
+	if err != nil {
+		return "", fmt.Errorf("%w: ls-remote %s %s: %v", esc.ErrFetch, url, ref, err)
+	}
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 2 {
+			return fields[0], nil
+		}
+	}
+	return "", nil
+}
