@@ -1,6 +1,7 @@
 package updatecheck
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"os"
@@ -30,6 +31,9 @@ func logPath(root string) string {
 }
 
 // LoadLog reads the JSONL log; returns (nil, nil) if the file does not exist.
+// Lines that fail to parse (a truncated tail or a hand-edited line) are
+// silently skipped so one corrupt line never makes the whole history
+// unreadable. Errors are returned only for real I/O failures.
 func LoadLog(root string) ([]Entry, error) {
 	data, err := os.ReadFile(logPath(root))
 	if os.IsNotExist(err) {
@@ -39,13 +43,20 @@ func LoadLog(root string) ([]Entry, error) {
 		return nil, err
 	}
 	var out []Entry
-	dec := json.NewDecoder(bytes.NewReader(data))
-	for dec.More() {
+	sc := bufio.NewScanner(bytes.NewReader(data))
+	for sc.Scan() {
+		line := bytes.TrimSpace(sc.Bytes())
+		if len(line) == 0 {
+			continue
+		}
 		var e Entry
-		if err := dec.Decode(&e); err != nil {
-			return nil, err
+		if err := json.Unmarshal(line, &e); err != nil {
+			continue // corrupt line: drop the entry, keep the rest
 		}
 		out = append(out, e)
+	}
+	if err := sc.Err(); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -133,6 +144,9 @@ func ensureGitignore(root string) {
 		}
 		f.WriteString(logFileName + "\n")
 		return
+	}
+	if !os.IsNotExist(err) {
+		return // real read error: don't clobber an existing .gitignore
 	}
 	if os.MkdirAll(filepath.Join(root, config.Dir), 0o755) == nil {
 		os.WriteFile(p, []byte(logFileName+"\n"), 0o644)
