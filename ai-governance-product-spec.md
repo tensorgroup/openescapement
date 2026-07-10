@@ -116,6 +116,18 @@ Initial ICP: 50–500 person engineering orgs heavy on Claude Code / Cursor, **p
 - **Data model spine:** Org → Departments → Teams → Projects (with lifecycle/expiry) → Repos/Services → Policies → Deployments → Events
 - **Design values:** privacy-respecting by default (aggregate telemetry, no prompt-content collection in v1); lightweight over complete; self-hostable; boring and fast
 
+### Update propagation & freshness (DECIDED)
+
+No cron, no daemon, no server push. Clients pull on their own cadence, and the cadence is itself policy:
+
+- **Cadence rule lives in the pack.** A pack manifest may declare `update_check: { every: 7d, endpoint: <optional URL> }`. If no installed pack declares one, no automatic checks occur — the unconnected OSS path stays silent by construction (same stance as the telemetry consent model). With multiple packs, the strictest (shortest) cadence wins.
+- **Trigger: piggyback on invocation.** Any `esc` command consults the local check log first; if the last successful check is older than the cadence, it performs one before proceeding. `esc sync` counts as a check by nature. A check never blocks or fails the invoking command; a failed check costs one short stderr line.
+- **Check location.** Default: a lightweight ref comparison against each pack's existing git source (`git ls-remote`; no content fetched). If `endpoint` is set — a full URL carrying scheme/host/port, HTTPS required — the client instead makes a single request to that endpoint (typically the control plane), reporting pinned pack versions and receiving latest-version info. Either way the check only *informs*: rules still arrive exclusively through the normal `esc sync` fetch + signature-verification path. The observe-don't-distribute line is untouched.
+- **Local log.** `.escapement/update-log.jsonl` — append-only, trimmed to the last N entries (default 50), gitignored per-clone state (`esc init` scaffolds the ignore entry). Each entry: timestamp, outcome (`ok_current` | `ok_updates` | `error`), per-pack pinned vs. latest versions, and whether a prompt was shown/accepted/declined.
+- **On updates found.** Stderr notice always. Interactive TTY: prompt — Enter runs `esc sync` now, N/Esc skips (skip is logged). Non-TTY (CI, agent-invoked): notice only, never a hanging prompt.
+- **Governance teeth via status.** Two new finding kinds: `pack-stale` (updates known available, not applied) and `check-overdue` (no successful check within cadence and the status-time attempt also failed). Both count as findings, so `esc status --check` exits 1 in CI while interactive use stays a polite prompt.
+- **Server side (control plane, v0.2+).** The admin portal edits packs, so setting the cadence there publishes a new pack version — one policy channel, versioned and audited like any other rule change; clients pick it up on their next check. Every check request against a control-plane endpoint is logged (org, repo, outcome, versions, timestamp): a passive fleet heartbeat that powers the freshness dashboards, per-repo last-seen, and the staleness view of the shadow-IT map with no separate heartbeat infrastructure. When connected, check results also flow as `update_check` telemetry events under the decided consent model (connected = opt-out, unconnected = silent).
+
 ## 7. MVP Cut (strawman — challenge this in Claude Code)
 
 **v0.1 (weeks, not months):**
