@@ -12,14 +12,21 @@ import (
 	"github.com/tensorgroup/openescapement/internal/updatecheck"
 )
 
-// gov builds a governed repo synced against a pack repo that declares
-// update_check, returning the governed root and the pack repo path.
+// govWithUpdateCheck builds a governed repo synced against a pack repo that
+// declares update_check, returning the governed root and the pack repo path.
 func govWithUpdateCheck(t *testing.T) (root, packRepo string) {
+	t.Helper()
+	return govRepo(t, "schema: 1\nname: acme\nversion: 1.0.0\nrules: [rules/a.md]\n"+
+		"update_check:\n  every: 7d\n")
+}
+
+// govRepo builds a governed repo synced against a pack repo whose pack.yaml
+// is the given content, returning the governed root and the pack repo path.
+func govRepo(t *testing.T, packYAML string) (root, packRepo string) {
 	t.Helper()
 	packRepo = t.TempDir()
 	files := map[string]string{
-		"org/pack.yaml": "schema: 1\nname: acme\nversion: 1.0.0\nrules: [rules/a.md]\n" +
-			"update_check:\n  every: 7d\n",
+		"org/pack.yaml":  packYAML,
 		"org/rules/a.md": "## A\none\n",
 	}
 	for rel, c := range files {
@@ -100,6 +107,86 @@ func TestStatusCheckOverdue(t *testing.T) {
 	}
 	if !hasState(st, CheckOverdue) {
 		t.Fatalf("want check-overdue finding, got %+v", st.Findings)
+	}
+}
+
+// A failed attempt after a within-cadence success is not overdue: the
+// cadence window is still satisfied by the recent success.
+func TestStatusErrorAfterFreshSuccessNotOverdue(t *testing.T) {
+	root, _ := govWithUpdateCheck(t)
+	appendTestLog(t, root, updatecheck.Entry{
+		Time: time.Now().Add(-1 * time.Hour).UTC(), Outcome: updatecheck.OutcomeOKCurrent,
+		Cadence: "7d", Prompt: "none",
+	})
+	appendTestLog(t, root, updatecheck.Entry{
+		Time: time.Now().UTC(), Outcome: updatecheck.OutcomeError, Cadence: "7d", Prompt: "none",
+	})
+	st, err := Status(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasState(st, CheckOverdue) {
+		t.Errorf("error after within-cadence success must not be overdue, got %+v", st.Findings)
+	}
+	if hasState(st, PackStale) {
+		t.Errorf("unexpected pack-stale finding, got %+v", st.Findings)
+	}
+	if !st.Clean() {
+		t.Errorf("status should be clean, got %+v", st.Findings)
+	}
+}
+
+// The stale signal comes from the last SUCCESSFUL check only: a newer
+// ok_current success supersedes an older ok_updates entry.
+func TestStatusNewerSuccessSupersedesStale(t *testing.T) {
+	root, _ := govWithUpdateCheck(t)
+	appendTestLog(t, root, updatecheck.Entry{
+		Time:    time.Now().Add(-48 * time.Hour).UTC(),
+		Outcome: updatecheck.OutcomeOKUpdates,
+		Cadence: "7d",
+		Prompt:  "none",
+		Packs: []updatecheck.PackStatus{{
+			Source: "file://x//org", Kind: "tag", Pinned: "v1.0.0", Latest: "v2.0.0", Updates: true,
+		}},
+	})
+	appendTestLog(t, root, updatecheck.Entry{
+		Time: time.Now().Add(-1 * time.Hour).UTC(), Outcome: updatecheck.OutcomeOKCurrent,
+		Cadence: "7d", Prompt: "none",
+	})
+	st, err := Status(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasState(st, PackStale) {
+		t.Errorf("newer ok_current success must supersede older ok_updates, got %+v", st.Findings)
+	}
+	if !st.Clean() {
+		t.Errorf("status should be clean, got %+v", st.Findings)
+	}
+}
+
+// When no pack currently declares update_check (cadence 0), the freshness
+// logic is inert even if a populated update log exists on disk.
+func TestStatusNoCadenceInertDespiteLog(t *testing.T) {
+	root, _ := govRepo(t, "schema: 1\nname: acme\nversion: 1.0.0\nrules: [rules/a.md]\n")
+	appendTestLog(t, root, updatecheck.Entry{
+		Time:    time.Now().Add(-100 * 24 * time.Hour).UTC(),
+		Outcome: updatecheck.OutcomeOKUpdates,
+		Cadence: "7d",
+		Prompt:  "none",
+		Packs: []updatecheck.PackStatus{{
+			Source: "file://x//org", Kind: "tag", Pinned: "v1.0.0", Latest: "v2.0.0", Updates: true,
+		}},
+	})
+	st, err := Status(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasState(st, PackStale) || hasState(st, CheckOverdue) {
+		t.Errorf("no update-check findings expected without a declared cadence, got %+v", st.Findings)
+	}
+	if !st.Clean() {
+		t.Errorf("status should be clean, got %+v", st.Findings)
 	}
 }
 
