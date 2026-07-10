@@ -44,14 +44,17 @@ func Maybe(ctx context.Context, root string, stdin *os.File, stderr io.Writer) *
 
 	cctx, cancel := context.WithTimeout(ctx, checkTimeout)
 	defer cancel()
+	entry := Entry{Time: time.Now().UTC(), Cadence: last.Cadence, Prompt: "none"}
 	cfg, err := config.Load(root)
 	if err != nil {
+		entry.Outcome = OutcomeError
+		fmt.Fprintf(stderr, "esc: update check skipped: %v\n", err)
+		_ = appendLog(root, entry)
 		return nil
 	}
 	lock, _ := lockfile.Load(root)
 	statuses, cerr := check(cctx, cfg, lock)
 
-	entry := Entry{Time: time.Now().UTC(), Cadence: last.Cadence, Prompt: "none"}
 	if cerr != nil {
 		entry.Outcome = OutcomeError
 		fmt.Fprintf(stderr, "esc: update check failed: %v\n", cerr)
@@ -87,22 +90,25 @@ func RecordSync(ctx context.Context, root string, packs []*pack.Pack) {
 	cadence, cadStr := Cadence(packs)
 	entries, _ := LoadLog(root)
 	if cadence == 0 {
-		if len(entries) > 0 {
-			// Was active, now inert: write a terminal empty-cadence marker so
-			// the throttle stops on the next command.
+		if last := LastEntry(entries); last != nil && last.Cadence != "" {
+			// Transition from active to inert: write one terminal
+			// empty-cadence marker so the throttle stops on the next command.
+			// Later syncs while already inert append nothing.
 			_ = appendLog(root, Entry{Time: time.Now().UTC(), Outcome: OutcomeOKCurrent, Prompt: "none"})
 		}
 		return
 	}
 	cctx, cancel := context.WithTimeout(ctx, checkTimeout)
 	defer cancel()
+	entry := Entry{Time: time.Now().UTC(), Cadence: cadStr, Prompt: "none"}
 	cfg, err := config.Load(root)
 	if err != nil {
+		entry.Outcome = OutcomeError
+		_ = appendLog(root, entry)
 		return
 	}
 	lock, _ := lockfile.Load(root)
 	statuses, cerr := check(cctx, cfg, lock)
-	entry := Entry{Time: time.Now().UTC(), Cadence: cadStr, Prompt: "none"}
 	if cerr != nil {
 		entry.Outcome = OutcomeError
 		_ = appendLog(root, entry)
@@ -148,10 +154,14 @@ func isInteractive(f *os.File) bool {
 	return fi.Mode()&os.ModeCharDevice != 0
 }
 
-// readPromptDecision prints the prompt and reads one line: empty = accept,
-// anything else (including an ESC escape sequence) = decline.
+// readPromptDecision prints the prompt and reads one line: an empty line typed
+// by the user = accept; anything else — a non-empty line, an ESC escape
+// sequence, EOF (Ctrl-D), or a read error — = decline.
 func readPromptDecision(r io.Reader, w io.Writer) bool {
 	fmt.Fprint(w, "Update now? [Enter=yes, n=no]: ")
-	line, _ := bufio.NewReader(r).ReadString('\n')
+	line, err := bufio.NewReader(r).ReadString('\n')
+	if err != nil {
+		return false // EOF or read error: bail out, never auto-accept
+	}
 	return strings.TrimRight(line, "\r\n") == ""
 }
