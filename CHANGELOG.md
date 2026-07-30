@@ -22,6 +22,9 @@ tagged releases begin.
   rather than probing. `esc status --check` reports `pack-stale`
   and `check-overdue` findings (exit 1). Inert unless a pack opts in. The `endpoint` field
   is parsed for forward-compatibility but not contacted in v0.1.
+- `AGENTS.md`: canonical agent-facing repo instructions (CLAUDE.md now imports it),
+  restructured per Anthropic's Claude 5 context-engineering guidance; vendor-guidance
+  tracking practice documented in `docs/roadmap/vendor-guidance-tracking.md`.
 
 Planned — see `docs/roadmap/`:
 - v0.2: MCP server surface (live policy queries, connection telemetry, agent-initiated registration)
