@@ -1,0 +1,20 @@
+{{define "title"}}Edit {{.Frag}} — esc portal{{end}}
+{{define "explainer"}}Edit a rule fragment, preview the diff, and publish a new version.{{end}}
+{{define "content"}}
+<h2>{{.Name}} <span class="muted">/ {{.Frag}}</span></h2>
+{{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+{{if .Diff}}<pre class="diff">{{.Diff}}</pre>{{end}}
+<form method="post" action="/packs/{{.Name}}/publish">
+  <input type="hidden" name="frag" value="{{.Frag}}">
+  <p><textarea name="content" rows="24" cols="90">{{.Content}}</textarea></p>
+  <p>
+    <label>Version
+      <input name="version" value="{{.SuggestedVersion}}">
+    </label>
+  </p>
+  <p>
+    <button type="submit" name="action" value="diff">Preview diff</button>
+    <button type="submit" name="action" value="publish">Publish</button>
+  </p>
+</form>
+{{end}}

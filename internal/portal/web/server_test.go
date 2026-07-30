@@ -15,7 +15,7 @@ func newTestServer(t *testing.T, token string) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return New(st, token, "test")
+	return New(st, nil, token, "test")
 }
 
 func get(t *testing.T, h http.Handler, path string, hdr map[string]string) *httptest.ResponseRecorder {

@@ -1,3 +1,19 @@
 {{define "title"}}Rule Packs — esc portal{{end}}
-{{define "explainer"}}What's published, and who's using which version.{{end}}
-{{define "content"}}<p class="muted">Coming soon.</p>{{end}}
+{{define "explainer"}}These are the AI rulebooks your teams' coding agents read on every session.{{end}}
+{{define "content"}}
+{{if not .Packs}}
+<p class="muted">No pack repos configured. Clone a pack repo into the server's packs directory.</p>
+{{else}}
+<div class="cards">
+  {{range .Packs}}
+  <a class="card" href="/packs/{{.Name}}">
+    <span class="num">v{{.Version}}</span>
+    <span class="label">{{.Name}}</span>
+    <p class="muted">{{.Description}}</p>
+    <p class="muted">{{len .Tags}} version{{if ne (len .Tags) 1}}s{{end}} published{{if .Tags}} · last {{(index .Tags 0).Date}}{{end}}</p>
+    <span>View</span>
+  </a>
+  {{end}}
+</div>
+{{end}}
+{{end}}

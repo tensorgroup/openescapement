@@ -19,7 +19,7 @@ func TestOverviewShowsSeededStats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := New(st, "", "test")
+	s := New(st, nil, "", "test")
 	s.Now = func() time.Time { return epoch }
 	rr := get(t, s.Handler(), "/", nil)
 	if rr.Code != 200 {

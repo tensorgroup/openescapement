@@ -16,7 +16,7 @@ func TestFleetFilters(t *testing.T) {
 		t.Fatal(err)
 	}
 	st, _ := store.Open(dir)
-	s := New(st, "", "test")
+	s := New(st, nil, "", "test")
 	h := s.Handler()
 
 	all := get(t, h, "/fleet", nil).Body.String()

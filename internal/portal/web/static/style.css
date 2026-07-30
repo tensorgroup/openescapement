@@ -130,3 +130,41 @@ tbody tr:last-child td { border-bottom: none; }
 .pill.drifted { background: var(--pill-drifted); }
 .pill.stale { background: var(--pill-stale); }
 .pill.ungoverned { background: var(--pill-ungoverned); }
+
+.fragment {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.9rem 1.25rem;
+  margin: 0.75rem 0;
+}
+.fragment h4 { margin-top: 0; }
+.fragment h4 a { margin-left: 0.75rem; font-size: 0.8rem; }
+
+pre.diff, .fragment pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  font-size: 0.85rem;
+}
+
+.error, .success {
+  border-radius: 6px;
+  padding: 0.6rem 1rem;
+  margin: 0.75rem 0;
+  font-size: 0.9rem;
+}
+.error { background: #fbeaec; border: 1px solid var(--pill-stale); color: var(--pill-stale); }
+.success { background: #e9f3ee; border: 1px solid var(--pill-in-sync); color: var(--pill-in-sync); }
+
+textarea {
+  width: 100%;
+  max-width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem;
+}

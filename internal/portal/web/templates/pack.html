@@ -1,0 +1,22 @@
+{{define "title"}}{{.Pack.Name}} — esc portal{{end}}
+{{define "explainer"}}Version history and rule fragments for {{.Pack.Name}}.{{end}}
+{{define "content"}}
+{{if .Published}}<div class="success">Published {{.Published}}.</div>{{end}}
+<h2>{{.Pack.Name}} <span class="muted">v{{.Pack.Version}}</span></h2>
+<p class="muted">{{.Pack.Description}}</p>
+<section>
+  <h3>Version history</h3>
+  <ul>
+    {{range .Pack.Tags}}<li>{{.Name}} — {{.Date}}</li>{{else}}<li class="muted">No versions published yet.</li>{{end}}
+  </ul>
+</section>
+<section>
+  <h3>Fragments</h3>
+  {{range .Fragments}}
+  <article class="fragment">
+    <h4>{{.Path}} <a href="/packs/{{$.Pack.Name}}/edit?frag={{.Path}}">Edit</a></h4>
+    {{.HTML}}
+  </article>
+  {{end}}
+</section>
+{{end}}

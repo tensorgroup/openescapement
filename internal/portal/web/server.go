@@ -6,13 +6,18 @@ package web
 import (
 	"crypto/subtle"
 	"embed"
+	"errors"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/tensorgroup/openescapement/internal/esc"
 	"github.com/tensorgroup/openescapement/internal/portal/charts"
+	"github.com/tensorgroup/openescapement/internal/portal/publish"
 	"github.com/tensorgroup/openescapement/internal/portal/store"
 )
 
@@ -25,10 +30,12 @@ var staticFS embed.FS
 const sessionCookie = "esc_session"
 
 // Server holds the portal's dependencies and routes. Packs (the publish
-// manager) is added in Task 8/9; handlers before then don't need it.
+// manager) may be nil, e.g. before Task 10 wires it up from cmdServe — the
+// packs pages then behave as if no pack repos are configured.
 type Server struct {
 	Store   *store.Store
-	Token   string // "" = auth disabled (demo mode)
+	Packs   *publish.Manager // nil = no pack repos configured
+	Token   string           // "" = auth disabled (demo mode)
 	Version string
 	Now     func() time.Time // injectable clock for tests; default time.Now
 
@@ -38,12 +45,13 @@ type Server struct {
 
 // pageNames are the page templates parsed at startup. Each defines the
 // "title", "explainer", and "content" blocks that override the layout.
-var pageNames = []string{"overview", "fleet", "packs", "usage"}
+var pageNames = []string{"overview", "fleet", "packs", "pack", "pack_edit", "usage"}
 
 // New builds a Server with its templates parsed and ready to serve.
-func New(st *store.Store, token, version string) *Server {
+func New(st *store.Store, packs *publish.Manager, token, version string) *Server {
 	s := &Server{
 		Store:   st,
+		Packs:   packs,
 		Token:   token,
 		Version: version,
 		Now:     time.Now,
@@ -93,16 +101,27 @@ type overviewData struct {
 	AdoptionChart template.HTML
 }
 
-// render executes the named page template against the shared layout.
+// render executes the named page template against the shared layout with a
+// 200 OK status.
 func (s *Server) render(w http.ResponseWriter, page string, data any) {
+	s.renderStatus(w, http.StatusOK, page, data)
+}
+
+// renderStatus is like render but with an explicit status code, for pages
+// that render a non-200 response body (e.g. a 422 validation error) rather
+// than a plain http.Error.
+func (s *Server) renderStatus(w http.ResponseWriter, status int, page string, data any) {
 	t, ok := s.pages[page]
 	if !ok {
 		http.Error(w, "template not found", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
 	if err := t.ExecuteTemplate(w, "layout.html", data); err != nil {
-		serverError(w, err)
+		// Status and headers are already written; log only, we can't
+		// change the response now.
+		log.Printf("portal: internal error rendering %s: %v", page, err)
 	}
 }
 
@@ -253,21 +272,186 @@ func (s *Server) handleFleet(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "fleet", data)
 }
 
+// packsData extends layoutData with every configured pack, for the /packs
+// list page.
+type packsData struct {
+	layoutData
+	Packs []publish.PackInfo
+}
+
 func (s *Server) handlePacks(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "packs", s.baseData())
+	var infos []publish.PackInfo
+	if s.Packs != nil {
+		var err error
+		infos, err = s.Packs.List(r.Context())
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+	}
+	data := packsData{layoutData: s.baseData(), Packs: infos}
+	s.render(w, "packs", data)
+}
+
+// fragmentView pairs a fragment's path with its rendered HTML, for the pack
+// detail page.
+type fragmentView struct {
+	Path string
+	HTML template.HTML
+}
+
+// packDetailData extends layoutData with one pack's version history and
+// rendered fragments, plus an optional "just published" banner version.
+type packDetailData struct {
+	layoutData
+	Pack      publish.PackInfo
+	Fragments []fragmentView
+	Published string // "" = no banner; else e.g. "v1.3.0"
 }
 
 func (s *Server) handlePackDetail(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "packs", s.baseData())
+	name := r.PathValue("name")
+	if s.Packs == nil {
+		http.NotFound(w, r)
+		return
+	}
+	info, err := s.Packs.Get(r.Context(), name)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	frags := make([]fragmentView, 0, len(info.Fragments))
+	for _, f := range info.Fragments {
+		content, err := s.Packs.ReadFragment(name, f)
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		frags = append(frags, fragmentView{Path: f, HTML: mdHTML(content)})
+	}
+	data := packDetailData{
+		layoutData: s.baseData(),
+		Pack:       *info,
+		Fragments:  frags,
+		Published:  r.URL.Query().Get("published"),
+	}
+	s.render(w, "pack", data)
+}
+
+// packEditData extends layoutData with the edit form's state: the fragment
+// being edited, its content (the on-disk version, or the user's submitted
+// version on a diff/validation-error re-render), the suggested next
+// version, and optionally a diff preview or a validation error.
+type packEditData struct {
+	layoutData
+	Name             string
+	Frag             string
+	Content          string
+	SuggestedVersion string
+	Diff             string
+	Error            string
+}
+
+// nextPatchVersion suggests the next version for a pack's edit form: the
+// minor component bumped by one with patch reset to 0 (1.2.0 -> 1.3.0),
+// matching how this pack's fixture and publish tests treat "the next
+// version" throughout. version is expected to already be a valid x.y.z
+// (PackInfo.Version comes from a validated manifest); if it isn't, version
+// is returned unchanged rather than guessing.
+func nextPatchVersion(version string) string {
+	parts := strings.SplitN(version, ".", 3)
+	if len(parts) != 3 {
+		return version
+	}
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return version
+	}
+	return fmt.Sprintf("%s.%d.0", parts[0], minor+1)
 }
 
 func (s *Server) handlePackEdit(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "packs", s.baseData())
+	name := r.PathValue("name")
+	if s.Packs == nil {
+		http.NotFound(w, r)
+		return
+	}
+	info, err := s.Packs.Get(r.Context(), name)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	frag := r.URL.Query().Get("frag")
+	content, err := s.Packs.ReadFragment(name, frag)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	data := packEditData{
+		layoutData:       s.baseData(),
+		Name:             name,
+		Frag:             frag,
+		Content:          string(content),
+		SuggestedVersion: nextPatchVersion(info.Version),
+	}
+	s.render(w, "pack_edit", data)
 }
 
 func (s *Server) handlePackPublish(w http.ResponseWriter, r *http.Request) {
-	// Wired in Task 9 once the publish manager exists.
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	name := r.PathValue("name")
+	if s.Packs == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if _, err := s.Packs.Get(r.Context(), name); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	frag := r.FormValue("frag")
+	content := r.FormValue("content")
+	version := r.FormValue("version")
+
+	switch r.FormValue("action") {
+	case "diff":
+		diff, err := s.Packs.Diff(r.Context(), name, frag, []byte(content))
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+		data := packEditData{
+			layoutData:       s.baseData(),
+			Name:             name,
+			Frag:             frag,
+			Content:          content,
+			SuggestedVersion: version,
+			Diff:             diff,
+		}
+		s.render(w, "pack_edit", data)
+	case "publish":
+		if err := s.Packs.Publish(r.Context(), name, frag, []byte(content), version); err != nil {
+			if errors.Is(err, esc.ErrManifest) {
+				data := packEditData{
+					layoutData:       s.baseData(),
+					Name:             name,
+					Frag:             frag,
+					Content:          content,
+					SuggestedVersion: version,
+					Error:            err.Error(),
+				}
+				s.renderStatus(w, http.StatusUnprocessableEntity, "pack_edit", data)
+				return
+			}
+			serverError(w, err)
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/packs/%s?published=v%s", name, version), http.StatusSeeOther)
+	default:
+		http.Error(w, "unknown action", http.StatusBadRequest)
+	}
 }
 
 func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {

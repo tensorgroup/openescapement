@@ -72,7 +72,10 @@ func cmdServe(root string, args []string, stdout, stderr io.Writer) int {
 		return 4
 	}
 
-	srv := web.New(st, token, Version)
+	// Packs (the publish manager) is nil until Task 10 wires a packs
+	// directory into cmdServe; the portal's packs pages treat that as "no
+	// pack repos configured".
+	srv := web.New(st, nil, token, Version)
 	httpServer := &http.Server{Addr: *addr, Handler: srv.Handler()}
 
 	if token == "" {
