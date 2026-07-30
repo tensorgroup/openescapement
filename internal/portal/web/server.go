@@ -7,6 +7,7 @@ import (
 	"crypto/subtle"
 	"embed"
 	"html/template"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -91,8 +92,16 @@ func (s *Server) render(w http.ResponseWriter, page string, data any) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := t.ExecuteTemplate(w, "layout.html", data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, err)
 	}
+}
+
+// serverError logs the underlying error server-side and returns a generic
+// 500 to the client. Internal error text (e.g. absolute file paths from
+// store I/O errors) must never reach an HTTP response body.
+func serverError(w http.ResponseWriter, err error) {
+	log.Printf("portal: internal error: %v", err)
+	http.Error(w, "internal error", http.StatusInternalServerError)
 }
 
 // Handler builds the routed, auth-wrapped HTTP handler.
@@ -177,7 +186,7 @@ func constantTimeEqual(a, b string) bool {
 func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	events, err := s.Store.Events()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		serverError(w, err)
 		return
 	}
 	stats := store.Overview(s.Store.Registry(), events, s.Now())

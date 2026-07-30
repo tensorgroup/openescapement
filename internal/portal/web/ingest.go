@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/tensorgroup/openescapement/internal/portal/store"
@@ -37,7 +38,8 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.Store.AppendEvent(e); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("portal: internal error: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
