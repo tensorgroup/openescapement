@@ -11,6 +11,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -454,6 +455,183 @@ func (s *Server) handlePackPublish(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// usageDays is the set of valid days filters; an unrecognized or missing
+// query value falls back to 30.
+var usageDays = map[int]bool{7: true, 30: true, 60: true}
+
+// usageModelRow is one model's row in the usage summary table.
+type usageModelRow struct {
+	Model  string
+	Tokens int64
+	Cost   float64
+	Share  float64 // percent of total tokens, 0-100
+}
+
+// usageData extends layoutData with the filter state, both charts, and the
+// per-model summary table (with totals) for the usage page.
+type usageData struct {
+	layoutData
+	Teams       []store.Team
+	Models      []string
+	Team        string
+	Model       string
+	Days        int
+	TokensChart template.HTML
+	CostChart   template.HTML
+	Rows        []usageModelRow
+	TotalTokens int64
+	TotalCost   float64
+}
+
 func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "usage", s.baseData())
+	events, err := s.Store.Events()
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	reg := s.Store.Registry()
+
+	days := 30
+	if d, err := strconv.Atoi(r.URL.Query().Get("days")); err == nil && usageDays[d] {
+		days = d
+	}
+	team := r.URL.Query().Get("team")
+	model := r.URL.Query().Get("model")
+
+	end := s.Now().UTC().Truncate(24 * time.Hour)
+	from := end.AddDate(0, 0, -(days - 1))
+	// UsageDaily's "to" bound is an inclusive event-timestamp cutoff
+	// (e.TS.After(to)), not a day boundary — events on the `end` day carry
+	// real hours (e.g. 14:00), so passing the bare truncated `end` would
+	// exclude nearly all of the most recent day. Extend the cutoff to the
+	// start of the following day so every timestamp within `end`'s 24h
+	// window is included; cells that truncate to a day outside [from, end]
+	// are still dropped below via dayIndex.
+	cells := store.UsageDaily(events, team, model, from, end.AddDate(0, 0, 1))
+
+	teamName := map[string]string{}
+	for _, t := range reg.Teams {
+		teamName[t.ID] = t.Name
+	}
+	teams := append([]store.Team(nil), reg.Teams...)
+	sort.Slice(teams, func(i, j int) bool { return teams[i].Name < teams[j].Name })
+
+	// Cost-chart series cover every team ID seen in either the registry or
+	// the filtered cells, sorted by ID for determinism (never map
+	// iteration). A cell's TeamID with no registry match falls back to the
+	// raw ID as its series label.
+	teamIDSet := map[string]bool{}
+	for _, t := range reg.Teams {
+		teamIDSet[t.ID] = true
+	}
+	for _, c := range cells {
+		teamIDSet[c.TeamID] = true
+	}
+	var teamIDs []string
+	for id := range teamIDSet {
+		teamIDs = append(teamIDs, id)
+	}
+	sort.Strings(teamIDs)
+
+	modelSet := map[string]bool{}
+	for _, e := range events {
+		if e.Kind == "provider_usage" && e.Model != "" {
+			modelSet[e.Model] = true
+		}
+	}
+	var models []string
+	for m := range modelSet {
+		models = append(models, m)
+	}
+	sort.Strings(models)
+
+	// Day labels covering [from, end], zero-filled.
+	var labels []string
+	var dayList []time.Time
+	for d := from; !d.After(end); d = d.AddDate(0, 0, 1) {
+		labels = append(labels, d.Format("Jan 2"))
+		dayList = append(dayList, d)
+	}
+	dayIndex := make(map[time.Time]int, len(dayList))
+	for i, d := range dayList {
+		dayIndex[d] = i
+	}
+
+	// Chart 1: tokens/day stacked by model.
+	tokenSeries := make(map[string][]float64, len(models))
+	for _, m := range models {
+		tokenSeries[m] = make([]float64, len(labels))
+	}
+	// Chart 2: cost/day stacked by team.
+	costSeries := make(map[string][]float64, len(teamIDs))
+	for _, id := range teamIDs {
+		costSeries[id] = make([]float64, len(labels))
+	}
+
+	tokensByModel := map[string]int64{}
+	costByModel := map[string]float64{}
+	var totalTokens int64
+	var totalCost float64
+
+	for _, c := range cells {
+		idx, ok := dayIndex[c.Day]
+		if !ok {
+			continue
+		}
+		if vals, ok := tokenSeries[c.Model]; ok {
+			vals[idx] += float64(c.Tokens)
+		}
+		if vals, ok := costSeries[c.TeamID]; ok {
+			vals[idx] += c.Cost
+		}
+		tokensByModel[c.Model] += c.Tokens
+		costByModel[c.Model] += c.Cost
+		totalTokens += c.Tokens
+		totalCost += c.Cost
+	}
+
+	var tokenChartSeries []charts.Series
+	for _, m := range models {
+		tokenChartSeries = append(tokenChartSeries, charts.Series{Label: m, Values: tokenSeries[m]})
+	}
+	var costChartSeries []charts.Series
+	for _, id := range teamIDs {
+		label := teamName[id]
+		if label == "" {
+			label = id
+		}
+		costChartSeries = append(costChartSeries, charts.Series{Label: label, Values: costSeries[id]})
+	}
+
+	// Summary table rows, per model with usage, sorted by model name.
+	var summaryModels []string
+	for m := range tokensByModel {
+		summaryModels = append(summaryModels, m)
+	}
+	sort.Strings(summaryModels)
+	var rows []usageModelRow
+	for _, m := range summaryModels {
+		tok := tokensByModel[m]
+		cost := costByModel[m]
+		share := 0.0
+		if totalTokens > 0 {
+			share = float64(tok) / float64(totalTokens) * 100
+		}
+		rows = append(rows, usageModelRow{Model: m, Tokens: tok, Cost: cost, Share: share})
+	}
+
+	data := usageData{
+		layoutData:  s.baseData(),
+		Teams:       teams,
+		Models:      models,
+		Team:        team,
+		Model:       model,
+		Days:        days,
+		TokensChart: charts.StackedBars(labels, tokenChartSeries, 640, 220),
+		CostChart:   charts.StackedBars(labels, costChartSeries, 640, 220),
+		Rows:        rows,
+		TotalTokens: totalTokens,
+		TotalCost:   totalCost,
+	}
+	s.render(w, "usage", data)
 }

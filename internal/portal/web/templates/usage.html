@@ -1,3 +1,57 @@
 {{define "title"}}Usage — esc portal{{end}}
-{{define "explainer"}}Tokens and cost by team and model.{{end}}
-{{define "content"}}<p class="muted">Coming soon.</p>{{end}}
+{{define "explainer"}}What your organization spends on AI models, by team and model. Aggregate token counts only — no prompts or code are ever collected.{{end}}
+{{define "content"}}
+<form class="filters" method="get" action="/usage">
+  <input type="hidden" name="days" value="{{.Days}}">
+  <select name="team">
+    <option value="">All teams</option>
+    {{range .Teams}}<option value="{{.ID}}"{{if eq .ID $.Team}} selected{{end}}>{{.Name}}</option>{{end}}
+  </select>
+  <select name="model">
+    <option value="">All models</option>
+    {{range .Models}}<option value="{{.}}"{{if eq . $.Model}} selected{{end}}>{{.}}</option>{{end}}
+  </select>
+  <button type="submit">Filter</button>
+  ·
+  {{if eq .Days 7}}<strong>7d</strong>{{else}}<a href="?team={{.Team}}&amp;model={{.Model}}&amp;days=7">7d</a>{{end}} ·
+  {{if eq .Days 30}}<strong>30d</strong>{{else}}<a href="?team={{.Team}}&amp;model={{.Model}}&amp;days=30">30d</a>{{end}} ·
+  {{if eq .Days 60}}<strong>60d</strong>{{else}}<a href="?team={{.Team}}&amp;model={{.Model}}&amp;days=60">60d</a>{{end}}
+</form>
+<section>
+  <h2>Tokens per day, by model</h2>
+  {{.TokensChart}}
+</section>
+<section>
+  <h2>Cost per day, by team</h2>
+  {{.CostChart}}
+</section>
+<p class="muted">Aggregate usage by API workspace. Per-tool attribution arrives with MCP connection telemetry.</p>
+<table>
+  <thead>
+    <tr>
+      <th>Model</th>
+      <th>Total tokens</th>
+      <th>Est. cost</th>
+      <th>Share</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Rows}}
+    <tr>
+      <td>{{.Model}}</td>
+      <td>{{abbrev .Tokens}}</td>
+      <td>{{printf "$%.2f" .Cost}}</td>
+      <td>{{printf "%.0f%%" .Share}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td>Total</td>
+      <td>{{abbrev .TotalTokens}}</td>
+      <td>{{printf "$%.2f" .TotalCost}}</td>
+      <td>100%</td>
+    </tr>
+  </tfoot>
+</table>
+{{end}}
