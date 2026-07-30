@@ -37,6 +37,8 @@ Usage:
   esc update [--source SRC] --ref REF
                                  Bump a pack pin in config + lock (run sync after)
   esc render --stdout            Print rendered targets without writing
+  esc serve [--demo] [--addr ADDR] [--data-dir DIR]
+                                 Launch the admin portal server
   esc version                    Print version
 
 Exit codes: 0 ok · 1 drift/constraint findings · 2 usage · 3 integrity/signature · 4 error
@@ -65,6 +67,10 @@ func Run(root string, args []string, stdout, stderr io.Writer) int {
 		err = cmdUpdate(ctx, root, args[1:], stdout, stderr)
 	case "render":
 		err = cmdRender(ctx, root, args[1:], stdout, stderr)
+	case "serve":
+		// No ctx: serve runs until SIGINT/SIGTERM, well past the 10-minute
+		// timeout above, and builds its own signal-bound context.
+		return cmdServe(root, args[1:], stdout, stderr)
 	case "version":
 		fmt.Fprintf(stdout, "esc %s (commit %s, built %s)\n", Version, Commit, Date)
 		return 0

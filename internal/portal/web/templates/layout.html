@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{block "title" .}}esc portal{{end}}</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <span class="brand">esc <strong>portal</strong></span>
+  <nav>
+    <a href="/">Overview</a><a href="/fleet">Fleet</a><a href="/packs">Rule Packs</a><a href="/usage">Usage</a>
+  </nav>
+</header>
+<p class="explainer">{{block "explainer" .}}{{end}}</p>
+<main>{{block "content" .}}{{end}}</main>
+<footer>esc {{.Version}} — deterministic governance for AI usage</footer>
+</body>
+</html>

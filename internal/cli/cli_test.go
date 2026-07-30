@@ -382,3 +382,14 @@ func TestVersionOutput(t *testing.T) {
 		t.Errorf("version output = %q, want %q", got, want)
 	}
 }
+
+func TestServeUsageErrors(t *testing.T) {
+	code, out := run(t, t.TempDir(), "serve", "--bogus")
+	if code != 2 {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+	code, out = run(t, t.TempDir(), "serve", "--demo", "--addr", "0.0.0.0:9999")
+	if code != 2 || !strings.Contains(out, "localhost") {
+		t.Fatalf("demo non-loopback: code=%d out=%s", code, out)
+	}
+}

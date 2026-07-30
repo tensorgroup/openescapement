@@ -1,0 +1,132 @@
+:root {
+  --bg: #fafbfc;
+  --ink: #1c2733;
+  --muted: #5f6b76;
+  --accent: #2563a8;
+  --border: #e3e7ea;
+  --pill-in-sync: #4d9078;
+  --pill-drifted: #b0713f;
+  --pill-stale: #a84b57;
+  --pill-ungoverned: #8a939c;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  font-size: 1.05rem;
+  color: var(--muted);
+}
+.brand strong { color: var(--ink); }
+
+nav a {
+  margin-left: 1.25rem;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+nav a:hover { color: var(--accent); }
+
+.explainer {
+  margin: 0.75rem 1.5rem 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+main {
+  padding: 1rem 1.5rem 2rem;
+}
+
+.muted { color: var(--muted); }
+
+footer {
+  padding: 1rem 1.5rem 2rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+}
+
+.card .number {
+  font-size: 1.6rem;
+  font-weight: 600;
+}
+
+.card .label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+th {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+tbody tr:hover { background: var(--bg); }
+tbody tr:last-child td { border-bottom: none; }
+
+.pill {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #fff;
+}
+
+.pill.in-sync { background: var(--pill-in-sync); }
+.pill.drifted { background: var(--pill-drifted); }
+.pill.stale { background: var(--pill-stale); }
+.pill.ungoverned { background: var(--pill-ungoverned); }
