@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 
@@ -23,7 +24,16 @@ import (
 
 // Manager works on working git clones under Dir: Dir/<name>/ is a git repo
 // whose root is an esc pack (pack.yaml at top level).
-type Manager struct{ Dir string }
+type Manager struct {
+	Dir string
+
+	// locks holds one *sync.Mutex per pack name, created on first use, so
+	// concurrent Publish calls for the same clone serialize (closing the
+	// TOCTOU window between the tag-exists guard and tag creation, and
+	// preventing one call's `git add -A` from sweeping up another's
+	// in-progress write) while different clones still proceed independently.
+	locks sync.Map
+}
 
 // PackInfo summarizes one pack clone.
 type PackInfo struct {
@@ -46,8 +56,11 @@ func NewManager(dir string) *Manager {
 // versionRE constrains publish versions to strict semver-shaped x.y.z.
 var versionRE = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 
-// gitRun runs git in dir, capturing combined output into the error.
-func gitRun(ctx context.Context, dir string, args ...string) (string, error) {
+// gitRun runs git in dir, capturing combined output into the error. It is a
+// package-level var (not a plain func) so tests can substitute a wrapper to
+// simulate a failure at a specific point in the Publish sequence without
+// touching the real git plumbing everywhere else.
+var gitRun = func(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
@@ -55,6 +68,12 @@ func gitRun(ctx context.Context, dir string, args ...string) (string, error) {
 		return "", fmt.Errorf("git %s: %v\n%s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}
 	return string(out), nil
+}
+
+// lockFor returns the mutex guarding Publish calls for the named clone.
+func (m *Manager) lockFor(name string) *sync.Mutex {
+	v, _ := m.locks.LoadOrStore(name, &sync.Mutex{})
+	return v.(*sync.Mutex)
 }
 
 // List returns every pack clone under Dir, sorted by name. Subdirectories
@@ -142,9 +161,11 @@ func listTags(ctx context.Context, dir string) ([]Tag, error) {
 }
 
 // safeFragPath resolves frag against cloneDir, rejecting absolute paths,
-// ".." escapes, and symlink targets that resolve outside cloneDir. It
-// mirrors pack.safeRel's hardening but also checks the resolved filesystem
-// target, since a fragment path may point through a symlink.
+// ".." escapes, paths reaching into the clone's own .git directory, and
+// symlink targets (including via a not-yet-existent leaf under a
+// symlinked ancestor directory) that resolve outside cloneDir. It mirrors
+// pack.safeRel's hardening but also checks the resolved filesystem target,
+// since a fragment path may point through a symlink.
 func safeFragPath(cloneDir, frag string) (string, error) {
 	if filepath.IsAbs(frag) {
 		return "", fmt.Errorf("fragment path %q: absolute paths not allowed", frag)
@@ -153,18 +174,52 @@ func safeFragPath(cloneDir, frag string) (string, error) {
 	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("fragment path %q escapes the pack clone", frag)
 	}
+	first := clean
+	if idx := strings.IndexRune(clean, filepath.Separator); idx >= 0 {
+		first = clean[:idx]
+	}
+	if first == ".git" {
+		return "", fmt.Errorf("fragment path %q: writes under .git are not allowed", frag)
+	}
 	full := filepath.Join(cloneDir, clean)
-	if resolved, err := filepath.EvalSymlinks(full); err == nil {
-		cloneResolved, err2 := filepath.EvalSymlinks(cloneDir)
-		if err2 != nil {
-			cloneResolved = cloneDir
-		}
-		rel, err3 := filepath.Rel(cloneResolved, resolved)
-		if err3 != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return "", fmt.Errorf("fragment path %q resolves outside the pack clone", frag)
-		}
+
+	// Resolve symlinks against the deepest existing ancestor of full, not
+	// full itself: for a fragment that doesn't exist yet (a brand-new file
+	// being published), EvalSymlinks(full) just errors "no such file",
+	// which would otherwise skip this check entirely and let a symlinked
+	// *parent* directory smuggle the write outside the clone.
+	resolved, err := resolveExistingAncestor(full)
+	if err != nil {
+		return "", fmt.Errorf("fragment path %q: %v", frag, err)
+	}
+	cloneResolved, err := filepath.EvalSymlinks(cloneDir)
+	if err != nil {
+		cloneResolved = cloneDir
+	}
+	rel, err := filepath.Rel(cloneResolved, resolved)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("fragment path %q resolves outside the pack clone", frag)
 	}
 	return full, nil
+}
+
+// resolveExistingAncestor returns the symlink-resolved form of the deepest
+// existing ancestor of path (path itself, if it already exists). cloneDir
+// is always among path's ancestors and always exists, so the walk is
+// guaranteed to terminate.
+func resolveExistingAncestor(path string) (string, error) {
+	for {
+		if _, err := os.Lstat(path); err == nil {
+			return filepath.EvalSymlinks(path)
+		} else if !os.IsNotExist(err) {
+			return "", err
+		}
+		parent := filepath.Dir(path)
+		if parent == path {
+			return path, nil
+		}
+		path = parent
+	}
 }
 
 // ReadFragment returns the current on-disk content of frag within the named
@@ -211,10 +266,22 @@ func (m *Manager) Diff(ctx context.Context, name, frag string, proposed []byte) 
 	return "", fmt.Errorf("git diff --no-index: %v\n%s", err, out)
 }
 
-// restore discards any working-tree changes in dir via `git checkout -- .`
-// and `git clean -fd`.
-func restore(ctx context.Context, dir string) error {
-	if _, err := gitRun(ctx, dir, "checkout", "--", "."); err != nil {
+// restore discards any working-tree AND index changes in dir, resetting it
+// back to ref — "HEAD" before anything has been committed, or a captured
+// pre-commit SHA to unwind a commit whose tag step failed — then removes
+// any untracked files the reset left behind. `git checkout -- .` only
+// restores tracked files from the index, not the index itself from HEAD:
+// after `git add -A`, that would leave staged changes (or, if the commit
+// already landed, the commit itself) in place — a half-published state.
+// `git reset --hard` undoes both.
+//
+// restore always runs on a context with cancellation/deadline stripped: the
+// caller's ctx may already be cancelled (e.g. a request that triggered
+// Publish timed out), but restore must still run to completion so the
+// clone is never left half-published.
+func restore(ctx context.Context, dir, ref string) error {
+	ctx = context.WithoutCancel(ctx)
+	if _, err := gitRun(ctx, dir, "reset", "--hard", ref); err != nil {
 		return err
 	}
 	if _, err := gitRun(ctx, dir, "clean", "-fd"); err != nil {
@@ -223,10 +290,10 @@ func restore(ctx context.Context, dir string) error {
 	return nil
 }
 
-// restoreAndErr restores dir's working tree and returns cause, folding in
-// any restore failure so it is never silently swallowed.
-func restoreAndErr(ctx context.Context, dir string, cause error) error {
-	if err := restore(ctx, dir); err != nil {
+// restoreAndErr restores dir's working tree to ref and returns cause,
+// folding in any restore failure so it is never silently swallowed.
+func restoreAndErr(ctx context.Context, dir, ref string, cause error) error {
+	if err := restore(ctx, dir, ref); err != nil {
 		return fmt.Errorf("%v (restore also failed: %v)", cause, err)
 	}
 	return cause
@@ -268,8 +335,8 @@ func rewriteVersion(path, newVersion string) error {
 
 // Publish writes content to frag, bumps pack.yaml's version to newVersion,
 // validates the result, and commits + tags it as v<newVersion>. Nothing is
-// half-published: any failure restores the working tree to its
-// pre-Publish state before returning.
+// half-published: any failure restores the clone to its pre-Publish state
+// before returning, including unwinding a commit whose tag step failed.
 //
 // Steps, in order:
 //  1. Guards: newVersion is well-formed, frag stays inside the clone, and
@@ -277,8 +344,20 @@ func rewriteVersion(path, newVersion string) error {
 //  2. Write the fragment and rewrite the manifest version.
 //  3. Validate via pack.Load; restore and return on failure.
 //  4. git add -A, commit, and annotated-tag; restore and return on any git
-//     failure.
+//     failure. A failure after the commit lands is unwound back to the
+//     exact pre-commit SHA (not a relative HEAD~1), and only when that
+//     commit is still HEAD — if something else moved HEAD in the meantime,
+//     Publish refuses to guess and surfaces both failures instead.
+//
+// Publish for a given pack name serializes against other Publish calls for
+// the same name (see Manager.locks): without that, the tag-exists guard in
+// step 1 and the tag creation in step 4 race, and one call's step 4
+// `git add -A` can sweep up another's in-progress write.
 func (m *Manager) Publish(ctx context.Context, name, frag string, content []byte, newVersion string) error {
+	lock := m.lockFor(name)
+	lock.Lock()
+	defer lock.Unlock()
+
 	dir := filepath.Join(m.Dir, name)
 
 	// Step 1: guards.
@@ -300,37 +379,62 @@ func (m *Manager) Publish(ctx context.Context, name, frag string, content []byte
 
 	// Step 2: write fragment + rewrite manifest version.
 	if err := os.WriteFile(fragPath, content, 0o644); err != nil {
-		return restoreAndErr(ctx, dir, err)
+		return restoreAndErr(ctx, dir, "HEAD", err)
 	}
 	if err := rewriteVersion(filepath.Join(dir, "pack.yaml"), newVersion); err != nil {
-		return restoreAndErr(ctx, dir, err)
+		return restoreAndErr(ctx, dir, "HEAD", err)
 	}
 
 	// Step 3: validate.
 	if _, err := pack.Load(dir); err != nil {
-		if rerr := restore(ctx, dir); rerr != nil {
+		if rerr := restore(ctx, dir, "HEAD"); rerr != nil {
 			return fmt.Errorf("%w: pack validation failed: %v (restore also failed: %v)", esc.ErrManifest, err, rerr)
 		}
 		return fmt.Errorf("%w: pack validation failed: %v", esc.ErrManifest, err)
 	}
 
-	// Step 4: commit + tag.
+	// Step 4: commit + tag. preCommitHead is captured before the commit so
+	// a failed tag step can unwind exactly that commit — `git reset --hard
+	// HEAD` alone would only undo the worktree/index, leaving a
+	// committed-but-untagged clone behind.
+	preCommitHead, err := gitRun(ctx, dir, "rev-parse", "HEAD")
+	if err != nil {
+		return restoreAndErr(ctx, dir, "HEAD", err)
+	}
+	preCommitHead = strings.TrimSpace(preCommitHead)
+
 	if _, err := gitRun(ctx, dir, "add", "-A"); err != nil {
-		return restoreAndErr(ctx, dir, err)
+		return restoreAndErr(ctx, dir, "HEAD", err)
 	}
 	commitMsg := fmt.Sprintf("portal: publish %s v%s", name, newVersion)
 	if _, err := gitRun(ctx, dir,
 		"-c", "user.name=esc portal", "-c", "user.email=portal@escapement.local", "-c", "commit.gpgsign=false",
 		"commit", "-m", commitMsg,
 	); err != nil {
-		return restoreAndErr(ctx, dir, err)
+		return restoreAndErr(ctx, dir, "HEAD", err)
 	}
+
+	newHead, err := gitRun(ctx, dir, "rev-parse", "HEAD")
+	if err != nil {
+		// The commit landed but we can't confirm HEAD. preCommitHead is an
+		// exact SHA, not a relative ref, so unwinding to it is still safe
+		// even without that confirmation.
+		return restoreAndErr(ctx, dir, preCommitHead, err)
+	}
+	newHead = strings.TrimSpace(newHead)
+
 	tagMsg := fmt.Sprintf("publish v%s", newVersion)
 	if _, err := gitRun(ctx, dir,
 		"-c", "user.name=esc portal", "-c", "user.email=portal@escapement.local", "-c", "tag.gpgsign=false",
 		"tag", "-a", tagName, "-m", tagMsg,
 	); err != nil {
-		return restoreAndErr(ctx, dir, err)
+		// Only unwind the commit if it's still HEAD: if something else
+		// landed a commit in between, blindly resetting to preCommitHead
+		// would destroy that work too.
+		if curHead, herr := gitRun(ctx, dir, "rev-parse", "HEAD"); herr == nil && strings.TrimSpace(curHead) == newHead {
+			return restoreAndErr(ctx, dir, preCommitHead, err)
+		}
+		return fmt.Errorf("tag failed and the commit could not be safely unwound (HEAD moved): %v", err)
 	}
 	return nil
 }
