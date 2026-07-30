@@ -4,6 +4,7 @@
 package web
 
 import (
+	"crypto/subtle"
 	"embed"
 	"html/template"
 	"net/http"
@@ -118,7 +119,7 @@ func (s *Server) withAuth(next http.Handler) http.Handler {
 		}
 
 		if tok := r.URL.Query().Get("token"); tok != "" {
-			if tok != s.Token {
+			if !constantTimeEqual(tok, s.Token) {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -135,16 +136,26 @@ func (s *Server) withAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		if c, err := r.Cookie(sessionCookie); err == nil && c.Value == s.Token {
+		if c, err := r.Cookie(sessionCookie); err == nil && constantTimeEqual(c.Value, s.Token) {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if r.Header.Get("Authorization") == "Bearer "+s.Token {
+		if constantTimeEqual(r.Header.Get("Authorization"), "Bearer "+s.Token) {
 			next.ServeHTTP(w, r)
 			return
 		}
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	})
+}
+
+// constantTimeEqual compares two strings in constant time, so a
+// timing side-channel can't be used to guess the session token byte by
+// byte. subtle.ConstantTimeCompare requires equal-length inputs to be
+// constant-time; the length check itself is a value-independent
+// short-circuit (both operands' lengths, not their contents), so it costs
+// no timing-safety here.
+func constantTimeEqual(a, b string) bool {
+	return len(a) == len(b) && subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
 func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
