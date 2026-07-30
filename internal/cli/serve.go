@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/tensorgroup/openescapement/internal/portal/publish"
 	"github.com/tensorgroup/openescapement/internal/portal/seed"
 	"github.com/tensorgroup/openescapement/internal/portal/store"
 	"github.com/tensorgroup/openescapement/internal/portal/web"
@@ -52,11 +53,22 @@ func cmdServe(root string, args []string, stdout, stderr io.Writer) int {
 	}
 
 	token := ""
+	demoRepo := ""
 	if *demo {
+		// Re-seed every start (registry + events) for a clean pitch, then
+		// materialize the demo pack + governed repos if they aren't there
+		// yet (Repos is idempotent, so a returning demo session keeps
+		// whatever the user published last time).
 		if err := seed.Demo(dir, time.Now().UTC()); err != nil {
 			fmt.Fprintf(stderr, "esc: %v\n", err)
 			return 4
 		}
+		_, repo, err := seed.Repos(dir)
+		if err != nil {
+			fmt.Fprintf(stderr, "esc: %v\n", err)
+			return 4
+		}
+		demoRepo = repo
 	} else {
 		buf := make([]byte, 16)
 		if _, err := rand.Read(buf); err != nil {
@@ -72,16 +84,20 @@ func cmdServe(root string, args []string, stdout, stderr io.Writer) int {
 		return 4
 	}
 
-	// Packs (the publish manager) is nil until Task 10 wires a packs
-	// directory into cmdServe; the portal's packs pages treat that as "no
-	// pack repos configured".
-	srv := web.New(st, nil, token, Version)
+	mgr := publish.NewManager(filepath.Join(dir, "packs"))
+	srv := web.New(st, mgr, token, Version)
 	httpServer := &http.Server{Addr: *addr, Handler: srv.Handler()}
 
-	if token == "" {
+	switch {
+	case *demo:
+		fmt.Fprintf(stdout, "esc portal (demo): http://%s/\n", *addr)
+	case token == "":
 		fmt.Fprintf(stdout, "esc portal: http://%s/\n", *addr)
-	} else {
+	default:
 		fmt.Fprintf(stdout, "esc portal: http://%s/?token=%s\n", *addr, token)
+	}
+	if *demo {
+		fmt.Fprintf(stdout, "demo governed repo: %s   (cd there and run `esc sync` after publishing)\n", demoRepo)
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
