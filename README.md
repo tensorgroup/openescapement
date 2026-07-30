@@ -64,6 +64,17 @@ git clone https://github.com/tensorgroup/openescapement && cd openescapement/exa
 go run ../../cmd/esc sync && go run ../../cmd/esc status
 ```
 
+### `esc serve` — the admin portal
+
+```sh
+esc serve --demo               # one binary, seeded fictional org, no setup
+```
+
+Four pages: an overview of fleet posture, a fleet list of registered repos and their
+drift status, rule-pack browsing with portal-side publishing (validate → commit → tag),
+and usage. The portal never pushes rules into repos — packs it publishes still reach a
+repo only when someone runs `esc sync` there, same as any other pack source.
+
 ## How it works
 
 A **rule pack** is a directory in a git repo: a small manifest plus markdown rule fragments.

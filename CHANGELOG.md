@@ -25,6 +25,11 @@ tagged releases begin.
 - `AGENTS.md`: canonical agent-facing repo instructions (CLAUDE.md now imports it),
   restructured per Anthropic's Claude 5 context-engineering guidance; vendor-guidance
   tracking practice documented in `docs/roadmap/vendor-guidance-tracking.md`.
+- **`esc serve`** — the admin portal: a one-binary control plane with overview, fleet,
+  rule-pack, and usage pages, a bearer-token events ingest API, and portal-side pack
+  publishing (validate → commit → tag; distribution still happens only via `esc sync`).
+  `--demo` seeds a deterministic fictional org plus a local pack repo and governed repo
+  for an end-to-end publish→sync walkthrough. Portal-published tags are unsigned in v1.
 
 Planned — see `docs/roadmap/`:
 - v0.2: MCP server surface (live policy queries, connection telemetry, agent-initiated registration)
