@@ -220,11 +220,18 @@ func TestPublishRejectsGitDir(t *testing.T) {
 	m := NewManager(newPackClone(t))
 	ctx := context.Background()
 	good := []byte("---\ntargets: [claude]\n---\nok\n")
-	if err := m.Publish(ctx, "org-baseline", ".git/config", good, "1.3.0"); err == nil {
-		t.Fatal(".git write accepted")
-	}
-	if _, err := m.ReadFragment("org-baseline", ".git/config"); err == nil {
-		t.Fatal(".git read accepted")
+
+	// Case variants matter: on case-insensitive filesystems (macOS default,
+	// Windows) ".Git/config" and ".GIT/x" resolve to the same real .git
+	// directory as ".git/config" — an exact-case compare alone would leave
+	// the guard bypassable by case.
+	for _, frag := range []string{".git/config", ".Git/config", ".GIT/x"} {
+		if err := m.Publish(ctx, "org-baseline", frag, good, "1.3.0"); err == nil {
+			t.Fatalf("%s write accepted", frag)
+		}
+		if _, err := m.ReadFragment("org-baseline", frag); err == nil {
+			t.Fatalf("%s read accepted", frag)
+		}
 	}
 }
 
@@ -295,6 +302,41 @@ func TestPublishConcurrentSerialized(t *testing.T) {
 	}
 	if !names["v1.3.0"] || !names["v1.4.0"] {
 		t.Fatalf("expected both v1.3.0 and v1.4.0 tags, got %+v", p.Tags)
+	}
+}
+
+// TestPublishRestoresAfterCtxCancelledMidPublish forces the commit step to
+// fail after cancelling the caller's context, simulating a request that
+// timed out mid-Publish. If restore reused the (now-cancelled) ctx for its
+// own git calls, exec.CommandContext would fail them immediately and the
+// worktree would be left dirty; restore must run on a context with
+// cancellation stripped (context.WithoutCancel) so it can still complete.
+func TestPublishRestoresAfterCtxCancelledMidPublish(t *testing.T) {
+	m := NewManager(newPackClone(t))
+	dir := filepath.Join(m.Dir, "org-baseline")
+	ctx, cancel := context.WithCancel(context.Background())
+
+	real := gitRun
+	defer func() { gitRun = real }()
+	gitRun = func(ctx context.Context, d string, args ...string) (string, error) {
+		if d == dir && containsArg(args, "commit") {
+			cancel() // simulate the triggering request timing out right here
+			return "", fmt.Errorf("simulated commit failure")
+		}
+		return real(ctx, d, args...)
+	}
+
+	good := []byte("---\ntargets: [claude]\n---\nok\n")
+	if err := m.Publish(ctx, "org-baseline", "rules/security.md", good, "1.3.0"); err == nil {
+		t.Fatal("expected simulated commit failure to propagate")
+	}
+
+	if out := git(t, dir, "status", "--porcelain"); out != "" {
+		t.Fatalf("dirty worktree after restore under a cancelled ctx: %s", out)
+	}
+	p, err := m.Get(context.Background(), "org-baseline")
+	if err != nil || p.Version != "1.2.0" || len(p.Tags) != 1 {
+		t.Fatalf("not restored: %+v err=%v", p, err)
 	}
 }
 

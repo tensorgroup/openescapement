@@ -178,7 +178,11 @@ func safeFragPath(cloneDir, frag string) (string, error) {
 	if idx := strings.IndexRune(clean, filepath.Separator); idx >= 0 {
 		first = clean[:idx]
 	}
-	if first == ".git" {
+	// EqualFold, not ==: on case-insensitive filesystems (macOS default,
+	// Windows) ".Git/config" resolves to the same real .git directory as
+	// ".git/config", so an exact-case compare alone would reopen the
+	// vulnerability this guard exists to close.
+	if strings.EqualFold(first, ".git") {
 		return "", fmt.Errorf("fragment path %q: writes under .git are not allowed", frag)
 	}
 	full := filepath.Join(cloneDir, clean)
