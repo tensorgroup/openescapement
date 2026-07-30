@@ -1,3 +1,37 @@
 {{define "title"}}Fleet — esc portal{{end}}
-{{define "explainer"}}Every repo, its team, and whether it's in sync.{{end}}
-{{define "content"}}<p class="muted">Coming soon.</p>{{end}}
+{{define "explainer"}}Every team and repository, which rulebook version it follows, and whether it's up to date.{{end}}
+{{define "content"}}
+<p class="filters">
+  {{if eq .Status ""}}<strong>All</strong>{{else}}<a href="/fleet">All</a>{{end}} ·
+  {{if eq .Status "in-sync"}}<strong>In sync</strong>{{else}}<a href="/fleet?status=in-sync">In sync</a>{{end}} ·
+  {{if eq .Status "drifted"}}<strong>Drifted</strong>{{else}}<a href="/fleet?status=drifted">Drifted</a>{{end}} ·
+  {{if eq .Status "stale"}}<strong>Stale</strong>{{else}}<a href="/fleet?status=stale">Stale</a>{{end}} ·
+  {{if eq .Status "ungoverned"}}<strong>Ungoverned</strong>{{else}}<a href="/fleet?status=ungoverned">Ungoverned</a>{{end}}
+</p>
+<table>
+  <thead>
+    <tr>
+      <th>Department</th>
+      <th>Team</th>
+      <th>Repository</th>
+      <th>Rule packs</th>
+      <th>Last sync</th>
+      <th>Status</th>
+      <th>Agent tools</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Rows}}
+    <tr>
+      <td>{{.DeptName}}</td>
+      <td>{{.TeamName}}</td>
+      <td>{{.RepoName}}</td>
+      <td>{{range $i, $p := .Packs}}{{if $i}}, {{end}}{{$p}}{{end}}</td>
+      <td>{{fmtTime .LastSync}}</td>
+      <td><span class="pill {{.Status}}">{{.Status}}</span></td>
+      <td>{{range $i, $t := .Tools}}{{if $i}}, {{end}}{{$t}}{{end}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}

@@ -49,7 +49,8 @@ func New(st *store.Store, token, version string) *Server {
 		Now:     time.Now,
 	}
 	s.layout = template.Must(template.New("layout.html").Funcs(template.FuncMap{
-		"abbrev": abbrevTokens,
+		"abbrev":  abbrevTokens,
+		"fmtTime": fmtLastSync,
 	}).ParseFS(templateFS, "templates/layout.html"))
 	s.pages = make(map[string]*template.Template, len(pageNames))
 	for _, name := range pageNames {
@@ -74,6 +75,15 @@ func (s *Server) baseData() layoutData {
 // overview template passes it, so it can be registered directly as the
 // "abbrev" template func.
 func abbrevTokens(v int64) string { return charts.Abbrev(float64(v)) }
+
+// fmtLastSync formats a repo's last-sync timestamp for the fleet table:
+// "Jan 2 15:04", or an em-dash for a repo that has never synced.
+func fmtLastSync(t time.Time) string {
+	if t.IsZero() {
+		return "—"
+	}
+	return t.Format("Jan 2 15:04")
+}
 
 // overviewData extends layoutData with the stats and chart the overview
 // page's content block renders.
@@ -202,8 +212,45 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "overview", data)
 }
 
+// fleetStatuses is the set of valid status filters; an unrecognized query
+// value falls through to "all rows".
+var fleetStatuses = map[string]bool{"in-sync": true, "drifted": true, "stale": true, "ungoverned": true}
+
+// fleetData extends layoutData with the (possibly filtered) fleet rows and
+// the active status filter, for the filter-links row to bold.
+type fleetData struct {
+	layoutData
+	Rows   []store.FleetRow
+	Status string // "" = all
+}
+
 func (s *Server) handleFleet(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "fleet", s.baseData())
+	events, err := s.Store.Events()
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	rows := store.FleetRows(s.Store.Registry(), events)
+
+	status := r.URL.Query().Get("status")
+	if fleetStatuses[status] {
+		filtered := rows[:0:0]
+		for _, row := range rows {
+			if row.Status == status {
+				filtered = append(filtered, row)
+			}
+		}
+		rows = filtered
+	} else {
+		status = ""
+	}
+
+	data := fleetData{
+		layoutData: s.baseData(),
+		Rows:       rows,
+		Status:     status,
+	}
+	s.render(w, "fleet", data)
 }
 
 func (s *Server) handlePacks(w http.ResponseWriter, r *http.Request) {
