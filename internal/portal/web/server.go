@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tensorgroup/openescapement/internal/portal/charts"
 	"github.com/tensorgroup/openescapement/internal/portal/store"
 )
 
@@ -46,7 +47,9 @@ func New(st *store.Store, token, version string) *Server {
 		Version: version,
 		Now:     time.Now,
 	}
-	s.layout = template.Must(template.New("layout.html").ParseFS(templateFS, "templates/layout.html"))
+	s.layout = template.Must(template.New("layout.html").Funcs(template.FuncMap{
+		"abbrev": abbrevTokens,
+	}).ParseFS(templateFS, "templates/layout.html"))
 	s.pages = make(map[string]*template.Template, len(pageNames))
 	for _, name := range pageNames {
 		t := template.Must(s.layout.Clone())
@@ -64,6 +67,19 @@ type layoutData struct {
 
 func (s *Server) baseData() layoutData {
 	return layoutData{Version: s.Version}
+}
+
+// abbrevTokens adapts charts.Abbrev (float64) to the int64 token counts the
+// overview template passes it, so it can be registered directly as the
+// "abbrev" template func.
+func abbrevTokens(v int64) string { return charts.Abbrev(float64(v)) }
+
+// overviewData extends layoutData with the stats and chart the overview
+// page's content block renders.
+type overviewData struct {
+	layoutData
+	Stats         store.OverviewStats
+	AdoptionChart template.HTML
 }
 
 // render executes the named page template against the shared layout.
@@ -159,7 +175,22 @@ func constantTimeEqual(a, b string) bool {
 }
 
 func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "overview", s.baseData())
+	events, err := s.Store.Events()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	stats := store.Overview(s.Store.Registry(), events, s.Now())
+	pts := make([]charts.Point, len(stats.Adoption))
+	for i, p := range stats.Adoption {
+		pts[i] = charts.Point{X: p.Day, Y: float64(p.Governed)}
+	}
+	data := overviewData{
+		layoutData:    s.baseData(),
+		Stats:         stats,
+		AdoptionChart: charts.Line(pts, 640, 220),
+	}
+	s.render(w, "overview", data)
 }
 
 func (s *Server) handleFleet(w http.ResponseWriter, r *http.Request) {
@@ -185,9 +216,4 @@ func (s *Server) handlePackPublish(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "usage", s.baseData())
-}
-
-func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
-	// Wired in Task 6b.
-	http.Error(w, "not implemented", http.StatusNotImplemented)
 }
