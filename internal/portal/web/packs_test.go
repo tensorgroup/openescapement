@@ -112,6 +112,26 @@ func TestEditAndPublishFlow(t *testing.T) {
 	}
 }
 
+func TestDiffColoring(t *testing.T) {
+	s := newTestServerWithPacks(t)
+	form := url.Values{
+		"frag":    {"rules/security.md"},
+		"content": {"---\ntargets: [claude, agents]\n---\n# Security\n\n- Never commit secrets.\n- Added rule.\n"},
+		"version": {"1.3.0"},
+		"action":  {"diff"},
+	}
+	req := httptest.NewRequest("POST", "/packs/org-baseline/publish", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != 200 {
+		t.Fatalf("diff render: %d %s", rr.Code, rr.Body.String())
+	}
+	if body := rr.Body.String(); !strings.Contains(body, `class="line add"`) {
+		t.Fatalf("added line not colored:\n%s", body)
+	}
+}
+
 func TestPublishValidationErrorKeepsContent(t *testing.T) {
 	s := newTestServerWithPacks(t)
 	form := url.Values{

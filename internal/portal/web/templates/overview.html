@@ -4,9 +4,9 @@
 <div class="cards">
   <a class="card" href="/fleet"><span class="num">{{.Stats.GovernedRepos}}</span>
     <span class="label">governed repos <span class="muted">of {{.Stats.KnownRepos}} known</span></span></a>
-  <a class="card{{if .Stats.DriftedRepos}} warn{{end}}" href="/fleet?status=drifted"><span class="num">{{.Stats.DriftedRepos}}</span>
+  <a class="card{{if .Stats.DriftedRepos}} warn amber{{end}}" href="/fleet?status=drifted"><span class="num">{{.Stats.DriftedRepos}}</span>
     <span class="label">repos with drift</span></a>
-  <a class="card{{if .Stats.StaleRepos}} warn{{end}}" href="/fleet?status=stale"><span class="num">{{.Stats.StaleRepos}}</span>
+  <a class="card{{if .Stats.StaleRepos}} warn red{{end}}" href="/fleet?status=stale"><span class="num">{{.Stats.StaleRepos}}</span>
     <span class="label">repos on stale rules</span></a>
   <a class="card" href="/usage"><span class="num">${{printf "%.0f" .Stats.CostWeek}}</span>
     <span class="label">AI spend this week <span class="muted">{{abbrev .Stats.TokensWeek}} tokens</span></span></a>

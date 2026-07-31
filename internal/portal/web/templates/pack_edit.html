@@ -3,7 +3,7 @@
 {{define "content"}}
 <h2>{{.Name}} <span class="muted">/ {{.Frag}}</span></h2>
 {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
-{{if .Diff}}<pre class="diff">{{.Diff}}</pre>{{end}}
+{{if .Diff}}<pre class="diff">{{range diffLines .Diff}}<span class="line {{.Class}}">{{.Text}}</span>{{end}}</pre>{{end}}
 <form method="post" action="/packs/{{.Name}}/publish">
   <input type="hidden" name="frag" value="{{.Frag}}">
   <p><textarea name="content" rows="24" cols="90">{{.Content}}</textarea></p>

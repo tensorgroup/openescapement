@@ -58,8 +58,9 @@ func New(st *store.Store, packs *publish.Manager, token, version string) *Server
 		Now:     time.Now,
 	}
 	s.layout = template.Must(template.New("layout.html").Funcs(template.FuncMap{
-		"abbrev":  abbrevTokens,
-		"fmtTime": fmtLastSync,
+		"abbrev":    abbrevTokens,
+		"fmtTime":   fmtLastSync,
+		"diffLines": diffLines,
 	}).ParseFS(templateFS, "templates/layout.html"))
 	s.pages = make(map[string]*template.Template, len(pageNames))
 	for _, name := range pageNames {
@@ -98,6 +99,39 @@ func fmtLastSync(t time.Time) string {
 		return "—"
 	}
 	return t.Format("Jan 2 15:04")
+}
+
+// diffLine is one line of a unified diff, classed for template coloring.
+type diffLine struct {
+	Class string // "add", "del", "meta", or "" (context)
+	Text  string
+}
+
+// diffLines splits a `git diff --no-index` unified diff into classed lines:
+// header lines ("diff ", "index ", "---", "+++", "@@") as meta, "+" adds and
+// "-" removals colored, everything else unclassed context. Text is rendered
+// through html/template, so it is auto-escaped.
+func diffLines(s string) []diffLine {
+	if s == "" {
+		return nil
+	}
+	raw := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	out := make([]diffLine, 0, len(raw))
+	for _, ln := range raw {
+		class := ""
+		switch {
+		case strings.HasPrefix(ln, "+++"), strings.HasPrefix(ln, "---"),
+			strings.HasPrefix(ln, "@@"), strings.HasPrefix(ln, "diff "),
+			strings.HasPrefix(ln, "index "):
+			class = "meta"
+		case strings.HasPrefix(ln, "+"):
+			class = "add"
+		case strings.HasPrefix(ln, "-"):
+			class = "del"
+		}
+		out = append(out, diffLine{Class: class, Text: ln})
+	}
+	return out
 }
 
 // overviewData extends layoutData with the stats and chart the overview
