@@ -30,6 +30,14 @@ tagged releases begin.
   publishing (validate → commit → tag; distribution still happens only via `esc sync`).
   `--demo` seeds a deterministic fictional org plus a local pack repo and governed repo
   for an end-to-end publish→sync walkthrough. Portal-published tags are unsigned in v1.
+- Portal visual refresh: fixed sidebar shell with active-page nav, refined
+  enterprise-light design tokens (4px spacing scale, tabular-nums metrics,
+  WCAG-AA status pills), and restyled deterministic SVG charts.
+- `esc serve --demo` now seeds pre-existing `CLAUDE.md`, `AGENTS.md`, and
+  `GEMINI.md` in the demo repo, and the demo pack publishes to all three, so a
+  publish→sync lands a managed block in every file while leaving the seeded
+  content untouched. Seeding stays create-if-missing: delete
+  `~/.escapement/server/demo-repo` to regenerate it.
 
 Planned — see `docs/roadmap/`:
 - v0.2: MCP server surface (live policy queries, connection telemetry, agent-initiated registration)
