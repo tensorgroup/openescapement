@@ -25,12 +25,19 @@ type Series struct {
 	Values []float64 // one per label slot; len(Values) == len(labels)
 }
 
-var palette = []string{"#2563a8", "#4d9078", "#b0713f", "#7a5aa0", "#a84b57", "#5b7a99"}
+var palette = []string{"#2563eb", "#1a7a4f", "#9a560f", "#7c3aed", "#b02a2a", "#3b82a0"}
 
 const (
 	mLeft, mRight, mTop, mBottom = 40.0, 20.0, 10.0, 24.0
-	textAttrs                    = `font-family="system-ui,sans-serif" font-size="11" fill="#5f6b76"`
+	textAttrs                    = `font-family="system-ui,sans-serif" font-size="11" fill="#5b6672"`
+	gridStroke                   = "#e9ecf1"
 )
+
+// gridLevels returns the y-values to draw gridlines/labels at: quarters from
+// 0 to maxY (five lines), for a calmer, easier-to-read grid than 0/mid/max.
+func gridLevels(maxY float64) []float64 {
+	return []float64{0, maxY / 4, maxY / 2, 3 * maxY / 4, maxY}
+}
 
 func f(v float64) string { return strconv.FormatFloat(v, 'f', 1, 64) }
 
@@ -81,11 +88,11 @@ func Line(pts []Point, w, h int) template.HTML {
 	maxY = niceCeil(maxY)
 	pw := float64(w) - mLeft - mRight
 	ph := float64(h) - mTop - mBottom
-	// gridlines + y labels at 0, mid, max
-	for _, v := range []float64{0, maxY / 2, maxY} {
+	// gridlines + y labels at quarter intervals
+	for _, v := range gridLevels(maxY) {
 		y := mTop + ph - ph*v/maxY
-		fmt.Fprintf(&b, `<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="#e3e7ea"/>`,
-			f(mLeft), f(y), f(mLeft+pw), f(y))
+		fmt.Fprintf(&b, `<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s"/>`,
+			f(mLeft), f(y), f(mLeft+pw), f(y), gridStroke)
 		fmt.Fprintf(&b, `<text x="%s" y="%s" text-anchor="end" %s>%s</text>`,
 			f(mLeft-6), f(y+4), textAttrs, esc(abbrev(v)))
 	}
@@ -150,11 +157,11 @@ func StackedBars(labels []string, series []Series, w, h int) template.HTML {
 	}
 	maxY = niceCeil(maxY)
 
-	// gridlines + y labels at 0, mid, max
-	for _, v := range []float64{0, maxY / 2, maxY} {
+	// gridlines + y labels at quarter intervals
+	for _, v := range gridLevels(maxY) {
 		y := top + ph - ph*v/maxY
-		fmt.Fprintf(&b, `<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="#e3e7ea"/>`,
-			f(mLeft), f(y), f(mLeft+pw), f(y))
+		fmt.Fprintf(&b, `<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s"/>`,
+			f(mLeft), f(y), f(mLeft+pw), f(y), gridStroke)
 		fmt.Fprintf(&b, `<text x="%s" y="%s" text-anchor="end" %s>%s</text>`,
 			f(mLeft-6), f(y+4), textAttrs, esc(abbrev(v)))
 	}
