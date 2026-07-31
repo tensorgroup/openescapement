@@ -66,6 +66,7 @@ Single shared/central pane of glass — with radical emphasis on **easy**: easy 
 - Rule pack versions deployed per repo/team; drift detection
 - Policy exceptions requested/granted/expired
 - Turn-limit and escalation-rule trigger events
+- Vendor-guidance freshness: the instruction-file conventions we render into (CLAUDE.md, AGENTS.md, GEMINI.md, skills, MCP config) are moving targets owned by model vendors, so the admin portal shows the date each vendor's guidance was last checked. A core vendor set — Anthropic, OpenAI, Google, xAI, Moonshot — is always shown top-level regardless of which tools the org uses; other vendors appear as their render targets are adopted. Process and check log: `docs/roadmap/vendor-guidance-tracking.md`.
 
 **SDLC & deployment surface**
 - Commit and deploy progress per governed repo
