@@ -43,7 +43,7 @@ func Repos(dataDir string) (packDir, demoRepo string, err error) {
 // securityRules12 is the fragment body at v1.2.0: the 3 memorable demo
 // rules the pitch shows arriving in CLAUDE.md. v1.1.0 carries just the
 // first two, so the pack's tag history has two real, different commits.
-const securityFragHeader = "---\ntargets: [claude, agents]\n---\n# Security\n\n"
+const securityFragHeader = "---\ntargets: [claude, agents, gemini]\n---\n# Security\n\n"
 
 const securityRule1 = "- Never commit secrets or API keys.\n"
 const securityRule2 = "- All authentication goes through the campus SSO service.\n"
@@ -149,7 +149,24 @@ func buildDemoRepo(dir, packDir string) error {
 	if err := os.WriteFile(filepath.Join(dir, ".escapement", "config.yaml"), []byte(cfg), 0o644); err != nil {
 		return err
 	}
-	claude := "# esc demo repo\n\nThis repo is governed by the esc admin portal demo. " +
-		"Run `esc sync` here after publishing a rule change from the portal.\n"
-	return os.WriteFile(filepath.Join(dir, "CLAUDE.md"), []byte(claude), 0o644)
+	// Pre-existing user content, one file per target. On sync, esc appends its
+	// managed block below this content and never touches these bytes — the
+	// core renderer invariant the publish demo is meant to show.
+	files := map[string]string{
+		"CLAUDE.md": "# Payments service\n\n" +
+			"Go 1.24 monorepo; run `make test` before pushing.\n" +
+			"Ask in #payments-eng before changing the ledger schema.\n",
+		"AGENTS.md": "# Payments service\n\n" +
+			"Primary language is Go. Keep handlers thin and push logic into `internal/`.\n" +
+			"Integration tests need a local Postgres; see `docs/dev-setup.md`.\n",
+		"GEMINI.md": "# Payments service\n\n" +
+			"This repo settles real money. Prefer boring, well-tested changes.\n" +
+			"Never log full card numbers or auth tokens.\n",
+	}
+	for name, body := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }

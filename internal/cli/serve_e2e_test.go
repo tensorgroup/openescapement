@@ -25,9 +25,14 @@ func TestDemoPublishSyncLoop(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("sync: %d %s", code, out)
 	}
-	claude, _ := os.ReadFile(filepath.Join(demoRepo, "CLAUDE.md"))
-	if !strings.Contains(string(claude), "org-baseline@1.2.0") {
-		t.Fatalf("initial block: %s", claude)
+	for _, name := range []string{"CLAUDE.md", "AGENTS.md", "GEMINI.md"} {
+		b, _ := os.ReadFile(filepath.Join(demoRepo, name))
+		if !strings.Contains(string(b), "org-baseline@1.2.0") {
+			t.Fatalf("%s missing managed block:\n%s", name, b)
+		}
+		if !strings.Contains(string(b), "Payments service") {
+			t.Fatalf("%s lost pre-existing content:\n%s", name, b)
+		}
 	}
 	// 2. Publish v1.3.0 through the portal's publish manager.
 	m := publish.NewManager(filepath.Dir(packDir))
@@ -50,9 +55,11 @@ func TestDemoPublishSyncLoop(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("resync: %d %s", code, out)
 	}
-	claude, _ = os.ReadFile(filepath.Join(demoRepo, "CLAUDE.md"))
-	if !strings.Contains(string(claude), "org-baseline@1.3.0") ||
-		!strings.Contains(string(claude), "Model routing") {
-		t.Fatalf("published rule did not arrive:\n%s", claude)
+	for _, name := range []string{"CLAUDE.md", "AGENTS.md", "GEMINI.md"} {
+		b, _ := os.ReadFile(filepath.Join(demoRepo, name))
+		if !strings.Contains(string(b), "org-baseline@1.3.0") ||
+			!strings.Contains(string(b), "Model routing") {
+			t.Fatalf("%s did not receive published rule:\n%s", name, b)
+		}
 	}
 }

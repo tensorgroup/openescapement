@@ -21,4 +21,9 @@ func TestReposIdempotent(t *testing.T) {
 	if err != nil || !strings.Contains(string(cfg), "trust: unsigned") {
 		t.Fatalf("config: %s err=%v", cfg, err)
 	}
+	for _, name := range []string{"CLAUDE.md", "AGENTS.md", "GEMINI.md"} {
+		if _, err := os.Stat(filepath.Join(r1, name)); err != nil {
+			t.Fatalf("missing seeded %s: %v", name, err)
+		}
+	}
 }
