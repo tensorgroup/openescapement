@@ -77,3 +77,19 @@ func TestUnknownRoute404(t *testing.T) {
 		t.Fatalf("code %d", rr.Code)
 	}
 }
+
+func TestActiveNav(t *testing.T) {
+	h := newTestServer(t, "").Handler()
+	cases := map[string]string{
+		"/":      `href="/" class="active"`,
+		"/fleet": `href="/fleet" class="active"`,
+		"/packs": `href="/packs" class="active"`,
+		"/usage": `href="/usage" class="active"`,
+	}
+	for path, want := range cases {
+		body := get(t, h, path, nil).Body.String()
+		if !strings.Contains(body, want) {
+			t.Fatalf("%s: missing active nav %q", path, want)
+		}
+	}
+}

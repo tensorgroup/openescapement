@@ -7,14 +7,25 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header>
-  <span class="brand">esc <strong>portal</strong></span>
+<aside class="sidebar">
+  <div class="brand">esc <strong>portal</strong></div>
   <nav>
-    <a href="/">Overview</a><a href="/fleet">Fleet</a><a href="/packs">Rule Packs</a><a href="/usage">Usage</a>
+    <a href="/"{{if eq .Page "overview"}} class="active"{{end}}>Overview</a>
+    <a href="/fleet"{{if eq .Page "fleet"}} class="active"{{end}}>Fleet</a>
+    <a href="/packs"{{if eq .Page "packs"}} class="active"{{end}}>Rule Packs</a>
+    <a href="/usage"{{if eq .Page "usage"}} class="active"{{end}}>Usage</a>
   </nav>
-</header>
-<p class="explainer">{{block "explainer" .}}{{end}}</p>
-<main>{{block "content" .}}{{end}}</main>
-<footer>esc {{.Version}} — deterministic governance for AI usage</footer>
+  <div class="sidebar-foot">
+    <div class="org">{{.Org}}</div>
+    <div class="ver">esc {{.Version}}</div>
+  </div>
+</aside>
+<main class="content">
+  <header class="page-head">
+    <h1>{{template "title" .}}</h1>
+    <p class="explainer">{{block "explainer" .}}{{end}}</p>
+  </header>
+  <div class="page-body">{{block "content" .}}{{end}}</div>
+</main>
 </body>
 </html>

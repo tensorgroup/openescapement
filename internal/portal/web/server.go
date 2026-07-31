@@ -74,10 +74,16 @@ func New(st *store.Store, packs *publish.Manager, token, version string) *Server
 // need more will wrap or extend this in later tasks.
 type layoutData struct {
 	Version string
+	Page    string // active nav key: "overview", "fleet", "packs", "usage"
+	Org     string // organization name, pinned in the sidebar footer
 }
 
-func (s *Server) baseData() layoutData {
-	return layoutData{Version: s.Version}
+func (s *Server) baseData(page string) layoutData {
+	org := ""
+	if s.Store != nil {
+		org = s.Store.Registry().Org.Name
+	}
+	return layoutData{Version: s.Version, Page: page, Org: org}
 }
 
 // abbrevTokens adapts charts.Abbrev (float64) to the int64 token counts the
@@ -225,7 +231,7 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 		pts[i] = charts.Point{X: p.Day, Y: float64(p.Governed)}
 	}
 	data := overviewData{
-		layoutData:    s.baseData(),
+		layoutData:    s.baseData("overview"),
 		Stats:         stats,
 		AdoptionChart: charts.Line(pts, 640, 220),
 	}
@@ -266,7 +272,7 @@ func (s *Server) handleFleet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := fleetData{
-		layoutData: s.baseData(),
+		layoutData: s.baseData("fleet"),
 		Rows:       rows,
 		Status:     status,
 	}
@@ -290,7 +296,7 @@ func (s *Server) handlePacks(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	data := packsData{layoutData: s.baseData(), Packs: infos}
+	data := packsData{layoutData: s.baseData("packs"), Packs: infos}
 	s.render(w, "packs", data)
 }
 
@@ -331,7 +337,7 @@ func (s *Server) handlePackDetail(w http.ResponseWriter, r *http.Request) {
 		frags = append(frags, fragmentView{Path: f, HTML: mdHTML(content)})
 	}
 	data := packDetailData{
-		layoutData: s.baseData(),
+		layoutData: s.baseData("packs"),
 		Pack:       *info,
 		Fragments:  frags,
 		Published:  r.URL.Query().Get("published"),
@@ -389,7 +395,7 @@ func (s *Server) handlePackEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := packEditData{
-		layoutData:       s.baseData(),
+		layoutData:       s.baseData("packs"),
 		Name:             name,
 		Frag:             frag,
 		Content:          string(content),
@@ -424,7 +430,7 @@ func (s *Server) handlePackPublish(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		data := packEditData{
-			layoutData:       s.baseData(),
+			layoutData:       s.baseData("packs"),
 			Name:             name,
 			Frag:             frag,
 			Content:          content,
@@ -436,7 +442,7 @@ func (s *Server) handlePackPublish(w http.ResponseWriter, r *http.Request) {
 		if err := s.Packs.Publish(r.Context(), name, frag, []byte(content), version); err != nil {
 			if errors.Is(err, esc.ErrManifest) {
 				data := packEditData{
-					layoutData:       s.baseData(),
+					layoutData:       s.baseData("packs"),
 					Name:             name,
 					Frag:             frag,
 					Content:          content,
@@ -621,7 +627,7 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := usageData{
-		layoutData:  s.baseData(),
+		layoutData:  s.baseData("usage"),
 		Teams:       teams,
 		Models:      models,
 		Team:        team,
