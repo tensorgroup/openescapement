@@ -52,7 +52,7 @@ func Apply(root string, p *PlanResult) error {
 			if err != nil && !os.IsNotExist(err) {
 				return err
 			}
-			out, err := render.Splice(existing, a.Body, render.BlockMeta{Packs: render.PackLabels(p.PackObjs)})
+			out, err := render.Splice(existing, a.Body, render.BlockMeta{Packs: a.BlockPacks})
 			if err != nil {
 				return fmt.Errorf("%s: %w", a.Path, err)
 			}

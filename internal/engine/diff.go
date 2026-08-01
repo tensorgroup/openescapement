@@ -20,7 +20,7 @@ func DriftDiff(ctx context.Context, root string, plan *PlanResult) (string, erro
 		if a.Kind != KindBlock && a.Kind != KindFile {
 			continue
 		}
-		expected, err := prospectiveContent(root, a, plan.PackObjs)
+		expected, err := prospectiveContent(root, a)
 		if err != nil {
 			return "", err
 		}
