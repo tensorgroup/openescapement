@@ -75,6 +75,14 @@ func TestValidateCustom(t *testing.T) {
 		{"file collides builtin claude", "copilot", "claude.md", false},
 		{"file collides builtin case", "copilot", "Claude.MD", false},
 		{"file collides builtin agents", "copilot", "AGENTS.md", false},
+
+		{"bare md filename", "copilot", ".md", false},
+		{"bare md filename in dir", "copilot", ".github/.md", false},
+		{"denylist 2-segment .claude", "copilot", ".claude/x.md", false},
+		{"denylist case-folded .Git", "copilot", ".Git/x.md", false},
+		{"file dot-slash prefix", "copilot", "./x.md", false},
+		{"file trailing slash", "copilot", "x.md/", false},
+		{"github workflows.md carve-out", "copilot", ".github/workflows.md", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {

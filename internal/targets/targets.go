@@ -144,6 +144,9 @@ func ValidateCustom(name, file string) error {
 	if !strings.HasSuffix(strings.ToLower(file), ".md") {
 		return fmt.Errorf("target file %q must end in .md", file)
 	}
+	if base := segs[len(segs)-1]; len(base) <= len(".md") {
+		return fmt.Errorf("target file %q: filename must be longer than %q", file, ".md")
+	}
 	if controlDirs[strings.ToLower(segs[0])] {
 		return fmt.Errorf("target file %q: %q is a control directory and may not hold custom targets", file, segs[0])
 	}

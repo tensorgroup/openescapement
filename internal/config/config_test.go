@@ -44,3 +44,43 @@ func TestLoadUnknownFieldRejected(t *testing.T) {
 		t.Fatal("want error for unknown config field")
 	}
 }
+
+// TestLoadAbsentAllowCustomTargetFilesBackwardCompat covers configs written
+// before allow_custom_target_files existed: the key is entirely absent, not
+// just empty, and Load must still succeed (backward compat, §2.3 is opt-in).
+func TestLoadAbsentAllowCustomTargetFilesBackwardCompat(t *testing.T) {
+	root := writeConfig(t, `schema: 1
+packs:
+  - source: file:///tmp/p
+    ref: v1.0.0
+    trust: unsigned
+`)
+	c, err := Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(c.AllowCustomTargetFiles) != 0 {
+		t.Errorf("AllowCustomTargetFiles should be empty when the key is absent, got %v", c.AllowCustomTargetFiles)
+	}
+}
+
+func TestSaveAllowCustomTargetFilesRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	c := &Config{
+		Schema:                 1,
+		Packs:                  []PackRef{{Source: "file:///tmp/p", Ref: "v1.0.0", Trust: "unsigned"}},
+		AllowCustomTargetFiles: []string{".github/copilot-instructions.md", "PAYMENTS-AGENTS.md"},
+	}
+	if err := c.Save(root); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	got, err := Load(root)
+	if err != nil {
+		t.Fatalf("Load after Save: %v", err)
+	}
+	if len(got.AllowCustomTargetFiles) != 2 ||
+		got.AllowCustomTargetFiles[0] != ".github/copilot-instructions.md" ||
+		got.AllowCustomTargetFiles[1] != "PAYMENTS-AGENTS.md" {
+		t.Errorf("AllowCustomTargetFiles round trip mismatch: %v", got.AllowCustomTargetFiles)
+	}
+}
