@@ -292,9 +292,14 @@ func TestOrphanBlockRemoval(t *testing.T) {
 	})
 	_ = repo // v1 repo no longer referenced
 
-	// status should report the orphan before removal.
-	if code, out := run(t, root, "status"); code == 0 || !strings.Contains(strings.ToLower(out), "orphan") {
-		t.Errorf("status should report orphan, exit=%d:\n%s", code, out)
+	// Plain status reports the orphan but exits 0 — orphans are self-healing
+	// drift (the next sync removes them), not a fail-closed violation.
+	if code, out := run(t, root, "status"); code != 0 || !strings.Contains(strings.ToLower(out), "orphan") {
+		t.Errorf("status should report orphan and exit 0, exit=%d:\n%s", code, out)
+	}
+	// status --check exits 1 on any drift, including orphans.
+	if code, out := run(t, root, "status", "--check"); code != 1 {
+		t.Errorf("status --check should exit 1 on orphan drift, exit=%d:\n%s", code, out)
 	}
 
 	if code, out := run(t, root, "sync"); code != 0 {
