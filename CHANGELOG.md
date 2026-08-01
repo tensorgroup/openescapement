@@ -18,7 +18,7 @@ tagged releases begin.
   non-ASCII, and built-in collisions; writes refuse symlinked parents; targets
   that leave the effective set have their managed block removed on the next sync.
 - `esc status` (without `--check`) now exits 1 when a fail-closed constraint
-  violation exists — for example, an unacknowledged custom target file. Ordinary
+  violation exists, for example an unacknowledged custom target file. Ordinary
   drift and orphaned managed blocks still exit 0 without `--check` and 1 with it;
   orphans are self-healing, since the next sync removes the stale block.
 - Release automation: goreleaser builds for linux/darwin/windows, cosign keyless
