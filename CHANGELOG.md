@@ -8,6 +8,19 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- Custom targets: a pack's `pack.yaml` may define managed-block markdown targets
+  under `custom_targets` (`name`, `file`, optional `doc`/`description`), usable in
+  fragment `targets:`. Each target is owned by its defining pack (no cross-pack
+  co-writing; duplicate name or file across packs fails), renders only the owning
+  pack's explicitly-targeting fragments with no catalog section, and lands only
+  after the repo acknowledges its file in `allow_custom_target_files` (fail-closed,
+  reported by `esc status`). Path rules reject traversal, control directories,
+  non-ASCII, and built-in collisions; writes refuse symlinked parents; targets
+  that leave the effective set have their managed block removed on the next sync.
+- `esc status` (without `--check`) now exits 1 when a fail-closed constraint
+  violation exists — for example, an unacknowledged custom target file. Ordinary
+  drift and orphaned managed blocks still exit 0 without `--check` and 1 with it;
+  orphans are self-healing, since the next sync removes the stale block.
 - Release automation: goreleaser builds for linux/darwin/windows, cosign keyless
   signing, SLSA v1 build-level-3 provenance, CycloneDX SBOMs, Homebrew cask,
   verified `install.sh`, and `VERIFYING.md`.
