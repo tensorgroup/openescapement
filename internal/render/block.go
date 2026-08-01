@@ -64,6 +64,21 @@ func Splice(existing []byte, body string, meta BlockMeta) ([]byte, error) {
 	return []byte(s + sep + block), nil
 }
 
+// RemoveBlock returns file with its managed block removed, preserving every
+// byte outside the block. removed reports whether a block was present. An
+// error is returned only when the block structure is corrupt.
+func RemoveBlock(file []byte) ([]byte, bool, error) {
+	b, err := Extract(file)
+	if err != nil {
+		return nil, false, err
+	}
+	if b == nil {
+		return file, false, nil
+	}
+	s := string(file)
+	return []byte(s[:b.start] + s[b.end:]), true, nil
+}
+
 // Extract finds the managed block in file. Returns (nil, nil) when absent and
 // an error when the block structure is corrupt (unterminated or duplicated).
 func Extract(file []byte) (*Block, error) {
