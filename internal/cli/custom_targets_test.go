@@ -341,3 +341,29 @@ func TestOrphanBlockByteEmptyDeletion(t *testing.T) {
 		t.Error("byte-empty orphaned custom file should be deleted")
 	}
 }
+
+// TestCustomTargetFilterCaseInsensitive covers the config targets: filter
+// naming a declared custom target in non-canonical case. Custom target names
+// are validated lowercase-only, and the filter-selection step already
+// case-folds for the allDeclared check, so a non-canonical filter entry must
+// render the target rather than silently drop it (built-ins, by contrast,
+// are matched by exact case and hard-reject an unknown-case name; the fix
+// here makes the final dispatch loop consistent with the earlier,
+// intentionally case-insensitive selection step instead of silently no-oping
+// between the two).
+func TestCustomTargetFilterCaseInsensitive(t *testing.T) {
+	repo := newCustomPackRepo(t, "acme-org", "1.0.0", copilotPackYAML, copilotFragment)
+	root := governedWith(t, repo, "v1.0.0",
+		"targets: [COPILOT]\nallow_custom_target_files:\n  - .github/copilot-instructions.md\n")
+	code, out := run(t, root, "sync")
+	if code != 0 {
+		t.Fatalf("sync exit %d:\n%s", code, out)
+	}
+	got, err := os.ReadFile(filepath.Join(root, ".github", "copilot-instructions.md"))
+	if err != nil {
+		t.Fatalf("custom target must render despite non-canonical filter case: %v", err)
+	}
+	if !strings.Contains(string(got), "## Copilot rule") {
+		t.Errorf("custom target content missing:\n%s", got)
+	}
+}

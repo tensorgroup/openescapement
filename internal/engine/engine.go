@@ -183,7 +183,16 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 	}
 
 	for _, t := range targets {
-		if c, ok := rendered[t]; ok {
+		// Custom target names are lowercase-only by construction
+		// (targets.ValidateCustom), and rendered/allDeclared are keyed
+		// lowercase; a config targets: entry in non-canonical case (e.g.
+		// "COPILOT") already passed the case-insensitive allDeclared check
+		// during filter selection above, so it must be looked up the same
+		// way here too — otherwise it silently falls through neither
+		// rendered nor the switch below and is dropped without an artifact
+		// or a Violation.
+		lt := strings.ToLower(t)
+		if c, ok := rendered[lt]; ok {
 			body := render.ComposeCustom(c.owner, c.name)
 			res.Artifacts = append(res.Artifacts, Artifact{
 				Path: c.file, Kind: KindBlock, Hash: render.BodyHash(body), Body: body,
@@ -191,7 +200,7 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 			})
 			continue
 		}
-		if allDeclared[strings.ToLower(t)] {
+		if allDeclared[lt] {
 			continue // declared custom target that is not acknowledged: Violation already recorded
 		}
 		switch t {
