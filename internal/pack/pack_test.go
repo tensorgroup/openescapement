@@ -111,9 +111,6 @@ func TestLoadManifestErrors(t *testing.T) {
 		{"unknown manifest field", func(f map[string]string) {
 			f["pack.yaml"] = "schema: 1\nname: x\nversion: 1.0.0\nbogus: true\n"
 		}},
-		{"unknown fragment target", func(f map[string]string) {
-			f["rules/secrets.md"] = "---\ntargets: [clade]\n---\nbody\n"
-		}},
 		{"invalid catalog status", func(f map[string]string) {
 			f["pack.yaml"] = "schema: 1\nname: x\nversion: 1.0.0\ncatalog:\n  - name: T\n    category: c\n    status: great\n"
 		}},
@@ -129,6 +126,72 @@ func TestLoadManifestErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCustomTargets(t *testing.T) {
+	base := func() map[string]string {
+		f := validFiles()
+		f["pack.yaml"] = `schema: 1
+name: acme-org
+version: 1.4.0
+custom_targets:
+  - name: copilot
+    file: .github/copilot-instructions.md
+    doc: https://docs.github.com/copilot
+    description: Copilot instructions.
+rules:
+  - rules/secrets.md
+`
+		f["rules/secrets.md"] = "---\ntargets: [claude, copilot]\n---\nbody\n"
+		delete(f, "rules/hosting.md")
+		return f
+	}
+
+	t.Run("parses and accepts own custom target in fragment", func(t *testing.T) {
+		p, err := Load(writePack(t, base()))
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if len(p.Manifest.CustomTargets) != 1 {
+			t.Fatalf("custom targets: %+v", p.Manifest.CustomTargets)
+		}
+		ct := p.Manifest.CustomTargets[0]
+		if ct.Name != "copilot" || ct.File != ".github/copilot-instructions.md" {
+			t.Errorf("custom target fields: %+v", ct)
+		}
+		if got := p.Fragments[0].Targets; len(got) != 2 || got[1] != "copilot" {
+			t.Errorf("fragment targets: %v", got)
+		}
+	})
+
+	t.Run("unknown/foreign fragment target is a constraint error", func(t *testing.T) {
+		f := base()
+		f["rules/secrets.md"] = "---\ntargets: [nope]\n---\nbody\n"
+		_, err := Load(writePack(t, f))
+		if !errors.Is(err, esc.ErrConstraint) {
+			t.Fatalf("want ErrConstraint, got %v", err)
+		}
+	})
+
+	t.Run("missing custom target name is a manifest error", func(t *testing.T) {
+		f := base()
+		f["pack.yaml"] = "schema: 1\nname: x\nversion: 1.0.0\ncustom_targets:\n  - file: X.md\n"
+		delete(f, "rules/secrets.md")
+		_, err := Load(writePack(t, f))
+		if !errors.Is(err, esc.ErrManifest) {
+			t.Fatalf("want ErrManifest, got %v", err)
+		}
+	})
+
+	t.Run("unknown manifest field still rejected (KnownFields stays true)", func(t *testing.T) {
+		f := base()
+		f["pack.yaml"] = "schema: 1\nname: x\nversion: 1.0.0\nbogus: true\n"
+		delete(f, "rules/secrets.md")
+		_, err := Load(writePack(t, f))
+		if !errors.Is(err, esc.ErrManifest) {
+			t.Fatalf("want ErrManifest, got %v", err)
+		}
+	})
 }
 
 func TestFragmentFrontmatter(t *testing.T) {

@@ -30,6 +30,8 @@ type Manifest struct {
 	Catalog     []CatalogEntry `yaml:"catalog"`
 	Constraints Constraints    `yaml:"constraints"`
 	UpdateCheck *UpdateCheck   `yaml:"update_check,omitempty"`
+
+	CustomTargets []CustomTarget `yaml:"custom_targets,omitempty"`
 }
 
 // MCPSpec declares MCP server entries a pack injects into .mcp.json.
@@ -50,6 +52,16 @@ type CatalogEntry struct {
 type Constraints struct {
 	MaxFileBytes      int      `yaml:"max_file_bytes"`
 	ForbiddenPatterns []string `yaml:"forbidden_patterns"`
+}
+
+// CustomTarget is a pack-defined managed-block markdown target (§1.2). Full
+// name/file validation lives in internal/targets.ValidateCustom and runs in
+// the engine after verifyTrust; the manifest only checks presence here.
+type CustomTarget struct {
+	Name        string `yaml:"name"`
+	File        string `yaml:"file"`
+	Doc         string `yaml:"doc,omitempty"`
+	Description string `yaml:"description,omitempty"`
 }
 
 // UpdateCheck declares how often clients should probe this pack's source for
@@ -104,8 +116,12 @@ func Load(dir string) (*Pack, error) {
 		return nil, err
 	}
 	p := &Pack{Dir: dir, Manifest: m}
+	customNames := map[string]bool{}
+	for _, ct := range m.CustomTargets {
+		customNames[ct.Name] = true
+	}
 	for _, rel := range m.Rules {
-		frag, err := loadFragment(dir, rel)
+		frag, err := loadFragment(dir, rel, customNames)
 		if err != nil {
 			return nil, err
 		}
@@ -164,6 +180,14 @@ func (m *Manifest) validate(dir string) error {
 		}
 		if e := m.UpdateCheck.Endpoint; e != "" && !strings.HasPrefix(e, "https://") {
 			return fail("update_check.endpoint %q: must be an https:// URL", e)
+		}
+	}
+	for _, ct := range m.CustomTargets {
+		if ct.Name == "" {
+			return fail("custom target: name is required")
+		}
+		if ct.File == "" {
+			return fail("custom target %q: file is required", ct.Name)
 		}
 	}
 	return nil
