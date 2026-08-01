@@ -63,7 +63,10 @@ func TestCustomTargetAcknowledgmentGate(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("unacknowledged sync exit %d, want 1:\n%s", code, out)
 	}
-	for _, want := range []string{"copilot", "acme-org", ".github/copilot-instructions.md", "allow_custom_target_files"} {
+	for _, want := range []string{
+		"copilot", "acme-org", ".github/copilot-instructions.md", "allow_custom_target_files",
+		"  - .github/copilot-instructions.md", // copy-pasteable YAML list line (§2.3)
+	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("error missing %q:\n%s", want, out)
 		}
@@ -204,6 +207,27 @@ func TestCustomTargetFilterInteraction(t *testing.T) {
 		"targets: [claude]\nallow_custom_target_files:\n  - .github/copilot-instructions.md\n")
 	if code, out := run(t, root, "sync"); code != 0 {
 		t.Fatalf("sync exit %d:\n%s", code, out)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".github", "copilot-instructions.md")); !os.IsNotExist(err) {
+		t.Error("filtered-out custom target must not be rendered")
+	}
+}
+
+// TestCustomTargetFilterExemptsAcknowledgment covers spec §3: filtering a
+// custom target out by name is a complete opt-out. A repo that never
+// acknowledges the file must still sync cleanly as long as the target is
+// excluded by the targets filter — the acknowledgment gate must not even
+// consider it.
+func TestCustomTargetFilterExemptsAcknowledgment(t *testing.T) {
+	repo := newCustomPackRepo(t, "acme-org", "1.0.0", copilotPackYAML, copilotFragment)
+	// targets filter excludes copilot; no allow_custom_target_files entry at all.
+	root := governedWith(t, repo, "v1.0.0", "targets: [claude]\n")
+	code, out := run(t, root, "sync")
+	if code != 0 {
+		t.Fatalf("filtered-out custom target should need no acknowledgment, exit %d:\n%s", code, out)
+	}
+	if strings.Contains(out, "not acknowledged") {
+		t.Errorf("filtered-out custom target must not raise an acknowledgment violation:\n%s", out)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".github", "copilot-instructions.md")); !os.IsNotExist(err) {
 		t.Error("filtered-out custom target must not be rendered")

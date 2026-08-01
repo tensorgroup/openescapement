@@ -130,35 +130,56 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 	if err != nil {
 		return nil, err
 	}
+
+	// Repo targets filter (§3): filtering a custom target out by name is a
+	// complete opt-out — a filtered-out target must never require
+	// acknowledgment. Selection is resolved before the acknowledgment gate
+	// runs, not after.
+	targets := cfg.Targets
+	selectedCustom := map[string]bool{}
+	if len(targets) == 0 {
+		for name := range customByName {
+			selectedCustom[name] = true
+		}
+	} else {
+		for _, t := range targets {
+			if !isBuiltInTarget(t) && !allDeclared[strings.ToLower(t)] {
+				return nil, fmt.Errorf("config: unknown target %q", t)
+			}
+			if allDeclared[strings.ToLower(t)] {
+				selectedCustom[strings.ToLower(t)] = true
+			}
+		}
+	}
+
 	ack := map[string]bool{}
 	for _, f := range cfg.AllowCustomTargetFiles {
 		ack[strings.ToLower(f)] = true
 	}
-	// Acknowledgment gate (§2.3): a declared custom target renders only if its
-	// file is acknowledged. Unacknowledged targets are a fail-closed Violation
-	// (blocks Apply, reported by esc status) — not a silent skip.
+	// Acknowledgment gate (§2.3): a selected (not filtered out) custom target
+	// renders only if its file is acknowledged. Unacknowledged targets are a
+	// fail-closed Violation (blocks Apply, reported by esc status) — not a
+	// silent skip. Iterated in sorted name order for deterministic Violation
+	// output when multiple targets are unacknowledged.
 	rendered := map[string]custom{} // name -> target to render
-	for name, c := range customByName {
+	for _, name := range sortedNames(customByName) {
+		if !selectedCustom[name] {
+			continue // filtered out by config targets: no acknowledgment required
+		}
+		c := customByName[name]
 		if ack[strings.ToLower(c.file)] {
 			rendered[name] = c
 			continue
 		}
 		res.Violations = append(res.Violations, render.Violation{
 			Path: c.file,
-			Rule: fmt.Sprintf("custom target %q from pack %s is not acknowledged; add this line to allow_custom_target_files in %s: %s",
+			Rule: fmt.Sprintf("custom target %q from pack %s is not acknowledged; add this line to allow_custom_target_files in %s:\n  - %s",
 				name, c.owner.Manifest.Name, config.Path(root), c.file),
 		})
 	}
 
-	targets := cfg.Targets
 	if len(targets) == 0 {
 		targets = append(append([]string{}, allTargets...), sortedNames(rendered)...)
-	} else {
-		for _, t := range targets {
-			if !isBuiltInTarget(t) && !allDeclared[strings.ToLower(t)] {
-				return nil, fmt.Errorf("config: unknown target %q", t)
-			}
-		}
 	}
 
 	for _, t := range targets {
