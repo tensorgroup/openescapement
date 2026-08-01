@@ -24,6 +24,29 @@ func containedPath(root, rel string) (string, error) {
 	return abs, nil
 }
 
+// refuseSymlinks fails closed if any existing path component of rel under root
+// is a symlink, immediately before a write. It never follows a symlinked
+// parent or target file (§2.1). A residual race between this check and the
+// rename remains on shared checkouts and is accepted, documented as the same
+// class as any local tooling.
+func refuseSymlinks(root, rel string) error {
+	cur := root
+	for _, part := range strings.Split(filepath.ToSlash(rel), "/") {
+		cur = filepath.Join(cur, part)
+		fi, err := os.Lstat(cur)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil // this and deeper components do not exist yet
+			}
+			return err
+		}
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("%w: %s: refusing to write through symlink %s", esc.ErrConstraint, rel, cur)
+		}
+	}
+	return nil
+}
+
 // Apply writes the planned artifacts and the lockfile. It refuses to write
 // anything when the plan has constraint violations.
 func Apply(root string, p *PlanResult) error {
@@ -44,6 +67,9 @@ func Apply(root string, p *PlanResult) error {
 	for _, a := range p.Artifacts {
 		abs, err := containedPath(root, a.Path)
 		if err != nil {
+			return err
+		}
+		if err := refuseSymlinks(root, a.Path); err != nil {
 			return err
 		}
 		switch a.Kind {
@@ -104,6 +130,53 @@ func Apply(root string, p *PlanResult) error {
 				return fmt.Errorf("refusing to remove %q: not an escapement-owned directory", prev.Path)
 			}
 			if err := os.RemoveAll(abs); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Remove stale managed blocks for targets that left the effective set.
+	// Bytes outside the block are preserved; a file left byte-empty is deleted.
+	// Each removal is a write and carries the same symlink protection.
+	desiredBlocks := map[string]bool{}
+	for _, a := range p.Artifacts {
+		if a.Kind == KindBlock {
+			desiredBlocks[a.Path] = true
+		}
+	}
+	if prevLock != nil {
+		for _, prev := range prevLock.Artifacts {
+			if prev.Kind != KindBlock || desiredBlocks[prev.Path] {
+				continue
+			}
+			abs, err := containedPath(root, prev.Path)
+			if err != nil {
+				return err
+			}
+			if err := refuseSymlinks(root, prev.Path); err != nil {
+				return err
+			}
+			existing, err := os.ReadFile(abs)
+			if os.IsNotExist(err) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			out, removed, err := render.RemoveBlock(existing)
+			if err != nil {
+				return fmt.Errorf("%s: %w", prev.Path, err)
+			}
+			if !removed {
+				continue
+			}
+			if len(out) == 0 {
+				if err := os.Remove(abs); err != nil {
+					return err
+				}
+				continue
+			}
+			if err := atomicWrite(abs, out); err != nil {
 				return err
 			}
 		}

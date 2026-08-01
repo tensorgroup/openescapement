@@ -272,7 +272,7 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 		} else {
 			fmt.Fprintf(stdout, "  ✗ %-20s %s: %s\n", f.Path, f.State, f.Detail)
 		}
-		if f.State == engine.ConstraintViolated {
+		if f.State == engine.ConstraintViolated || f.State == engine.Orphan {
 			hasViolation = true
 		}
 	}
@@ -281,9 +281,11 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 		return 0
 	}
 	fmt.Fprintln(stdout, "Drift detected. Run `esc diff` to inspect, `esc sync` to reconcile.")
-	// Constraint violations (e.g. an unacknowledged custom target, §2.3) are
-	// fail-closed: they block Apply outright, so status must surface them as a
-	// non-zero exit even without --check, not just as ordinary drift.
+	// Constraint violations (e.g. an unacknowledged custom target, §2.3) and
+	// orphaned managed blocks (a target that left the effective set but still
+	// has stale content on disk, §3) are fail-closed: they represent content
+	// that should not exist as-is, so status must surface them as a non-zero
+	// exit even without --check, not just as ordinary drift.
 	if *check || hasViolation {
 		return 1
 	}

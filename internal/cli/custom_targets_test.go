@@ -252,3 +252,87 @@ func TestCustomTargetDeterministic(t *testing.T) {
 		t.Error("status should be clean after sync")
 	}
 }
+
+func TestCustomTargetSymlinkRefusal(t *testing.T) {
+	repo := newCustomPackRepo(t, "acme-org", "1.0.0", copilotPackYAML, copilotFragment)
+	root := governedWith(t, repo, "v1.0.0", "allow_custom_target_files:\n  - .github/copilot-instructions.md\n")
+	// Make .github a symlink to an out-of-repo directory.
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(root, ".github")); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	code, out := run(t, root, "sync")
+	if code != 1 {
+		t.Fatalf("writing through a symlinked parent should fail exit 1, got %d:\n%s", code, out)
+	}
+	if _, err := os.Stat(filepath.Join(outside, "copilot-instructions.md")); !os.IsNotExist(err) {
+		t.Error("must not have written through the symlink")
+	}
+}
+
+func TestOrphanBlockRemoval(t *testing.T) {
+	// v1 defines copilot; sync writes the block into a file with user content.
+	repo := newCustomPackRepo(t, "acme-org", "1.0.0", copilotPackYAML, copilotFragment)
+	root := governedWith(t, repo, "v1.0.0", "allow_custom_target_files:\n  - .github/copilot-instructions.md\n")
+	writeFiles(t, root, map[string]string{".github/copilot-instructions.md": "# Existing user content\n"})
+	if code, out := run(t, root, "sync"); code != 0 {
+		t.Fatalf("initial sync: %d\n%s", code, out)
+	}
+
+	// Un-acknowledge the target (drop it from the effective set) by rewriting
+	// config with no allow list, and remove the pack's custom target so it is
+	// no longer even declared. Simplest: point config at a v2 pack with no
+	// custom_targets. Here we just drop acknowledgment AND the filter so the
+	// block is orphaned. Repin to a pack version that no longer defines it.
+	repo2 := newCustomPackRepo(t, "acme-org", "2.0.0",
+		"schema: 1\nname: acme-org\nversion: 2.0.0\nrules:\n  - rules/main.md\n",
+		"## Claude rule\nbody\n")
+	writeFiles(t, root, map[string]string{
+		".escapement/config.yaml": "schema: 1\npacks:\n  - source: file://" + repo2 + "\n    ref: v2.0.0\n    trust: unsigned\n",
+	})
+	_ = repo // v1 repo no longer referenced
+
+	// status should report the orphan before removal.
+	if code, out := run(t, root, "status"); code == 0 || !strings.Contains(strings.ToLower(out), "orphan") {
+		t.Errorf("status should report orphan, exit=%d:\n%s", code, out)
+	}
+
+	if code, out := run(t, root, "sync"); code != 0 {
+		t.Fatalf("re-sync: %d\n%s", code, out)
+	}
+	got, err := os.ReadFile(filepath.Join(root, ".github", "copilot-instructions.md"))
+	if err != nil {
+		t.Fatalf("file should still exist (had user content): %v", err)
+	}
+	if strings.Contains(string(got), "escapement:begin") {
+		t.Errorf("orphaned managed block should be removed:\n%s", got)
+	}
+	if !strings.Contains(string(got), "# Existing user content") {
+		t.Errorf("user content must be preserved:\n%s", got)
+	}
+}
+
+func TestOrphanBlockByteEmptyDeletion(t *testing.T) {
+	// Same as above but the custom file had NO user content, so removing the
+	// block leaves it byte-empty and the file is deleted.
+	repo := newCustomPackRepo(t, "acme-org", "1.0.0", copilotPackYAML, copilotFragment)
+	root := governedWith(t, repo, "v1.0.0", "allow_custom_target_files:\n  - .github/copilot-instructions.md\n")
+	if code, out := run(t, root, "sync"); code != 0 {
+		t.Fatalf("initial sync: %d\n%s", code, out)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".github", "copilot-instructions.md")); err != nil {
+		t.Fatalf("expected custom file after first sync: %v", err)
+	}
+	repo2 := newCustomPackRepo(t, "acme-org", "2.0.0",
+		"schema: 1\nname: acme-org\nversion: 2.0.0\nrules:\n  - rules/main.md\n",
+		"## Claude rule\nbody\n")
+	writeFiles(t, root, map[string]string{
+		".escapement/config.yaml": "schema: 1\npacks:\n  - source: file://" + repo2 + "\n    ref: v2.0.0\n    trust: unsigned\n",
+	})
+	if code, out := run(t, root, "sync"); code != 0 {
+		t.Fatalf("re-sync: %d\n%s", code, out)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".github", "copilot-instructions.md")); !os.IsNotExist(err) {
+		t.Error("byte-empty orphaned custom file should be deleted")
+	}
+}

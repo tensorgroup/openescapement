@@ -25,6 +25,7 @@ const (
 	ConstraintViolated State = "constraint-violated"
 	PackStale          State = "pack-stale"
 	CheckOverdue       State = "check-overdue"
+	Orphan             State = "orphan"
 )
 
 // Finding is one classified artifact (or pack pin) in a status report.
@@ -75,6 +76,34 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 	for _, a := range plan.Artifacts {
 		res.Findings = append(res.Findings, classify(root, a, lock))
 	}
+
+	// Orphan managed blocks: files that carry an esc block for a target no
+	// longer in the effective set (pack dropped it, repo un-acknowledged it, or
+	// a filter excludes it). Reported here and removed by the next sync.
+	desiredBlocks := map[string]bool{}
+	for _, a := range plan.Artifacts {
+		if a.Kind == KindBlock {
+			desiredBlocks[a.Path] = true
+		}
+	}
+	if lock != nil {
+		for _, la := range lock.Artifacts {
+			if la.Kind != KindBlock || desiredBlocks[la.Path] {
+				continue
+			}
+			content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(la.Path)))
+			if err != nil {
+				continue // already gone
+			}
+			if block, err := render.Extract(content); err == nil && block != nil {
+				res.Findings = append(res.Findings, Finding{
+					Path: la.Path, State: Orphan,
+					Detail: "carries an esc block for a target no longer in the effective set — run `esc sync` to remove it",
+				})
+			}
+		}
+	}
+
 	for _, v := range plan.Violations {
 		res.Findings = append(res.Findings, Finding{Path: v.Path, State: ConstraintViolated, Detail: v.Rule})
 	}
