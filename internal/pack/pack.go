@@ -121,7 +121,7 @@ func Load(dir string) (*Pack, error) {
 		customNames[ct.Name] = true
 	}
 	for _, rel := range m.Rules {
-		frag, err := loadFragment(dir, rel, customNames)
+		frag, err := loadFragment(dir, m.Name, rel, customNames)
 		if err != nil {
 			return nil, err
 		}
@@ -182,13 +182,25 @@ func (m *Manifest) validate(dir string) error {
 			return fail("update_check.endpoint %q: must be an https:// URL", e)
 		}
 	}
-	for _, ct := range m.CustomTargets {
+	seenCustomName := map[string]string{}
+	seenCustomFile := map[string]string{}
+	for i, ct := range m.CustomTargets {
 		if ct.Name == "" {
-			return fail("custom target: name is required")
+			return fail("custom_targets[%d]: name is required", i)
 		}
 		if ct.File == "" {
 			return fail("custom target %q: file is required", ct.Name)
 		}
+		lname := strings.ToLower(ct.Name)
+		if prev, ok := seenCustomName[lname]; ok {
+			return fail("custom target name %q duplicates %q (case-insensitive) within this pack", ct.Name, prev)
+		}
+		seenCustomName[lname] = ct.Name
+		lfile := strings.ToLower(ct.File)
+		if prev, ok := seenCustomFile[lfile]; ok {
+			return fail("custom target %q: file %q duplicates the file used by %q (case-insensitive) within this pack", ct.Name, ct.File, prev)
+		}
+		seenCustomFile[lfile] = ct.Name
 	}
 	return nil
 }

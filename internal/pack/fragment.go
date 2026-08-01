@@ -23,8 +23,10 @@ type Fragment struct {
 // loadFragment parses one rule file. A fragment may name built-in fragment
 // targets or one of its own pack's declared custom targets (customNames);
 // naming anything else — including another pack's custom target — is a
-// constraint failure (§3 unknown/foreign reference).
-func loadFragment(packDir, rel string, customNames map[string]bool) (*Fragment, error) {
+// constraint failure (§3 unknown/foreign reference). packName is the owning
+// pack's manifest name, included in the error so the operator can tell which
+// pack authored the offending rule without cross-referencing the path.
+func loadFragment(packDir, packName, rel string, customNames map[string]bool) (*Fragment, error) {
 	raw, err := os.ReadFile(filepath.Join(packDir, rel))
 	if err != nil {
 		return nil, fmt.Errorf("%w: rule %s: %v", esc.ErrManifest, rel, err)
@@ -40,7 +42,7 @@ func loadFragment(packDir, rel string, customNames map[string]bool) (*Fragment, 
 		}
 		for _, tgt := range meta.Targets {
 			if !targets.IsFragmentTarget(tgt) && !customNames[tgt] {
-				return nil, fmt.Errorf("%w: rule %s: unknown or foreign target %q (not a built-in target or a custom target defined by this pack)", esc.ErrConstraint, rel, tgt)
+				return nil, fmt.Errorf("%w: pack %q: rule %s: unknown or foreign target %q (not a built-in target or a custom target defined by this pack)", esc.ErrConstraint, packName, rel, tgt)
 			}
 		}
 		frag.Targets = meta.Targets
