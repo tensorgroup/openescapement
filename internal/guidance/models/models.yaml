@@ -33,12 +33,33 @@ vendors:
   - key: openai
     name: OpenAI
     models:
+      - id: gpt-5.6-sol
+        name: GPT-5.6 Sol
+        tier: frontier
+        roles: [planning, plan-check, review]
+        status: current
+        docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-5.6-sol]
+        verified: 2026-08-02
+      - id: gpt-5.6-terra
+        name: GPT-5.6 Terra
+        tier: mid
+        roles: [coding, review]
+        status: current
+        docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-5.6-terra]
+        verified: 2026-08-02
+      - id: gpt-5.6-luna
+        name: GPT-5.6 Luna
+        tier: fast
+        roles: [bulk]
+        status: current
+        docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-5.6-luna]
+        verified: 2026-08-02
       - id: gpt-5.2
         name: GPT-5.2
         tier: frontier
         roles: [planning, coding, review]
-        status: current
-        docs: [https://platform.openai.com/docs/models]
+        status: legacy
+        docs: [https://developers.openai.com/codex/models]
         verified: 2026-08-02
   - key: google
     name: Google
