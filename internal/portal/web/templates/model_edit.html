@@ -1,3 +1,14 @@
-{{define "title"}}Edit model guidance{{end}}
-{{define "explainer"}}{{end}}
-{{define "content"}}{{end}}
+{{define "title"}}Edit {{.File}}{{end}}
+{{define "explainer"}}Edit guidance for {{.VendorKey}}. Saving writes the file and returns to the rendered view.{{end}}
+{{define "content"}}
+{{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+<h2>{{.VendorKey}} <span class="muted">/ {{.File}}</span></h2>
+<form method="post" action="/models/{{.VendorKey}}/edit">
+  <input type="hidden" name="file" value="{{.File}}">
+  <p><textarea name="content" rows="24" cols="90">{{.Content}}</textarea></p>
+  <p>
+    <button type="submit">Save</button>
+    <a href="/models/{{.VendorKey}}">Cancel</a>
+  </p>
+</form>
+{{end}}

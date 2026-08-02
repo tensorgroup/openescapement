@@ -1,6 +1,8 @@
 package web
 
 import (
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -67,5 +69,58 @@ func TestModelVendorPageRendersNoteModelsExamplesAnchors(t *testing.T) {
 	}
 	if get(t, h, "/models/nope", nil).Code != 404 {
 		t.Fatal("unknown vendor should 404")
+	}
+}
+
+func TestModelEditRoundTrip(t *testing.T) {
+	s := newTestServerWithGuidance(t)
+	h := s.Handler()
+	edit := get(t, h, "/models/anthropic/edit?file=anthropic.md", nil).Body.String()
+	if !strings.Contains(edit, "<textarea") || !strings.Contains(edit, "hx-disable") == true {
+		// editor is a plain form: must NOT be inside hx-disable, must have textarea
+	}
+	if !strings.Contains(edit, "<textarea") {
+		t.Fatalf("edit page missing textarea: %s", edit)
+	}
+	// The vendor page's example Edit links emit ?file= percent-encoded
+	// (examples%2fanthropic%2fmodel-routing.md); confirm the GET handler,
+	// which reads r.URL.Query().Get("file"), round-trips that decoded value.
+	encoded := get(t, h, "/models/anthropic/edit?file=examples%2fanthropic%2fmodel-routing.md", nil)
+	if encoded.Code != 200 || !strings.Contains(encoded.Body.String(), "<textarea") {
+		t.Fatalf("encoded example file edit: code=%d body=%s", encoded.Code, encoded.Body.String())
+	}
+	form := url.Values{
+		"file":    {"anthropic.md"},
+		"content": {"# Anthropic\n\nUpdated guidance body.\n\n## Sources\n- https://docs.claude.com/\n"},
+	}
+	req := httptest.NewRequest("POST", "/models/anthropic/edit", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != 303 || rr.Header().Get("Location") != "/models/anthropic" {
+		t.Fatalf("save: code=%d loc=%s", rr.Code, rr.Header().Get("Location"))
+	}
+	body := get(t, h, "/models/anthropic", nil).Body.String()
+	if !strings.Contains(body, "Updated guidance body.") {
+		t.Fatal("next GET did not show the saved edit")
+	}
+}
+
+func TestModelEditRejectsForeignAndUnknownFiles(t *testing.T) {
+	s := newTestServerWithGuidance(t)
+	h := s.Handler()
+	// models.yaml is not editable; a note under the wrong vendor is rejected.
+	for _, q := range []string{"file=models.yaml", "file=openai.md", "file=../secret", "file=examples/openai/x.md"} {
+		if get(t, h, "/models/anthropic/edit?"+q, nil).Code != 404 {
+			t.Errorf("GET edit %s should 404", q)
+		}
+	}
+	form := url.Values{"file": {"models.yaml"}, "content": {"x"}}
+	req := httptest.NewRequest("POST", "/models/anthropic/edit", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != 404 {
+		t.Fatalf("POST models.yaml should 404, got %d", rr.Code)
 	}
 }

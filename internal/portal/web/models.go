@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/tensorgroup/openescapement/internal/guidance"
 )
@@ -111,8 +112,75 @@ func (s *Server) handleModelVendor(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// The editor handlers are implemented in Task 5.
-func (s *Server) handleModelEdit(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) }
+// modelEditData is the /models/{vendor}/edit page's data.
+type modelEditData struct {
+	layoutData
+	VendorKey string
+	File      string
+	Content   string
+	Error     string
+}
+
+// fileBelongsToVendor gates the editor to a vendor's own known files, so the
+// portal never writes a path assembled from unchecked user input.
+func fileBelongsToVendor(g *guidance.Set, vendor, file string) bool {
+	if !g.KnownFiles()[file] {
+		return false
+	}
+	return file == vendor+".md" || strings.HasPrefix(file, "examples/"+vendor+"/")
+}
+
+func (s *Server) handleModelEdit(w http.ResponseWriter, r *http.Request) {
+	vendor := r.PathValue("vendor")
+	g := s.loadGuidance()
+	if _, ok := findVendor(g.Registry, vendor); !ok {
+		http.NotFound(w, r)
+		return
+	}
+	file := r.URL.Query().Get("file")
+	if !fileBelongsToVendor(g, vendor, file) {
+		http.NotFound(w, r)
+		return
+	}
+	content, _, err := g.ReadFile(file)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	s.render(w, "model_edit", modelEditData{
+		layoutData: s.baseData("models"),
+		VendorKey:  vendor,
+		File:       file,
+		Content:    string(content),
+	})
+}
+
 func (s *Server) handleModelEditSave(w http.ResponseWriter, r *http.Request) {
-	http.NotFound(w, r)
+	vendor := r.PathValue("vendor")
+	g := s.loadGuidance()
+	if _, ok := findVendor(g.Registry, vendor); !ok {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	file := r.FormValue("file")
+	content := r.FormValue("content")
+	if !fileBelongsToVendor(g, vendor, file) {
+		http.NotFound(w, r)
+		return
+	}
+	if err := g.WriteFile(file, []byte(content)); err != nil {
+		s.renderStatus(w, http.StatusUnprocessableEntity, "model_edit", modelEditData{
+			layoutData: s.baseData("models"),
+			VendorKey:  vendor,
+			File:       file,
+			Content:    content,
+			Error:      err.Error(),
+		})
+		return
+	}
+	http.Redirect(w, r, "/models/"+vendor, http.StatusSeeOther)
 }
