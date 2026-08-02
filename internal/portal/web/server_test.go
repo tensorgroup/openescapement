@@ -160,6 +160,35 @@ func TestModernCSSMarkup(t *testing.T) {
 	}
 }
 
+func TestHtmxAssetsServed(t *testing.T) {
+	h := newTestServer(t, "").Handler()
+
+	js := get(t, h, "/static/htmx.min.js", nil)
+	if js.Code != 200 || len(js.Body.String()) < 1000 {
+		t.Fatalf("htmx.min.js: code=%d len=%d", js.Code, js.Body.Len())
+	}
+
+	cfg := get(t, h, "/static/htmx-config.js", nil).Body.String()
+	for _, want := range []string{"allowEval = false", "includeIndicatorStyles = false", "historyEnabled = false", "selfRequestsOnly = true"} {
+		if !strings.Contains(cfg, want) {
+			t.Fatalf("htmx-config.js missing %q", want)
+		}
+	}
+
+	layout := get(t, h, "/", nil).Body.String()
+	if !strings.Contains(layout, `src="/static/htmx.min.js"`) || !strings.Contains(layout, `src="/static/htmx-config.js"`) {
+		t.Fatal("layout missing htmx script tags")
+	}
+}
+
+func TestPackMarkdownHasHxDisable(t *testing.T) {
+	h := newTestServerWithPacks(t).Handler()
+	detail := get(t, h, "/packs/org-baseline", nil).Body.String()
+	if !strings.Contains(detail, "hx-disable") {
+		t.Fatal("pack fragments must be wrapped with hx-disable")
+	}
+}
+
 func findCookie(t *testing.T, rr *httptest.ResponseRecorder, name string) *http.Cookie {
 	t.Helper()
 	for _, c := range rr.Result().Cookies() {

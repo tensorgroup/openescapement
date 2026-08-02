@@ -10,7 +10,7 @@
     {{range .Pack.Tags}}<li>{{.Name}} — {{.Date}}</li>{{else}}<li class="muted">No versions published yet.</li>{{end}}
   </ul>
 </section>
-<section>
+<section hx-disable>
   <h3>Fragments</h3>
   {{range .Fragments}}
   <article class="fragment">
