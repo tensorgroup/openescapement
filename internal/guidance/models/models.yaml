@@ -1,0 +1,54 @@
+vendors:
+  - key: anthropic
+    name: Anthropic
+    models:
+      - id: claude-opus-5
+        name: Claude Opus 5
+        tier: frontier
+        roles: [planning, plan-check, review]
+        status: current
+        docs: [https://docs.claude.com/en/docs/about-claude/models]
+        verified: 2026-08-02
+      - id: claude-sonnet-5
+        name: Claude Sonnet 5
+        tier: mid
+        roles: [coding, review]
+        status: current
+        docs: [https://docs.claude.com/en/docs/about-claude/models]
+        verified: 2026-08-02
+      - id: claude-haiku-4-5
+        name: Claude Haiku 4.5
+        tier: fast
+        roles: [bulk]
+        status: current
+        docs: [https://docs.claude.com/en/docs/about-claude/models]
+        verified: 2026-08-02
+  - key: openai
+    name: OpenAI
+    models:
+      - id: gpt-5.2
+        name: GPT-5.2
+        tier: frontier
+        roles: [planning, coding, review]
+        status: current
+        docs: [https://platform.openai.com/docs/models]
+        verified: 2026-08-02
+  - key: google
+    name: Google
+    models:
+      - id: gemini-3-pro
+        name: Gemini 3 Pro
+        tier: frontier
+        roles: [planning, coding]
+        status: current
+        docs: [https://ai.google.dev/gemini-api/docs/models]
+        verified: 2026-08-02
+  - key: kimi
+    name: Kimi
+    models: []
+  - key: deepseek
+    name: Deepseek
+    models: []
+  - key: grok
+    name: Grok
+    models: []
