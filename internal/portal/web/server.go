@@ -188,7 +188,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/events", s.handleEvents)
 	mux.Handle("/static/", noStore(http.FileServerFS(staticFS)))
 
-	return s.withAuth(mux)
+	return securityHeaders(s.withAuth(mux))
 }
 
 // noStore sets Cache-Control: no-store on static asset responses so a
@@ -196,6 +196,22 @@ func (s *Server) Handler() http.Handler {
 func noStore(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
+		h.ServeHTTP(w, r)
+	})
+}
+
+// contentSecurityPolicy is the strict CSP applied to every portal response.
+// default-src 'none' denies everything not explicitly allowed; connect-src
+// 'self' is required for htmx XHR (it does not fall back from default-src).
+const contentSecurityPolicy = "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+
+// securityHeaders sets the CSP and nosniff header on every response. It wraps
+// the entire handler, so pages, static assets, redirects, and error responses
+// all carry the same baseline.
+func securityHeaders(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		h.ServeHTTP(w, r)
 	})
 }
@@ -223,7 +239,8 @@ func (s *Server) withAuth(next http.Handler) http.Handler {
 				Value:    s.Token,
 				Path:     "/",
 				HttpOnly: true,
-				SameSite: http.SameSiteLaxMode,
+				Secure:   r.TLS != nil,
+				SameSite: http.SameSiteStrictMode,
 			})
 			u := *r.URL
 			u.RawQuery = ""

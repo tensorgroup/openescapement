@@ -1,6 +1,7 @@
 package web
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -92,4 +93,54 @@ func TestActiveNav(t *testing.T) {
 			t.Fatalf("%s: missing active nav %q", path, want)
 		}
 	}
+}
+
+func TestSecurityHeadersOnEveryRoute(t *testing.T) {
+	const wantCSP = "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+	h := newTestServer(t, "").Handler()
+	for _, p := range []string{"/", "/fleet", "/packs", "/usage", "/static/style.css", "/nope"} {
+		rr := get(t, h, p, nil)
+		if got := rr.Header().Get("Content-Security-Policy"); got != wantCSP {
+			t.Fatalf("%s: CSP = %q", p, got)
+		}
+		if got := rr.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+			t.Fatalf("%s: nosniff = %q", p, got)
+		}
+	}
+	// Unauthorized responses still carry the headers.
+	ha := newTestServer(t, "sekrit").Handler()
+	if rr := get(t, ha, "/", nil); rr.Code != 401 || rr.Header().Get("Content-Security-Policy") != wantCSP {
+		t.Fatalf("401 missing CSP: code=%d", rr.Code)
+	}
+}
+
+func TestSessionCookieHardening(t *testing.T) {
+	h := newTestServer(t, "sekrit").Handler()
+
+	// Plain HTTP: Strict + HttpOnly, not Secure.
+	rr := get(t, h, "/?token=sekrit", nil)
+	c := findCookie(t, rr, "esc_session")
+	if c.SameSite != http.SameSiteStrictMode || !c.HttpOnly || c.Secure {
+		t.Fatalf("http cookie: samesite=%v httponly=%v secure=%v", c.SameSite, c.HttpOnly, c.Secure)
+	}
+
+	// TLS: Secure set.
+	req := httptest.NewRequest("GET", "/?token=sekrit", nil)
+	req.TLS = &tls.ConnectionState{}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if !findCookie(t, rec, "esc_session").Secure {
+		t.Fatal("tls cookie must be Secure")
+	}
+}
+
+func findCookie(t *testing.T, rr *httptest.ResponseRecorder, name string) *http.Cookie {
+	t.Helper()
+	for _, c := range rr.Result().Cookies() {
+		if c.Name == name {
+			return c
+		}
+	}
+	t.Fatalf("cookie %q not set", name)
+	return nil
 }
