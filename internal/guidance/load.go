@@ -130,7 +130,11 @@ func (s *Set) WriteFile(rel string, content []byte) error {
 		os.Remove(tmpName)
 		return err
 	}
-	return os.Rename(tmpName, dst)
+	if err := os.Rename(tmpName, dst); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	return nil
 }
 
 // VendorForModel finds the vendor key owning a model id.

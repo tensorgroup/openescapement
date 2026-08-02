@@ -1,6 +1,7 @@
 package web
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
@@ -104,6 +105,39 @@ func TestModelEditRoundTrip(t *testing.T) {
 	body := get(t, h, "/models/anthropic", nil).Body.String()
 	if !strings.Contains(body, "Updated guidance body.") {
 		t.Fatal("next GET did not show the saved edit")
+	}
+}
+
+// TestModelEditSaveWithoutDataDirReturns422 covers the editor save's only
+// error branch: GuidanceDir left "" still lets the file through
+// fileBelongsToVendor (KnownFiles derives from the embedded FS, not disk),
+// but Set.WriteFile then fails because there's no data directory to write
+// to. The handler must re-render the editor with the submitted content
+// preserved (not lost) alongside the error, at 422.
+func TestModelEditSaveWithoutDataDirReturns422(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := New(st, nil, "", "test") // GuidanceDir left unset ("")
+	h := s.Handler()
+	form := url.Values{
+		"file":    {"anthropic.md"},
+		"content": {"unsaved draft content"},
+	}
+	req := httptest.NewRequest("POST", "/models/anthropic/edit", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("save without data dir: code=%d body=%s", rr.Code, rr.Body.String())
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "unsaved draft content") {
+		t.Fatalf("editor did not preserve submitted content: %s", body)
+	}
+	if !strings.Contains(body, "guidance: no data directory configured") {
+		t.Fatalf("editor did not show the write error: %s", body)
 	}
 }
 
