@@ -23,6 +23,19 @@ func TestEveryRouteRendersFullPageWithoutHX(t *testing.T) {
 	}
 }
 
+func TestPackDetailAndEditRenderFullPageWithoutHX(t *testing.T) {
+	h := newTestServerWithPacks(t).Handler()
+	for _, p := range []string{"/packs/org-baseline", "/packs/org-baseline/edit?frag=rules/security.md"} {
+		body := get(t, h, p, nil).Body.String()
+		if !strings.Contains(body, "<html") {
+			t.Fatalf("%s: missing <html", p)
+		}
+		if !strings.Contains(body, "esc <strong>portal</strong>") {
+			t.Fatalf("%s: missing sidebar", p)
+		}
+	}
+}
+
 func TestFleetAndUsageFragmentsRequireHXHeader(t *testing.T) {
 	h := newTestServer(t, "").Handler()
 	for _, p := range []string{"/fleet?sort=repo", "/usage"} {
