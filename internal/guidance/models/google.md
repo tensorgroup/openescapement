@@ -10,7 +10,7 @@ Google's most advanced reasoning model, built to refine the Gemini 3 Pro series 
 
 ### Gemini 3.6 Flash (gemini-3.6-flash) - mid
 
-Google's newest Flash model, positioned as sustained frontier-level intelligence at Flash speed and cost. It is built for the agentic era: strong at code generation, agentic execution loops, and spatial reasoning, and is tuned specifically for rapid iterate-test-fix coding cycles. 1,048,576-token input context, 65,536-token max output, $1.50 / $7.50 per million tokens. Recommended roles: coding and review. This is the default day-to-day coding model, and it also covers review on lower-stakes diffs where a full Pro Preview pass is not warranted.
+Google's newest Flash model, positioned as sustained frontier-level intelligence at Flash speed and cost. It is built for the agentic era: strong at code generation, agentic execution loops, and spatial reasoning, and is tuned specifically for rapid iterate-test-fix coding cycles. 1,048,576-token input context, 65,536-token max output, $1.50 / $7.50 per million tokens. Recommended roles: coding and review. This is the default day-to-day coding model, and it also covers review on lower-stakes diffs where a full Pro Preview pass is not warranted. Google still lists the older Gemini 3.5 Flash (`gemini-3.5-flash`, stable since 2026-05-19) separately; 3.6 Flash supersedes it as the coding default in this registry.
 
 ### Gemini 3.5 Flash-Lite (gemini-3.5-flash-lite) - fast
 
@@ -18,13 +18,13 @@ Google's fastest and most cost-effective current model, optimized for high-throu
 
 ### Gemini 3 Pro Preview (gemini-3-pro) - frontier
 
-Previously Google's frontier reasoning model, Gemini 3 Pro Preview (`gemini-3-pro-preview`) launched November 2025 and was shut down on 2026-03-09; the id now redirects to Gemini 3.1 Pro Preview. It stays in this registry because seeded usage telemetry references it under the shorter id `gemini-3-pro`; do not route new work to it, and migrate any saved configuration to `gemini-3.1-pro-preview`.
+Previously Google's frontier reasoning model, Gemini 3 Pro Preview (`gemini-3-pro-preview`) launched November 2025 and was shut down on 2026-03-09; its recommended replacement is `gemini-3.1-pro-preview`. It stays in this registry because seeded usage telemetry references it under the shorter id `gemini-3-pro`; do not route new work to it, and migrate any saved configuration to `gemini-3.1-pro-preview`.
 
 ## Governance
 
 - Require a human review gate before merging any change Gemini 3.1 Pro Preview produced with high autonomy (broad file access, destructive commands, or unsupervised multi-step runs); its reasoning depth is strong but it still carries a preview label, and the blast radius of an autonomous frontier session is larger than a supervised one.
-- Route bulk, mechanical, and high-volume work to Gemini 3.5 Flash-Lite to hold spend down; it is roughly 5x cheaper than 3.6 Flash and 40x cheaper than 3.1 Pro Preview on output tokens.
-- Treat Gemini 3 Pro Preview (`gemini-3-pro`) as retired: Google shut it down on 2026-03-09 and the underlying endpoint now serves Gemini 3.1 Pro Preview, so point new configuration at `gemini-3.1-pro-preview` directly.
+- Route bulk, mechanical, and high-volume work to Gemini 3.5 Flash-Lite to hold spend down; on output tokens it is roughly 3x cheaper than 3.6 Flash ($2.50 vs $7.50 per million) and roughly 5x cheaper than 3.1 Pro Preview ($2.50 vs $12 per million, prompts up to 200K tokens).
+- Treat Gemini 3 Pro Preview (`gemini-3-pro`) as retired: Google shut it down on 2026-03-09 and its recommended replacement is `gemini-3.1-pro-preview`, so point new configuration there directly.
 - Routing policy: plan, plan-check, and review on Gemini 3.1 Pro Preview; code day-to-day on Gemini 3.6 Flash; run bulk and mechanical edits on Gemini 3.5 Flash-Lite.
 
 ## Sources
