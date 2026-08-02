@@ -32,3 +32,24 @@ func TestOverviewShowsSeededStats(t *testing.T) {
 		}
 	}
 }
+
+func TestChartsHaveAccessibleTitles(t *testing.T) {
+	dir := t.TempDir()
+	epoch := time.Date(2026, 7, 30, 9, 0, 0, 0, time.UTC)
+	if err := seed.Demo(dir, epoch); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := store.Open(dir)
+	s := New(st, nil, "", "test")
+	s.Now = func() time.Time { return epoch }
+	h := s.Handler()
+
+	overview := get(t, h, "/", nil).Body.String()
+	if !strings.Contains(overview, `role="img"`) || !strings.Contains(overview, "<title>") {
+		t.Fatal("overview chart needs role=img and a <title>")
+	}
+	usage := get(t, h, "/usage", nil).Body.String()
+	if strings.Count(usage, "<title>") < 2 {
+		t.Fatal("both usage charts need <title>")
+	}
+}

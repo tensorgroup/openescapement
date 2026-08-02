@@ -38,7 +38,7 @@ func TestLineGolden(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		pts = append(pts, Point{X: base.AddDate(0, 0, i), Y: float64(3 + i*2)})
 	}
-	golden(t, "line.golden.svg", string(Line(pts, 480, 160)))
+	golden(t, "line.golden.svg", string(Line("Adoption", pts, 480, 160)))
 }
 
 func TestStackedBarsGolden(t *testing.T) {
@@ -47,14 +47,14 @@ func TestStackedBarsGolden(t *testing.T) {
 		{Label: "claude-sonnet-5", Values: []float64{1200, 3400, 2100}},
 		{Label: "claude-haiku-4-5", Values: []float64{800, 600, 1500}},
 	}
-	golden(t, "bars.golden.svg", string(StackedBars(labels, series, 480, 200)))
+	golden(t, "bars.golden.svg", string(StackedBars("Usage", labels, series, 480, 200)))
 }
 
 func TestEmptyStates(t *testing.T) {
-	if got := string(Line(nil, 480, 160)); !contains(got, "No data yet") {
+	if got := string(Line("Adoption", nil, 480, 160)); !contains(got, "No data yet") {
 		t.Fatalf("line empty state: %s", got)
 	}
-	if got := string(StackedBars(nil, nil, 480, 200)); !contains(got, "No data yet") {
+	if got := string(StackedBars("Usage", nil, nil, 480, 200)); !contains(got, "No data yet") {
 		t.Fatalf("bars empty state: %s", got)
 	}
 }

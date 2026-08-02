@@ -305,7 +305,7 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	data := overviewData{
 		layoutData:    s.baseData("overview"),
 		Stats:         stats,
-		AdoptionChart: charts.Line(pts, 640, 220),
+		AdoptionChart: charts.Line("Governed repos over time", pts, 640, 220),
 	}
 	s.render(w, "overview", data)
 }
@@ -769,8 +769,8 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 		Team:        team,
 		Model:       model,
 		Days:        days,
-		TokensChart: charts.StackedBars(labels, tokenChartSeries, 640, 220),
-		CostChart:   charts.StackedBars(labels, costChartSeries, 640, 220),
+		TokensChart: charts.StackedBars("Tokens per day by model", labels, tokenChartSeries, 640, 220),
+		CostChart:   charts.StackedBars("Cost per day by team", labels, costChartSeries, 640, 220),
 		Rows:        rows,
 		TotalTokens: totalTokens,
 		TotalCost:   totalCost,

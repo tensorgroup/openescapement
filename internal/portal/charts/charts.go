@@ -67,20 +67,20 @@ func niceCeil(v float64) float64 {
 
 func esc(s string) string { return template.HTMLEscapeString(s) }
 
-func empty(w, h int) template.HTML {
+func empty(title string, w, h int) template.HTML {
 	return template.HTML(fmt.Sprintf(
-		`<svg viewBox="0 0 %d %d" width="%d" height="%d" role="img"><text x="%s" y="%s" text-anchor="middle" %s>No data yet</text></svg>`,
-		w, h, w, h, f(float64(w)/2), f(float64(h)/2), textAttrs))
+		`<svg viewBox="0 0 %d %d" width="%d" height="%d" role="img"><title>%s</title><text x="%s" y="%s" text-anchor="middle" %s>No data yet</text></svg>`,
+		w, h, w, h, esc(title), f(float64(w)/2), f(float64(h)/2), textAttrs))
 }
 
 // Line renders pts as a single polyline SVG chart of width w and height h.
 // Empty input returns a styled "No data yet" placeholder of the same size.
-func Line(pts []Point, w, h int) template.HTML {
+func Line(title string, pts []Point, w, h int) template.HTML {
 	if len(pts) == 0 {
-		return empty(w, h)
+		return empty(title, w, h)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %d %d" width="%d" height="%d" role="img">`, w, h, w, h)
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %d %d" width="%d" height="%d" role="img"><title>%s</title>`, w, h, w, h, esc(title))
 	maxY := 0.0
 	for _, p := range pts {
 		maxY = math.Max(maxY, p.Y)
@@ -121,12 +121,12 @@ func Line(pts []Point, w, h int) template.HTML {
 // labels appears along the top. Each bar segment carries a <title> child
 // for native hover tooltips. Empty input returns a styled "No data yet"
 // placeholder of the same size.
-func StackedBars(labels []string, series []Series, w, h int) template.HTML {
+func StackedBars(title string, labels []string, series []Series, w, h int) template.HTML {
 	if len(labels) == 0 || len(series) == 0 {
-		return empty(w, h)
+		return empty(title, w, h)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %d %d" width="%d" height="%d" role="img">`, w, h, w, h)
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %d %d" width="%d" height="%d" role="img"><title>%s</title>`, w, h, w, h, esc(title))
 
 	// Legend row at top: colored square + label, advancing left to right.
 	legendY := 10.0
