@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/tensorgroup/openescapement/internal/config"
@@ -41,7 +42,9 @@ func DriftDiff(ctx context.Context, root string, plan *PlanResult) (string, erro
 }
 
 // PolicyDiff renders the policy text of the configured agent-file targets
-// from two plans (current pins vs alternate ref) and diffs them.
+// from two plans (current pins vs alternate ref) and diffs them, then diffs
+// every pack-defined custom target present in either plan's effective set
+// (spec §3).
 func PolicyDiff(ctx context.Context, cur, next *PlanResult) (string, error) {
 	var out strings.Builder
 	targets := cur.Config.Targets
@@ -50,7 +53,7 @@ func PolicyDiff(ctx context.Context, cur, next *PlanResult) (string, error) {
 	}
 	for _, t := range targets {
 		if render.TargetFile[t] == "" {
-			continue // skills/mcp targets have no single policy text to diff
+			continue // skills/mcp targets have no single policy text; custom targets are diffed below
 		}
 		var a, b string
 		if t == render.TargetGovernance {
@@ -67,7 +70,78 @@ func PolicyDiff(ctx context.Context, cur, next *PlanResult) (string, error) {
 		}
 		out.WriteString(d)
 	}
+
+	d, err := customPolicyDiff(ctx, cur, next)
+	if err != nil {
+		return "", err
+	}
+	out.WriteString(d)
 	return out.String(), nil
+}
+
+// builtinBlockFiles are the managed-block target files diffed by the loop
+// above; every other KindBlock artifact in a plan is a pack-defined custom
+// target (governance is KindFile, not KindBlock, so it never appears here).
+var builtinBlockFiles = map[string]bool{
+	render.TargetFile[render.TargetClaude]: true,
+	render.TargetFile[render.TargetAgents]: true,
+	render.TargetFile[render.TargetGemini]: true,
+}
+
+// customPolicyDiff diffs every pack-defined custom target present in either
+// plan's Artifacts, matched by file path. planFromConfig already computed
+// each side's Artifacts by iterating that side's effective target set: the
+// repo's targets: filter and allow_custom_target_files acknowledgment gate
+// (§2.3, §3) are applied there, identically to Plan/Apply, and an alt-ref
+// pack whose custom target definitions fail validation (§2.1) or collide
+// (§2.2) already made PlanWithRef return a hard error before this function
+// ever runs. So a target filtered out or unacknowledged on a side is simply
+// absent from that side's Artifacts here — never a special case — and a
+// target present on only one side diffs as a pure add or remove of its
+// managed block, the same as any other file gitDiff renders.
+func customPolicyDiff(ctx context.Context, cur, next *PlanResult) (string, error) {
+	curCustom := customArtifactBodies(cur.Artifacts)
+	nextCustom := customArtifactBodies(next.Artifacts)
+
+	paths := map[string]bool{}
+	for p := range curCustom {
+		paths[p] = true
+	}
+	for p := range nextCustom {
+		paths[p] = true
+	}
+	sorted := make([]string, 0, len(paths))
+	for p := range paths {
+		sorted = append(sorted, p)
+	}
+	sort.Strings(sorted)
+
+	var out strings.Builder
+	for _, p := range sorted {
+		a, b := curCustom[p], nextCustom[p]
+		if a == b {
+			continue
+		}
+		d, err := gitDiff(ctx, []byte(a), []byte(b), p)
+		if err != nil {
+			return "", err
+		}
+		out.WriteString(d)
+	}
+	return out.String(), nil
+}
+
+// customArtifactBodies returns the rendered body of every custom-target
+// block artifact, keyed by path.
+func customArtifactBodies(artifacts []Artifact) map[string]string {
+	bodies := map[string]string{}
+	for _, a := range artifacts {
+		if a.Kind != KindBlock || builtinBlockFiles[a.Path] {
+			continue
+		}
+		bodies[a.Path] = a.Body
+	}
+	return bodies
 }
 
 // PlanWithRef re-plans with one source pinned to a different ref.

@@ -367,3 +367,72 @@ func TestCustomTargetFilterCaseInsensitive(t *testing.T) {
 		t.Errorf("custom target content missing:\n%s", got)
 	}
 }
+
+// TestCustomTargetDiffAgainst covers spec §3: PolicyDiff must diff the
+// effective custom-target set, not just the four built-ins. A content change
+// to a custom target's owning fragment between the current pin and an
+// alternate ref must appear in `esc diff --against`.
+func TestCustomTargetDiffAgainst(t *testing.T) {
+	// Fragment names copilot only (not claude), so a content change is
+	// visible exclusively through the custom target's diff — isolating the
+	// assertion from the built-in claude diff path.
+	v1Fragment := "---\ntargets: [copilot]\n---\n## Copilot rule\nUse Vault.\n"
+	repo := newCustomPackRepo(t, "acme-org", "1.0.0", copilotPackYAML, v1Fragment)
+	root := governedWith(t, repo, "v1.0.0", "allow_custom_target_files:\n  - .github/copilot-instructions.md\n")
+	if code, out := run(t, root, "sync"); code != 0 {
+		t.Fatalf("sync: %d\n%s", code, out)
+	}
+
+	// Publish v2.0.0 with changed custom-target content.
+	v2YAML := strings.Replace(copilotPackYAML, "version: 1.0.0", "version: 2.0.0", 1)
+	v2Fragment := "---\ntargets: [copilot]\n---\n## Copilot rule\nUse LastPass.\n"
+	writeFiles(t, repo, map[string]string{"pack.yaml": v2YAML, "rules/main.md": v2Fragment})
+	gitIn(t, repo, "add", "-A")
+	gitIn(t, repo, "commit", "-q", "-m", "v2")
+	gitIn(t, repo, "tag", "-a", "v2.0.0", "-m", "v2")
+
+	code, out := run(t, root, "diff", "--against", "v2.0.0")
+	if code != 1 {
+		t.Fatalf("diff --against: exit %d\n%s", code, out)
+	}
+	if !strings.Contains(out, ".github/copilot-instructions.md") {
+		t.Errorf("custom target file missing from diff:\n%s", out)
+	}
+	if !strings.Contains(out, "Vault") || !strings.Contains(out, "LastPass") {
+		t.Errorf("custom target content change missing from diff:\n%s", out)
+	}
+}
+
+// TestCustomTargetDiffAgainstFilteredOut covers spec §3: a custom target
+// excluded by the repo's targets: filter must be absent from both sides of
+// the diff, even though its content changed between refs — exactly as Plan
+// treats it (never rendered, never considered).
+func TestCustomTargetDiffAgainstFilteredOut(t *testing.T) {
+	// Fragment names copilot only, and the repo's targets: filter excludes
+	// it, so claude never sees this content either — the whole diff must be
+	// empty even though the custom target's content changed between refs.
+	v1Fragment := "---\ntargets: [copilot]\n---\n## Copilot rule\nUse Vault.\n"
+	repo := newCustomPackRepo(t, "acme-org", "1.0.0", copilotPackYAML, v1Fragment)
+	root := governedWith(t, repo, "v1.0.0", "targets: [claude]\n")
+	if code, out := run(t, root, "sync"); code != 0 {
+		t.Fatalf("sync: %d\n%s", code, out)
+	}
+
+	v2YAML := strings.Replace(copilotPackYAML, "version: 1.0.0", "version: 2.0.0", 1)
+	v2Fragment := "---\ntargets: [copilot]\n---\n## Copilot rule\nUse LastPass.\n"
+	writeFiles(t, repo, map[string]string{"pack.yaml": v2YAML, "rules/main.md": v2Fragment})
+	gitIn(t, repo, "add", "-A")
+	gitIn(t, repo, "commit", "-q", "-m", "v2")
+	gitIn(t, repo, "tag", "-a", "v2.0.0", "-m", "v2")
+
+	code, out := run(t, root, "diff", "--against", "v2.0.0")
+	if code != 0 {
+		t.Errorf("filtered-out custom target: diff should be empty, exit %d:\n%s", code, out)
+	}
+	if strings.Contains(out, ".github/copilot-instructions.md") {
+		t.Errorf("filtered-out custom target must not appear in diff:\n%s", out)
+	}
+	if strings.Contains(out, "LastPass") || strings.Contains(out, "Vault") {
+		t.Errorf("filtered-out custom target content must not appear in diff:\n%s", out)
+	}
+}
