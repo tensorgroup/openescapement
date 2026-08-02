@@ -11,6 +11,7 @@ at runtime. Hardening lives in `static/htmx-config.js`.
 ## Upgrading
 
 1. Download the new `htmx.min.js` from the release tag above.
-2. Diff-review the source against the current file.
-3. Update Version and SHA-256 here.
-4. Re-run `go test ./internal/portal/...`.
+2. Verify the download's SHA-256 against the checksum published with the release before trusting it.
+3. Diff-review the source against the current file.
+4. Update Version and SHA-256 here.
+5. Re-run `go test ./internal/portal/...`.
