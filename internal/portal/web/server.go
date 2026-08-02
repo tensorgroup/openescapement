@@ -488,6 +488,7 @@ type packEditData struct {
 	Content          string
 	SuggestedVersion string
 	Diff             string
+	DiffRequested    bool // a diff action ran; render feedback even when Diff is empty
 	Error            string
 }
 
@@ -568,6 +569,7 @@ func (s *Server) handlePackPublish(w http.ResponseWriter, r *http.Request) {
 			Content:          content,
 			SuggestedVersion: version,
 			Diff:             diff,
+			DiffRequested:    true,
 		}
 		if isHX(r) {
 			s.renderFragment(w, "pack_edit", "diff-region", data)

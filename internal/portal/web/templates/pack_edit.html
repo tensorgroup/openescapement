@@ -22,5 +22,5 @@
 
 {{define "diff-region"}}
 {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
-{{if .Diff}}<pre class="diff">{{range diffLines .Diff}}<span class="line {{.Class}}">{{.Text}}</span>{{end}}</pre>{{end}}
+{{if .Diff}}<pre class="diff">{{range diffLines .Diff}}<span class="line {{.Class}}">{{.Text}}</span>{{end}}</pre>{{else if .DiffRequested}}<p class="muted">No changes compared to the current version.</p>{{end}}
 {{end}}

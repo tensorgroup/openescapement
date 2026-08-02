@@ -160,6 +160,27 @@ func TestDiffPreviewFragment(t *testing.T) {
 	}
 }
 
+func TestDiffPreviewEmptyDiffShowsFeedback(t *testing.T) {
+	s := newTestServerWithPacks(t)
+	form := url.Values{
+		"frag":    {"rules/security.md"},
+		"content": {"---\ntargets: [claude, agents]\n---\n# Security\n\n- Never commit secrets.\n"}, // identical to the fixture: empty diff
+		"version": {"1.3.0"},
+		"action":  {"diff"},
+	}
+	req := httptest.NewRequest("POST", "/packs/org-baseline/publish", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != 200 {
+		t.Fatalf("empty diff render: %d %s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "No changes") {
+		t.Fatalf("empty diff must render visible feedback, got: %q", rr.Body.String())
+	}
+}
+
 func TestPublishValidationErrorKeepsContent(t *testing.T) {
 	s := newTestServerWithPacks(t)
 	form := url.Values{
