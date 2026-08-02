@@ -36,12 +36,15 @@ func TestParseRegistryReordersAndRejects(t *testing.T) {
 		t.Fatalf("not reordered: %v", reg.Vendors)
 	}
 	cases := map[string]string{
-		"unknown vendor": "vendors:\n  - {key: acme, name: Acme, models: []}\n",
-		"unknown field":  "vendors:\n  - {key: anthropic, name: A, bogus: 1, models: []}\n",
-		"bad tier":       "vendors:\n  - key: anthropic\n    name: A\n    models: [{id: x, name: X, tier: huge, roles: [coding], status: current, docs: [], verified: 2026-08-02}]\n",
-		"bad role":       "vendors:\n  - key: anthropic\n    name: A\n    models: [{id: x, name: X, tier: mid, roles: [wizard], status: current, docs: [], verified: 2026-08-02}]\n",
-		"bad status":     "vendors:\n  - key: anthropic\n    name: A\n    models: [{id: x, name: X, tier: mid, roles: [coding], status: retired, docs: [], verified: 2026-08-02}]\n",
-		"bad date":       "vendors:\n  - key: anthropic\n    name: A\n    models: [{id: x, name: X, tier: mid, roles: [coding], status: current, docs: [], verified: yesterday}]\n",
+		"unknown vendor":                    "vendors:\n  - {key: acme, name: Acme, models: []}\n",
+		"unknown field":                     "vendors:\n  - {key: anthropic, name: A, bogus: 1, models: []}\n",
+		"bad tier":                          "vendors:\n  - key: anthropic\n    name: A\n    models: [{id: x, name: X, tier: huge, roles: [coding], status: current, docs: [], verified: 2026-08-02}]\n",
+		"bad role":                          "vendors:\n  - key: anthropic\n    name: A\n    models: [{id: x, name: X, tier: mid, roles: [wizard], status: current, docs: [], verified: 2026-08-02}]\n",
+		"bad status":                        "vendors:\n  - key: anthropic\n    name: A\n    models: [{id: x, name: X, tier: mid, roles: [coding], status: retired, docs: [], verified: 2026-08-02}]\n",
+		"bad date":                          "vendors:\n  - key: anthropic\n    name: A\n    models: [{id: x, name: X, tier: mid, roles: [coding], status: current, docs: [], verified: yesterday}]\n",
+		"duplicate model id one vendor":     "vendors:\n  - key: anthropic\n    name: A\n    models: [{id: x, name: X, tier: mid, roles: [coding], status: current, docs: [], verified: 2026-08-02}, {id: x, name: X2, tier: mid, roles: [coding], status: current, docs: [], verified: 2026-08-02}]\n",
+		"duplicate model id across vendors": "vendors:\n  - key: anthropic\n    name: A\n    models: [{id: x, name: X, tier: mid, roles: [coding], status: current, docs: [], verified: 2026-08-02}]\n  - key: openai\n    name: O\n    models: [{id: x, name: X2, tier: mid, roles: [coding], status: current, docs: [], verified: 2026-08-02}]\n",
+		"empty roles list":                  "vendors:\n  - key: anthropic\n    name: A\n    models: [{id: x, name: X, tier: mid, roles: [], status: current, docs: [], verified: 2026-08-02}]\n",
 	}
 	for name, src := range cases {
 		if _, err := ParseRegistry([]byte(src)); err == nil {

@@ -62,10 +62,11 @@ func ParseRegistry(data []byte) (*Registry, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&reg); err != nil {
-		return nil, fmt.Errorf("guidance: parsing models.yaml: %v", err)
+		return nil, fmt.Errorf("guidance: parsing models.yaml: %w", err)
 	}
 	seen := map[string]bool{}
 	byKey := map[string]Vendor{}
+	seenModelID := map[string]bool{}
 	for _, v := range reg.Vendors {
 		if _, ok := vendorName[v.Key]; !ok {
 			return nil, fmt.Errorf("guidance: unknown vendor %q", v.Key)
@@ -78,11 +79,18 @@ func ParseRegistry(data []byte) (*Registry, error) {
 			if m.ID == "" {
 				return nil, fmt.Errorf("guidance: vendor %s: model missing id", v.Key)
 			}
+			if seenModelID[m.ID] {
+				return nil, fmt.Errorf("guidance: duplicate model id %q", m.ID)
+			}
+			seenModelID[m.ID] = true
 			if !validTier[m.Tier] {
 				return nil, fmt.Errorf("guidance: model %s: invalid tier %q", m.ID, m.Tier)
 			}
 			if !validStatus[m.Status] {
 				return nil, fmt.Errorf("guidance: model %s: invalid status %q", m.ID, m.Status)
+			}
+			if len(m.Roles) == 0 {
+				return nil, fmt.Errorf("guidance: model %s: roles must not be empty", m.ID)
 			}
 			for _, role := range m.Roles {
 				if !validRole[role] {
