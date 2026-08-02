@@ -1,0 +1,24 @@
+{{define "title"}}Models{{end}}
+{{define "explainer"}}Curated, sourced guidance on each vendor's models: what they excel at, how to govern them, and example rule-pack fragments to adopt.{{end}}
+{{define "content"}}
+{{if .Degraded}}<div class="error">Showing built-in guidance. These on-disk files are missing or unreadable: {{range $i, $f := .Degraded}}{{if $i}}, {{end}}{{$f}}{{end}}.</div>{{end}}
+{{range .Vendors}}
+{{$v := .Key}}
+<section>
+  <h2><a href="/models/{{$v}}">{{.Name}}</a></h2>
+  {{if .Models}}
+  <div class="cards">
+    {{range .Models}}
+    <a class="card" href="/models/{{$v}}#{{.ID}}">
+      <span class="label">{{.Name}} <span class="muted">{{.ID}}</span></span>
+      <ul class="chips"><li>{{.Tier}}</li>{{range .Roles}}<li>{{.}}</li>{{end}}</ul>
+      <p class="muted">{{.Status}} · verified {{.Verified}}</p>
+    </a>
+    {{end}}
+  </div>
+  {{else}}
+  <p class="muted">Guidance in progress. <a href="/models/{{$v}}">View notes</a>.</p>
+  {{end}}
+</section>
+{{end}}
+{{end}}

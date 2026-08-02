@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/tensorgroup/openescapement/internal/guidance"
 	"github.com/tensorgroup/openescapement/internal/portal/publish"
 	"github.com/tensorgroup/openescapement/internal/portal/seed"
 	"github.com/tensorgroup/openescapement/internal/portal/store"
@@ -52,6 +53,11 @@ func cmdServe(root string, args []string, stdout, stderr io.Writer) int {
 		dir = filepath.Join(home, ".escapement", "server")
 	}
 
+	if err := guidance.Seed(dir); err != nil {
+		fmt.Fprintf(stderr, "esc: %v\n", err)
+		return 4
+	}
+
 	token := ""
 	demoRepo := ""
 	if *demo {
@@ -86,6 +92,7 @@ func cmdServe(root string, args []string, stdout, stderr io.Writer) int {
 
 	mgr := publish.NewManager(filepath.Join(dir, "packs"))
 	srv := web.New(st, mgr, token, Version)
+	srv.GuidanceDir = filepath.Join(dir, "guidance")
 	httpServer := &http.Server{Addr: *addr, Handler: srv.Handler()}
 
 	switch {

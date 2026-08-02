@@ -41,13 +41,17 @@ type Server struct {
 	Version string
 	Now     func() time.Time // injectable clock for tests; default time.Now
 
+	// GuidanceDir is <data-dir>/guidance ("" = embedded guidance only, used
+	// by tests and any caller that has not seeded a data dir).
+	GuidanceDir string
+
 	layout *template.Template
 	pages  map[string]*template.Template
 }
 
 // pageNames are the page templates parsed at startup. Each defines the
 // "title", "explainer", and "content" blocks that override the layout.
-var pageNames = []string{"overview", "fleet", "packs", "pack", "pack_edit", "usage"}
+var pageNames = []string{"overview", "fleet", "packs", "pack", "pack_edit", "usage", "models", "model_vendor", "model_edit"}
 
 // New builds a Server with its templates parsed and ready to serve.
 func New(st *store.Store, packs *publish.Manager, token, version string) *Server {
@@ -62,6 +66,7 @@ func New(st *store.Store, packs *publish.Manager, token, version string) *Server
 		"abbrev":    abbrevTokens,
 		"fmtTime":   fmtLastSync,
 		"diffLines": diffLines,
+		"host":      urlHost,
 	}).ParseFS(templateFS, "templates/layout.html"))
 	s.pages = make(map[string]*template.Template, len(pageNames))
 	for _, name := range pageNames {
@@ -206,6 +211,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /packs/{name}/edit", s.handlePackEdit)
 	mux.HandleFunc("POST /packs/{name}/publish", s.handlePackPublish)
 	mux.HandleFunc("GET /usage", s.handleUsage)
+	mux.HandleFunc("GET /models", s.handleModels)
+	mux.HandleFunc("GET /models/{vendor}", s.handleModelVendor)
+	mux.HandleFunc("GET /models/{vendor}/edit", s.handleModelEdit)
+	mux.HandleFunc("POST /models/{vendor}/edit", s.handleModelEditSave)
 	mux.HandleFunc("POST /api/v1/events", s.handleEvents)
 	mux.Handle("/static/", noStore(http.FileServerFS(staticFS)))
 
