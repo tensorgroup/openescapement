@@ -75,6 +75,10 @@ drift status, rule-pack browsing with portal-side publishing (validate → commi
 and usage. The portal never pushes rules into repos — packs it publishes still reach a
 repo only when someone runs `esc sync` there, same as any other pack source.
 
+The portal is server-rendered with a strict CSP; its one third-party asset, htmx, is
+vendored and embedded (pinned by SHA-256 in `internal/portal/web/HTMX-VENDOR.md`), never
+fetched at runtime, and every interaction still works with JavaScript disabled.
+
 ## How it works
 
 A **rule pack** is a directory in a git repo: a small manifest plus markdown rule fragments.

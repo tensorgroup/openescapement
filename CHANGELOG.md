@@ -51,6 +51,19 @@ tagged releases begin.
   publish→sync lands a managed block in every file while leaving the seeded
   content untouched. Seeding stays create-if-missing: delete
   `~/.escapement/server/demo-repo` to regenerate it.
+- Portal frontend modernization: cross-document view transitions (disabled under
+  prefers-reduced-motion), a responsive sidebar that collapses below 700px,
+  segmented filter controls, and :focus-visible rings. A strict
+  Content-Security-Policy (default-src 'none') and X-Content-Type-Options:
+  nosniff now ship on every portal response; the session cookie is SameSite=Strict
+  and Secure over TLS.
+- Portal partial updates via vendored htmx 2.0.9 (an embedded JS asset pinned by
+  SHA-256 in internal/portal/web/HTMX-VENDOR.md, never fetched at runtime, not a
+  Go dependency), scoped to three interactions: pack-edit diff preview, usage
+  filters, and fleet column sorting. Each degrades to a full-page render when
+  JavaScript is off; fragments are returned only for HX-Request requests. htmx
+  runs under the strict CSP with eval, history, and injected indicator styles
+  disabled, and hx-disable wrapping all pack-authored markdown.
 
 Planned — see `docs/roadmap/`:
 - v0.2: MCP server surface (live policy queries, connection telemetry, agent-initiated registration)
