@@ -67,7 +67,6 @@ func New(st *store.Store, packs *publish.Manager, token, version string) *Server
 		"fmtTime":   fmtLastSync,
 		"diffLines": diffLines,
 		"host":      urlHost,
-		"editHref":  editHref,
 	}).ParseFS(templateFS, "templates/layout.html"))
 	s.pages = make(map[string]*template.Template, len(pageNames))
 	for _, name := range pageNames {

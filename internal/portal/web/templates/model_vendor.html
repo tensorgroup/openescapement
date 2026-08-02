@@ -4,7 +4,7 @@
 {{if .Degraded}}<div class="error">Showing built-in guidance. These on-disk files are missing or unreadable: {{range $i, $f := .Degraded}}{{if $i}}, {{end}}{{$f}}{{end}}.</div>{{end}}
 <section hx-disable>
   <article class="fragment">
-    <h3>Guidance <a href="{{editHref .VendorKey .NoteFile}}">Edit</a></h3>
+    <h3>Guidance <a href="/models/{{.VendorKey}}/edit?file={{.NoteFile}}">Edit</a></h3>
     {{.NoteHTML}}
   </article>
 </section>
@@ -26,7 +26,7 @@
   <h3>Example rule-pack fragments</h3>
   {{range .Examples}}
   <article class="fragment">
-    <h4>{{.File}} <a href="{{editHref $.VendorKey .File}}">Edit</a></h4>
+    <h4>{{.File}} <a href="/models/{{$.VendorKey}}/edit?file={{.File}}">Edit</a></h4>
     {{.HTML}}
     <pre>{{.Raw}}</pre>
   </article>

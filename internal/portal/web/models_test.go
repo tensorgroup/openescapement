@@ -48,8 +48,16 @@ func TestModelVendorPageRendersNoteModelsExamplesAnchors(t *testing.T) {
 		`id="claude-opus-5"`, // registry anchor
 		"claude-sonnet-5",    // model id shown
 		"hx-disable",         // rendered markdown wrapped
-		`/models/anthropic/edit?file=anthropic.md`,                        // note Edit button
-		`/models/anthropic/edit?file=examples/anthropic/model-routing.md`, // example Edit
+		`/models/anthropic/edit?file=anthropic.md`, // note Edit button, no slash to encode
+		// html/template's contextual autoescaper percent-encodes "/" in a
+		// URL query value, so the example's nested rel path comes out
+		// encoded here. This is intentional: it keeps html/template's
+		// contextual safety net intact rather than bypassing it with
+		// template.URL. The edit handler (Task 5) round-trips this via
+		// r.URL.Query().Get("file"), which decodes %2f back to "/"
+		// transparently — net/http's query parsing, not this page, owns
+		// that guarantee, so it isn't re-asserted here.
+		`/models/anthropic/edit?file=examples%2fanthropic%2fmodel-routing.md`, // example Edit
 		"docs.claude.com", // doc host, not full URL
 		"<pre>",           // copyable raw example
 	} {
