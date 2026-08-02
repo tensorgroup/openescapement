@@ -16,6 +16,7 @@ import (
 	"github.com/tensorgroup/openescapement/internal/pack"
 	"github.com/tensorgroup/openescapement/internal/render"
 	"github.com/tensorgroup/openescapement/internal/source"
+	"github.com/tensorgroup/openescapement/internal/targets"
 )
 
 // Artifact kinds — the four output mechanisms.
@@ -38,6 +39,10 @@ type Artifact struct {
 	SrcDir string
 	// Servers are the owned MCP entries (kind=json-keys).
 	Servers map[string]map[string]any
+	// BlockPacks are the "name@version" labels recorded in a managed block's
+	// header (kind=block). Built-in blocks carry every pack; a custom target
+	// carries only its owning pack.
+	BlockPacks []string
 }
 
 // PlanResult is the desired state computed from config + packs, plus any
@@ -118,16 +123,92 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 		})
 	}
 
-	targets := cfg.Targets
-	if len(targets) == 0 {
-		targets = allTargets
+	// Custom targets (§2). Runs after the fetch/verify/load loop above — parsed
+	// from verified pack content only, never during fetch — and before any
+	// artifact is composed or written.
+	customByName, allDeclared, err := collectCustomTargets(res.PackObjs)
+	if err != nil {
+		return nil, err
 	}
+
+	// Repo targets filter (§3): filtering a custom target out by name is a
+	// complete opt-out — a filtered-out target must never require
+	// acknowledgment. Selection is resolved before the acknowledgment gate
+	// runs, not after.
+	targets := cfg.Targets
+	selectedCustom := map[string]bool{}
+	if len(targets) == 0 {
+		for name := range customByName {
+			selectedCustom[name] = true
+		}
+	} else {
+		for _, t := range targets {
+			if !isBuiltInTarget(t) && !allDeclared[strings.ToLower(t)] {
+				return nil, fmt.Errorf("config: unknown target %q", t)
+			}
+			if allDeclared[strings.ToLower(t)] {
+				selectedCustom[strings.ToLower(t)] = true
+			}
+		}
+	}
+
+	ack := map[string]bool{}
+	for _, f := range cfg.AllowCustomTargetFiles {
+		ack[strings.ToLower(f)] = true
+	}
+	// Acknowledgment gate (§2.3): a selected (not filtered out) custom target
+	// renders only if its file is acknowledged. Unacknowledged targets are a
+	// fail-closed Violation (blocks Apply, reported by esc status) — not a
+	// silent skip. Iterated in sorted name order for deterministic Violation
+	// output when multiple targets are unacknowledged.
+	rendered := map[string]custom{} // name -> target to render
+	for _, name := range sortedNames(customByName) {
+		if !selectedCustom[name] {
+			continue // filtered out by config targets: no acknowledgment required
+		}
+		c := customByName[name]
+		if ack[strings.ToLower(c.file)] {
+			rendered[name] = c
+			continue
+		}
+		res.Violations = append(res.Violations, render.Violation{
+			Path: c.file,
+			Rule: fmt.Sprintf("custom target %q from pack %s is not acknowledged; add this line to allow_custom_target_files in %s:\n  - %s",
+				name, c.owner.Manifest.Name, config.Path(root), c.file),
+		})
+	}
+
+	if len(targets) == 0 {
+		targets = append(append([]string{}, allTargets...), sortedNames(rendered)...)
+	}
+
 	for _, t := range targets {
+		// Custom target names are lowercase-only by construction
+		// (targets.ValidateCustom), and rendered/allDeclared are keyed
+		// lowercase; a config targets: entry in non-canonical case (e.g.
+		// "COPILOT") already passed the case-insensitive allDeclared check
+		// during filter selection above, so it must be looked up the same
+		// way here too — otherwise it silently falls through neither
+		// rendered nor the switch below and is dropped without an artifact
+		// or a Violation.
+		lt := strings.ToLower(t)
+		if c, ok := rendered[lt]; ok {
+			body := render.ComposeCustom(c.owner, c.name)
+			res.Artifacts = append(res.Artifacts, Artifact{
+				Path: c.file, Kind: KindBlock, Hash: render.BodyHash(body), Body: body,
+				BlockPacks: render.PackLabels([]*pack.Pack{c.owner}),
+			})
+			continue
+		}
+		if allDeclared[lt] {
+			continue // declared custom target that is not acknowledged: Violation already recorded
+		}
 		switch t {
 		case render.TargetClaude, render.TargetAgents, render.TargetGemini:
 			body := render.Compose(res.PackObjs, t)
 			res.Artifacts = append(res.Artifacts, Artifact{
 				Path: render.TargetFile[t], Kind: KindBlock, Hash: render.BodyHash(body), Body: body,
+				BlockPacks: render.PackLabels(res.PackObjs),
 			})
 		case render.TargetGovernance:
 			content := render.Governance(res.PackObjs)
@@ -185,7 +266,7 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 	for _, a := range res.Artifacts {
 		switch a.Kind {
 		case KindBlock, KindFile:
-			merged, err := prospectiveContent(root, a, res.PackObjs)
+			merged, err := prospectiveContent(root, a)
 			if err != nil {
 				return nil, err
 			}
@@ -246,16 +327,71 @@ func checkVersionRef(ref, version, src string) error {
 
 // prospectiveContent computes what an artifact's file would contain after
 // apply, without writing.
-func prospectiveContent(root string, a Artifact, packs []*pack.Pack) ([]byte, error) {
+func prospectiveContent(root string, a Artifact) ([]byte, error) {
 	existing, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(a.Path)))
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 	switch a.Kind {
 	case KindBlock:
-		return render.Splice(existing, a.Body, render.BlockMeta{Packs: render.PackLabels(packs)})
+		return render.Splice(existing, a.Body, render.BlockMeta{Packs: a.BlockPacks})
 	case KindFile:
 		return []byte(a.Body), nil
 	}
 	return existing, nil
+}
+
+// custom is one acknowledged/declared pack custom target during planning.
+type custom struct {
+	owner *pack.Pack
+	name  string
+	file  string
+}
+
+// collectCustomTargets validates every pack's custom targets (§2.1) and
+// enforces cross-pack single-owner collisions (§2.2). It returns the declared
+// targets keyed by name and a lower-cased declared-name set (used to validate
+// the config targets filter). All failures are constraint errors (exit 1).
+func collectCustomTargets(packs []*pack.Pack) (map[string]custom, map[string]bool, error) {
+	byName := map[string]custom{}
+	declared := map[string]bool{}
+	seenName := map[string]string{} // lower name -> owning pack
+	seenFile := map[string]string{} // lower file -> owning pack
+	for _, p := range packs {
+		for _, ct := range p.Manifest.CustomTargets {
+			if err := targets.ValidateCustom(ct.Name, ct.File); err != nil {
+				return nil, nil, fmt.Errorf("%w: pack %s: custom target %q: %v", esc.ErrConstraint, p.Manifest.Name, ct.Name, err)
+			}
+			ln, lf := strings.ToLower(ct.Name), strings.ToLower(ct.File)
+			if other, ok := seenName[ln]; ok {
+				return nil, nil, fmt.Errorf("%w: custom target name %q is declared by both %s and %s; a custom target belongs to exactly one pack", esc.ErrConstraint, ct.Name, other, p.Manifest.Name)
+			}
+			if other, ok := seenFile[lf]; ok {
+				return nil, nil, fmt.Errorf("%w: custom target file %q is declared by both %s and %s; a custom target belongs to exactly one pack", esc.ErrConstraint, ct.File, other, p.Manifest.Name)
+			}
+			seenName[ln], seenFile[lf] = p.Manifest.Name, p.Manifest.Name
+			byName[ct.Name] = custom{owner: p, name: ct.Name, file: ct.File}
+			declared[ln] = true
+		}
+	}
+	return byName, declared, nil
+}
+
+func isBuiltInTarget(name string) bool {
+	for _, t := range allTargets {
+		if t == name {
+			return true
+		}
+	}
+	return false
+}
+
+// sortedNames returns the map keys sorted, for deterministic target ordering.
+func sortedNames(m map[string]custom) []string {
+	names := make([]string, 0, len(m))
+	for n := range m {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names
 }

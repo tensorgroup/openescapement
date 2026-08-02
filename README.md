@@ -118,11 +118,71 @@ The `catalog` renders twice: concise directives for agents, and a readable table
 | `esc update --ref v2.0.0` | Bump the pin (then `esc diff`, PR, `esc sync`) |
 | `esc render --stdout` | Preview without writing |
 
+Plain `esc status` (no `--check`) exits 1 when a fail-closed constraint violation
+exists, for example an unacknowledged custom target file. Ordinary drift and
+orphaned managed blocks still exit 0 without `--check` and 1 with it; orphans are
+self-healing, since the next sync removes the stale block.
+
 There's also a GitHub Action:
 
 ```yaml
 - uses: tensorgroup/openescapement@main
   # runs `esc status --check` — policy drift fails the build
+```
+
+### Custom targets
+
+A pack may define extra managed-block markdown targets in `pack.yaml` under
+`custom_targets`, so an org can govern files like
+`.github/copilot-instructions.md` or `QWEN.md` without waiting for an esc
+release:
+
+```yaml
+custom_targets:
+  - name: copilot
+    file: .github/copilot-instructions.md
+    doc: https://docs.github.com/en/copilot/customizing-copilot
+    description: Repository custom instructions for GitHub Copilot.
+```
+
+`name` matches `^[a-z][a-z0-9-]{0,31}$` and is used in fragment `targets:`;
+`file` is a clean relative `.md` path of at most two segments, ASCII only, not
+in a control directory. A fragment reaches a custom target only when it names
+it explicitly; a fragment with no `targets:` goes to built-in files only.
+
+**Single owner:** a custom target belongs to the one pack that defines it.
+Only that pack's fragments render into it. Two packs declaring the same name
+or file is an error and sync refuses. If an org and a team need to co-write
+one file, put the fragments in the same pack.
+
+A custom target renders only if its file is listed in the repo's
+`.escapement/config.yaml`:
+
+```yaml
+allow_custom_target_files:
+  - .github/copilot-instructions.md
+```
+
+Pinning a pack grants it write access to a known, fixed set of files. Custom
+targets would let a pack choose new paths, so the acknowledgment list keeps a
+repo's write surface enumerable from the repo's own config. Filename rules
+alone are not enough because markdown transcludes (one instruction file can
+pull in another), so a file the pack does not name directly could still change
+what an agent reads. Without the acknowledgment, sync fails closed and names
+the file to add.
+
+Recommended layout: an org base pack plus team packs, each able to contribute
+its own custom targets, with the repo acknowledging every file it wants
+written:
+
+```yaml
+packs:
+  - {source: git@github.com:acme/esc-org-base, ref: v2.1.0}      # org floor
+  - {source: git@github.com:acme-payments/esc-team, ref: v0.3.0} # team additions
+targets: []                                                       # optional filter
+allow_custom_target_files:
+  - .github/copilot-instructions.md                               # org base's target
+  - PAYMENTS-AGENTS.md                                            # team's target
 ```
 
 ## Security model

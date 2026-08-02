@@ -265,11 +265,15 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 	if err != nil {
 		return exitCode(err, stderr)
 	}
+	hasViolation := false
 	for _, f := range st.Findings {
 		if f.State == engine.InSync {
 			fmt.Fprintf(stdout, "  ✓ %-20s in sync\n", f.Path)
 		} else {
 			fmt.Fprintf(stdout, "  ✗ %-20s %s: %s\n", f.Path, f.State, f.Detail)
+		}
+		if f.State == engine.ConstraintViolated {
+			hasViolation = true
 		}
 	}
 	if st.Clean() {
@@ -277,7 +281,13 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 		return 0
 	}
 	fmt.Fprintln(stdout, "Drift detected. Run `esc diff` to inspect, `esc sync` to reconcile.")
-	if *check {
+	// Constraint violations (e.g. an unacknowledged custom target, §2.3) are
+	// fail-closed: they block Apply outright, so status must surface them as a
+	// non-zero exit even without --check, not just as ordinary drift. Orphaned
+	// managed blocks (§3) are drift-family, not violations — the next sync
+	// self-heals them, so they are reported but do not force a non-zero exit
+	// without --check.
+	if *check || hasViolation {
 		return 1
 	}
 	return 0

@@ -21,10 +21,11 @@ type PackRef struct {
 }
 
 type Config struct {
-	Schema             int       `yaml:"schema"`
-	Packs              []PackRef `yaml:"packs"`
-	AllowedSignersFile string    `yaml:"allowed_signers_file,omitempty"`
-	Targets            []string  `yaml:"targets,omitempty"` // empty = all targets
+	Schema                 int       `yaml:"schema"`
+	Packs                  []PackRef `yaml:"packs"`
+	AllowedSignersFile     string    `yaml:"allowed_signers_file,omitempty"`
+	Targets                []string  `yaml:"targets,omitempty"`                   // empty = all targets
+	AllowCustomTargetFiles []string  `yaml:"allow_custom_target_files,omitempty"` // acknowledged custom-target files (§2.3)
 }
 
 func Path(root string) string { return filepath.Join(root, Dir, fileName) }

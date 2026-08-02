@@ -76,6 +76,55 @@ func TestComposeDeterministic(t *testing.T) {
 	}
 }
 
+func TestComposeCustom(t *testing.T) {
+	body := ComposeCustom(customOwner(), "copilot")
+	if !strings.Contains(body, "## Copilot") {
+		t.Errorf("custom body missing explicitly-targeted fragment:\n%s", body)
+	}
+	if strings.Contains(body, "## Secrets") {
+		t.Errorf("untargeted fragment leaked into custom target:\n%s", body)
+	}
+	if strings.Contains(body, "Tool & service policy") || strings.Contains(body, "Tailscale") {
+		t.Errorf("catalog section must not appear in a custom target file (carve-out):\n%s", body)
+	}
+	if !strings.Contains(body, "Managed by escapement") {
+		t.Errorf("notice missing:\n%s", body)
+	}
+	if !strings.HasSuffix(body, "\n") {
+		t.Errorf("custom body must end with newline")
+	}
+}
+
+func TestRemoveBlock(t *testing.T) {
+	spliced, err := Splice([]byte("# Team\n\nkeep me\n"), "policy body\n", BlockMeta{Packs: []string{"p@1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, removed, err := RemoveBlock(spliced)
+	if err != nil || !removed {
+		t.Fatalf("RemoveBlock: removed=%v err=%v", removed, err)
+	}
+	if !strings.Contains(string(out), "keep me") || strings.Contains(string(out), "policy body") {
+		t.Errorf("RemoveBlock must strip only the managed block:\n%s", out)
+	}
+	// Idempotent: no block present now.
+	if _, again, _ := RemoveBlock(out); again {
+		t.Error("RemoveBlock reported a second block")
+	}
+	// A file that is only a managed block becomes byte-empty.
+	only, err := Splice(nil, "x\n", BlockMeta{Packs: []string{"p@1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	empty, removed, err := RemoveBlock(only)
+	if err != nil || !removed {
+		t.Fatalf("RemoveBlock only-block: %v %v", removed, err)
+	}
+	if len(empty) != 0 {
+		t.Errorf("removing the sole block should leave byte-empty content, got %q", empty)
+	}
+}
+
 func TestGovernance(t *testing.T) {
 	g := Governance(testPacks())
 	for _, want := range []string{

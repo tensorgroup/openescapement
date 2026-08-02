@@ -9,22 +9,24 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/tensorgroup/openescapement/internal/esc"
+	"github.com/tensorgroup/openescapement/internal/targets"
 )
 
-// Fragment is one markdown rule file. Empty Targets means the fragment
-// applies to every target.
+// Fragment is one markdown rule file. Empty Targets means the fragment applies
+// to every built-in target (never a custom target).
 type Fragment struct {
 	Path    string
 	Targets []string
 	Body    string
 }
 
-// ValidTargets are the render targets a fragment may name in frontmatter.
-var ValidTargets = map[string]bool{
-	"claude": true, "agents": true, "gemini": true, "governance": true,
-}
-
-func loadFragment(packDir, rel string) (*Fragment, error) {
+// loadFragment parses one rule file. A fragment may name built-in fragment
+// targets or one of its own pack's declared custom targets (customNames);
+// naming anything else — including another pack's custom target — is a
+// constraint failure (§3 unknown/foreign reference). packName is the owning
+// pack's manifest name, included in the error so the operator can tell which
+// pack authored the offending rule without cross-referencing the path.
+func loadFragment(packDir, packName, rel string, customNames map[string]bool) (*Fragment, error) {
 	raw, err := os.ReadFile(filepath.Join(packDir, rel))
 	if err != nil {
 		return nil, fmt.Errorf("%w: rule %s: %v", esc.ErrManifest, rel, err)
@@ -39,8 +41,8 @@ func loadFragment(packDir, rel string) (*Fragment, error) {
 			return nil, fmt.Errorf("%w: rule %s frontmatter: %v", esc.ErrManifest, rel, err)
 		}
 		for _, tgt := range meta.Targets {
-			if !ValidTargets[tgt] {
-				return nil, fmt.Errorf("%w: rule %s: unknown target %q", esc.ErrManifest, rel, tgt)
+			if !targets.IsFragmentTarget(tgt) && !customNames[tgt] {
+				return nil, fmt.Errorf("%w: pack %q: rule %s: unknown or foreign target %q (not a built-in target or a custom target defined by this pack)", esc.ErrConstraint, packName, rel, tgt)
 			}
 		}
 		frag.Targets = meta.Targets

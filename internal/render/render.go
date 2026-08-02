@@ -74,6 +74,37 @@ func Compose(packs []*pack.Pack, target string) string {
 	return b.String()
 }
 
+// ComposeCustom renders the managed-block body for one pack-defined custom
+// target. Only the owning pack's fragments that explicitly name the target are
+// included; fragments with empty targets are never included. No catalog
+// section is rendered (the catalog carve-out, §3). Output is deterministic.
+func ComposeCustom(p *pack.Pack, target string) string {
+	var b strings.Builder
+	b.WriteString(notice)
+	b.WriteString("\n")
+	for _, f := range p.Fragments {
+		if !fragmentNamesTarget(f, target) {
+			continue
+		}
+		b.WriteString("\n")
+		b.WriteString(strings.TrimSuffix(f.Body, "\n"))
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// fragmentNamesTarget reports whether f explicitly names target. Unlike
+// fragmentApplies, an empty target list never matches — custom targets require
+// explicit opt-in.
+func fragmentNamesTarget(f pack.Fragment, target string) bool {
+	for _, t := range f.Targets {
+		if t == target {
+			return true
+		}
+	}
+	return false
+}
+
 // composeCatalog renders all packs' catalog entries as concise directive
 // text, grouped by status in fixed severity order.
 func composeCatalog(packs []*pack.Pack) string {
