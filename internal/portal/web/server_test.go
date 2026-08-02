@@ -134,6 +134,32 @@ func TestSessionCookieHardening(t *testing.T) {
 	}
 }
 
+func TestModernCSSMarkup(t *testing.T) {
+	h := newTestServer(t, "").Handler()
+
+	layout := get(t, h, "/", nil).Body.String()
+	if !strings.Contains(layout, `class="skip"`) || !strings.Contains(layout, `id="main"`) {
+		t.Fatal("layout missing skip link / main landmark")
+	}
+
+	fleet := get(t, h, "/fleet", nil).Body.String()
+	if !strings.Contains(fleet, `class="segmented"`) || !strings.Contains(fleet, `class="seg active"`) {
+		t.Fatal("fleet filters not segmented")
+	}
+
+	usage := get(t, h, "/usage", nil).Body.String()
+	if !strings.Contains(usage, `class="segmented"`) {
+		t.Fatal("usage day filters not segmented")
+	}
+
+	css := get(t, h, "/static/style.css", nil).Body.String()
+	for _, want := range []string{"@view-transition", "prefers-reduced-motion", ":focus-visible", "@media (max-width: 700px)", ".htmx-indicator"} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("style.css missing %q", want)
+		}
+	}
+}
+
 func findCookie(t *testing.T, rr *httptest.ResponseRecorder, name string) *http.Cookie {
 	t.Helper()
 	for _, c := range rr.Result().Cookies() {

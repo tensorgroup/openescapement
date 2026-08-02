@@ -1,13 +1,15 @@
 {{define "title"}}Fleet{{end}}
 {{define "explainer"}}Every team and repository, which rulebook version it follows, and whether it's up to date.{{end}}
 {{define "content"}}
-<p class="filters">
-  {{if eq .Status ""}}<strong>All</strong>{{else}}<a href="/fleet">All</a>{{end}} ·
-  {{if eq .Status "in-sync"}}<strong>In sync</strong>{{else}}<a href="/fleet?status=in-sync">In sync</a>{{end}} ·
-  {{if eq .Status "drifted"}}<strong>Drifted</strong>{{else}}<a href="/fleet?status=drifted">Drifted</a>{{end}} ·
-  {{if eq .Status "stale"}}<strong>Stale</strong>{{else}}<a href="/fleet?status=stale">Stale</a>{{end}} ·
-  {{if eq .Status "ungoverned"}}<strong>Ungoverned</strong>{{else}}<a href="/fleet?status=ungoverned">Ungoverned</a>{{end}}
-</p>
+<div class="filters">
+  <div class="segmented" role="group" aria-label="Filter by status">
+    {{if eq .Status ""}}<span class="seg active" aria-current="true">All</span>{{else}}<a class="seg" href="/fleet">All</a>{{end}}
+    {{if eq .Status "in-sync"}}<span class="seg active" aria-current="true">In sync</span>{{else}}<a class="seg" href="/fleet?status=in-sync">In sync</a>{{end}}
+    {{if eq .Status "drifted"}}<span class="seg active" aria-current="true">Drifted</span>{{else}}<a class="seg" href="/fleet?status=drifted">Drifted</a>{{end}}
+    {{if eq .Status "stale"}}<span class="seg active" aria-current="true">Stale</span>{{else}}<a class="seg" href="/fleet?status=stale">Stale</a>{{end}}
+    {{if eq .Status "ungoverned"}}<span class="seg active" aria-current="true">Ungoverned</span>{{else}}<a class="seg" href="/fleet?status=ungoverned">Ungoverned</a>{{end}}
+  </div>
+</div>
 <table>
   <thead>
     <tr>

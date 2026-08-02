@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <aside class="sidebar">
   <div class="brand">esc <strong>portal</strong></div>
   <nav>
@@ -20,7 +21,7 @@
     <div class="ver">esc {{.Version}}</div>
   </div>
 </aside>
-<main class="content">
+<main class="content" id="main">
   <header class="page-head">
     <h1>{{template "title" .}}</h1>
     <p class="explainer">{{block "explainer" .}}{{end}}</p>

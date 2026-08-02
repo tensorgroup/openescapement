@@ -12,10 +12,11 @@
     {{range .Models}}<option value="{{.}}"{{if eq . $.Model}} selected{{end}}>{{.}}</option>{{end}}
   </select>
   <button type="submit">Filter</button>
-  ·
-  {{if eq .Days 7}}<strong>7d</strong>{{else}}<a href="?team={{.Team}}&amp;model={{.Model}}&amp;days=7">7d</a>{{end}} ·
-  {{if eq .Days 30}}<strong>30d</strong>{{else}}<a href="?team={{.Team}}&amp;model={{.Model}}&amp;days=30">30d</a>{{end}} ·
-  {{if eq .Days 60}}<strong>60d</strong>{{else}}<a href="?team={{.Team}}&amp;model={{.Model}}&amp;days=60">60d</a>{{end}}
+  <div class="segmented" role="group" aria-label="Time range">
+    {{if eq .Days 7}}<span class="seg active" aria-current="true">7d</span>{{else}}<a class="seg" href="?team={{.Team}}&amp;model={{.Model}}&amp;days=7">7d</a>{{end}}
+    {{if eq .Days 30}}<span class="seg active" aria-current="true">30d</span>{{else}}<a class="seg" href="?team={{.Team}}&amp;model={{.Model}}&amp;days=30">30d</a>{{end}}
+    {{if eq .Days 60}}<span class="seg active" aria-current="true">60d</span>{{else}}<a class="seg" href="?team={{.Team}}&amp;model={{.Model}}&amp;days=60">60d</a>{{end}}
+  </div>
 </form>
 <section>
   <h2>Tokens per day, by model</h2>
