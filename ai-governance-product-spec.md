@@ -87,6 +87,7 @@ Single shared/central pane of glass — with radical emphasis on **easy**: easy 
 - Not an AI firewall/proxy (gateways like LiteLLM are integration partners, not competitors)
 - Not a code scanner (we verify gates exist; we don't run scans)
 - Not a model evaluation platform
+  - The Models guidance is curated, sourced paved-path pointing (which model class suits planning, plan-checking, review, coding, or bulk work, and how to govern each), not benchmarking or model evaluation.
 - Not policy consulting delivered as PDFs (that's the services on-ramp)
 
 ## 5. Users & Buyers

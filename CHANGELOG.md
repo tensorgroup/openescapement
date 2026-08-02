@@ -8,6 +8,15 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- Models guidance: a new portal **Models** section with curated, sourced,
+  editable guidance per vendor (Anthropic, OpenAI, Google, Kimi, Deepseek,
+  Grok). A strict `models.yaml` registry (fixed vendor order), per-vendor
+  markdown notes, and example rule-pack fragments ship embedded and are seeded
+  to `<data-dir>/guidance/` create-if-missing. The portal reads from disk on
+  every request with per-file fallback to the embedded copy and a fail-soft
+  banner. Overview chips and usage-table model names link to their vendor page
+  anchors. Editor writes are atomic and restricted to the fixed guidance file
+  set (`models.yaml` is repo-managed, not portal-editable).
 - Custom targets: a pack's `pack.yaml` may define managed-block markdown targets
   under `custom_targets` (`name`, `file`, optional `doc`/`description`), usable in
   fragment `targets:`. Each target is owned by its defining pack (no cross-pack
