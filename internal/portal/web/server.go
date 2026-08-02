@@ -166,6 +166,26 @@ func (s *Server) renderStatus(w http.ResponseWriter, status int, page string, da
 	}
 }
 
+// isHX reports whether the request came from htmx, which sets HX-Request: true
+// on every AJAX request. Handlers use it to return a fragment instead of a
+// full page.
+func isHX(r *http.Request) bool { return r.Header.Get("HX-Request") == "true" }
+
+// renderFragment executes a single named template block (a swappable region)
+// from the given page's template set, for htmx partial swaps. Unlike render it
+// emits no <html> shell.
+func (s *Server) renderFragment(w http.ResponseWriter, page, block string, data any) {
+	t, ok := s.pages[page]
+	if !ok {
+		http.Error(w, "template not found", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := t.ExecuteTemplate(w, block, data); err != nil {
+		log.Printf("portal: internal error rendering fragment %s/%s: %v", page, block, err)
+	}
+}
+
 // serverError logs the underlying error server-side and returns a generic
 // 500 to the client. Internal error text (e.g. absolute file paths from
 // store I/O errors) must never reach an HTTP response body.
@@ -487,6 +507,10 @@ func (s *Server) handlePackPublish(w http.ResponseWriter, r *http.Request) {
 			Content:          content,
 			SuggestedVersion: version,
 			Diff:             diff,
+		}
+		if isHX(r) {
+			s.renderFragment(w, "pack_edit", "diff-region", data)
+			return
 		}
 		s.render(w, "pack_edit", data)
 	case "publish":

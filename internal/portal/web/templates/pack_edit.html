@@ -2,8 +2,7 @@
 {{define "explainer"}}Edit a rule fragment, preview the diff, and publish a new version.{{end}}
 {{define "content"}}
 <h2>{{.Name}} <span class="muted">/ {{.Frag}}</span></h2>
-{{if .Error}}<div class="error">{{.Error}}</div>{{end}}
-{{if .Diff}}<pre class="diff">{{range diffLines .Diff}}<span class="line {{.Class}}">{{.Text}}</span>{{end}}</pre>{{end}}
+<div id="diff-region" aria-live="polite">{{template "diff-region" .}}</div>
 <form method="post" action="/packs/{{.Name}}/publish">
   <input type="hidden" name="frag" value="{{.Frag}}">
   <p><textarea name="content" rows="24" cols="90">{{.Content}}</textarea></p>
@@ -13,8 +12,15 @@
     </label>
   </p>
   <p>
-    <button type="submit" name="action" value="diff">Preview diff</button>
+    <button type="submit" name="action" value="diff"
+      hx-post="/packs/{{.Name}}/publish" hx-target="#diff-region" hx-swap="innerHTML">Preview diff</button>
     <button type="submit" name="action" value="publish">Publish</button>
+    <span class="htmx-indicator muted">Rendering diff&hellip;</span>
   </p>
 </form>
+{{end}}
+
+{{define "diff-region"}}
+{{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+{{if .Diff}}<pre class="diff">{{range diffLines .Diff}}<span class="line {{.Class}}">{{.Text}}</span>{{end}}</pre>{{end}}
 {{end}}

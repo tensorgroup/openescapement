@@ -135,6 +135,31 @@ func TestDiffColoring(t *testing.T) {
 	}
 }
 
+func TestDiffPreviewFragment(t *testing.T) {
+	s := newTestServerWithPacks(t)
+	form := url.Values{
+		"frag":    {"rules/security.md"},
+		"content": {"---\ntargets: [claude, agents]\n---\n# Security\n\n- Added rule.\n"},
+		"version": {"1.3.0"},
+		"action":  {"diff"},
+	}
+	newReq := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", "/packs/org-baseline/publish", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Request", "true")
+		rr := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rr, req)
+		return rr
+	}
+	frag := newReq().Body.String()
+	if strings.Contains(frag, "<html") {
+		t.Fatal("HX diff response must be a fragment, not a full page")
+	}
+	if !strings.Contains(frag, `class="line add"`) {
+		t.Fatalf("fragment missing diff: %s", frag)
+	}
+}
+
 func TestPublishValidationErrorKeepsContent(t *testing.T) {
 	s := newTestServerWithPacks(t)
 	form := url.Values{
