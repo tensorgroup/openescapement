@@ -1,3 +1,36 @@
-{{define "title"}}Model{{end}}
-{{define "explainer"}}{{end}}
-{{define "content"}}{{end}}
+{{define "title"}}{{.VendorName}}{{end}}
+{{define "explainer"}}Model guidance and governance advice for {{.VendorName}}.{{end}}
+{{define "content"}}
+{{if .Degraded}}<div class="error">Showing built-in guidance. These on-disk files are missing or unreadable: {{range $i, $f := .Degraded}}{{if $i}}, {{end}}{{$f}}{{end}}.</div>{{end}}
+<section hx-disable>
+  <article class="fragment">
+    <h3>Guidance <a href="{{editHref .VendorKey .NoteFile}}">Edit</a></h3>
+    {{.NoteHTML}}
+  </article>
+</section>
+<section>
+  <h3>Models</h3>
+  {{range .Models}}
+  <article class="fragment" id="{{.ID}}">
+    <h4>{{.Name}} <span class="muted">{{.ID}}</span></h4>
+    <ul class="chips"><li>{{.Tier}}</li>{{range .Roles}}<li>{{.}}</li>{{end}}<li>{{.Status}}</li></ul>
+    <p class="muted">Verified {{.Verified}}</p>
+    {{if .Docs}}<ul>{{range .Docs}}<li><a href="{{.}}" rel="noreferrer">{{host .}}</a></li>{{end}}</ul>{{end}}
+  </article>
+  {{else}}
+  <p class="muted">No models catalogued yet.</p>
+  {{end}}
+</section>
+{{if .Examples}}
+<section hx-disable>
+  <h3>Example rule-pack fragments</h3>
+  {{range .Examples}}
+  <article class="fragment">
+    <h4>{{.File}} <a href="{{editHref $.VendorKey .File}}">Edit</a></h4>
+    {{.HTML}}
+    <pre>{{.Raw}}</pre>
+  </article>
+  {{end}}
+</section>
+{{end}}
+{{end}}

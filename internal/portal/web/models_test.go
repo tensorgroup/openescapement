@@ -40,3 +40,24 @@ func TestModelsOverviewListsEveryVendor(t *testing.T) {
 		t.Fatal("sidebar missing Models nav")
 	}
 }
+
+func TestModelVendorPageRendersNoteModelsExamplesAnchors(t *testing.T) {
+	h := newTestServerWithGuidance(t).Handler()
+	body := get(t, h, "/models/anthropic", nil).Body.String()
+	for _, want := range []string{
+		`id="claude-opus-5"`, // registry anchor
+		"claude-sonnet-5",    // model id shown
+		"hx-disable",         // rendered markdown wrapped
+		`/models/anthropic/edit?file=anthropic.md`,                        // note Edit button
+		`/models/anthropic/edit?file=examples/anthropic/model-routing.md`, // example Edit
+		"docs.claude.com", // doc host, not full URL
+		"<pre>",           // copyable raw example
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("/models/anthropic missing %q", want)
+		}
+	}
+	if get(t, h, "/models/nope", nil).Code != 404 {
+		t.Fatal("unknown vendor should 404")
+	}
+}
