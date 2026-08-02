@@ -64,12 +64,33 @@ vendors:
   - key: google
     name: Google
     models:
+      - id: gemini-3.1-pro-preview
+        name: Gemini 3.1 Pro Preview
+        tier: frontier
+        roles: [planning, plan-check, review]
+        status: current
+        docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview]
+        verified: 2026-08-02
+      - id: gemini-3.6-flash
+        name: Gemini 3.6 Flash
+        tier: mid
+        roles: [coding, review]
+        status: current
+        docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash]
+        verified: 2026-08-02
+      - id: gemini-3.5-flash-lite
+        name: Gemini 3.5 Flash-Lite
+        tier: fast
+        roles: [bulk]
+        status: current
+        docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite]
+        verified: 2026-08-02
       - id: gemini-3-pro
-        name: Gemini 3 Pro
+        name: Gemini 3 Pro Preview
         tier: frontier
         roles: [planning, coding]
-        status: current
-        docs: [https://ai.google.dev/gemini-api/docs/models]
+        status: legacy
+        docs: [https://ai.google.dev/gemini-api/docs/deprecations]
         verified: 2026-08-02
   - key: kimi
     name: Kimi
