@@ -11,6 +11,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -313,12 +314,48 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 // value falls through to "all rows".
 var fleetStatuses = map[string]bool{"in-sync": true, "drifted": true, "stale": true, "ungoverned": true}
 
-// fleetData extends layoutData with the (possibly filtered) fleet rows and
-// the active status filter, for the filter-links row to bold.
+// colSort is one sortable header's rendered state: the toggle URL (current
+// status preserved), the aria-sort value, and the direction a click will
+// request next.
+type colSort struct {
+	Href    string // "/fleet?status=..&sort=..&dir=.."
+	Aria    string // "none" | "ascending" | "descending"
+	NextDir string // "asc" | "desc"
+}
+
+// fleetSorts maps a sort key to its less-than comparator over FleetRow.
+var fleetSorts = map[string]func(a, b store.FleetRow) bool{
+	"repo":      func(a, b store.FleetRow) bool { return a.RepoName < b.RepoName },
+	"status":    func(a, b store.FleetRow) bool { return a.Status < b.Status },
+	"last-sync": func(a, b store.FleetRow) bool { return a.LastSync.Before(b.LastSync) },
+}
+
+// fleetHeader computes a sortable column's rendered state. When col is the
+// active sort, aria-sort reflects dir and a click toggles direction;
+// otherwise a click sorts ascending.
+func fleetHeader(col, status, activeCol, dir string) colSort {
+	h := colSort{Aria: "none", NextDir: "asc"}
+	if col == activeCol {
+		if dir == "desc" {
+			h.Aria, h.NextDir = "descending", "asc"
+		} else {
+			h.Aria, h.NextDir = "ascending", "desc"
+		}
+	}
+	h.Href = fmt.Sprintf("/fleet?status=%s&sort=%s&dir=%s", url.QueryEscape(status), col, h.NextDir)
+	return h
+}
+
+// fleetData extends layoutData with the (possibly filtered, possibly sorted)
+// fleet rows, the active status filter, and per-column sort header state.
 type fleetData struct {
 	layoutData
-	Rows   []store.FleetRow
-	Status string // "" = all
+	Rows         []store.FleetRow
+	Status       string // "" = all
+	SortCol      string // "", "repo", "status", "last-sync"
+	RepoSort     colSort
+	LastSyncSort colSort
+	StatusSort   colSort
 }
 
 func (s *Server) handleFleet(w http.ResponseWriter, r *http.Request) {
@@ -342,10 +379,34 @@ func (s *Server) handleFleet(w http.ResponseWriter, r *http.Request) {
 		status = ""
 	}
 
+	sortCol := r.URL.Query().Get("sort")
+	dir := r.URL.Query().Get("dir")
+	if dir != "desc" {
+		dir = "asc"
+	}
+	if less, ok := fleetSorts[sortCol]; ok {
+		sort.SliceStable(rows, func(i, j int) bool {
+			if dir == "desc" {
+				return less(rows[j], rows[i])
+			}
+			return less(rows[i], rows[j])
+		})
+	} else {
+		sortCol = ""
+	}
+
 	data := fleetData{
-		layoutData: s.baseData("fleet"),
-		Rows:       rows,
-		Status:     status,
+		layoutData:   s.baseData("fleet"),
+		Rows:         rows,
+		Status:       status,
+		SortCol:      sortCol,
+		RepoSort:     fleetHeader("repo", status, sortCol, dir),
+		LastSyncSort: fleetHeader("last-sync", status, sortCol, dir),
+		StatusSort:   fleetHeader("status", status, sortCol, dir),
+	}
+	if isHX(r) {
+		s.renderFragment(w, "fleet", "fleet-table", data)
+		return
 	}
 	s.render(w, "fleet", data)
 }

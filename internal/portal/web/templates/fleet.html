@@ -10,16 +10,41 @@
     {{if eq .Status "ungoverned"}}<span class="seg active" aria-current="true">Ungoverned</span>{{else}}<a class="seg" href="/fleet?status=ungoverned">Ungoverned</a>{{end}}
   </div>
 </div>
+<div id="fleet-table" aria-live="polite">{{template "fleet-table" .}}</div>
+{{end}}
+
+{{define "fleet-table"}}
 <table>
   <thead>
     <tr>
-      <th>Department</th>
-      <th>Team</th>
-      <th>Repository</th>
-      <th>Rule packs</th>
-      <th>Last sync</th>
-      <th>Status</th>
-      <th>Agent tools</th>
+      <th scope="col">Department</th>
+      <th scope="col">Team</th>
+      <th scope="col" aria-sort="{{.RepoSort.Aria}}">
+        <form method="get" action="/fleet">
+          <input type="hidden" name="status" value="{{.Status}}">
+          <input type="hidden" name="dir" value="{{.RepoSort.NextDir}}">
+          <button class="th-sort" type="submit" name="sort" value="repo"
+            hx-get="{{.RepoSort.Href}}" hx-target="#fleet-table" hx-swap="innerHTML">Repository</button>
+        </form>
+      </th>
+      <th scope="col">Rule packs</th>
+      <th scope="col" aria-sort="{{.LastSyncSort.Aria}}">
+        <form method="get" action="/fleet">
+          <input type="hidden" name="status" value="{{.Status}}">
+          <input type="hidden" name="dir" value="{{.LastSyncSort.NextDir}}">
+          <button class="th-sort" type="submit" name="sort" value="last-sync"
+            hx-get="{{.LastSyncSort.Href}}" hx-target="#fleet-table" hx-swap="innerHTML">Last sync</button>
+        </form>
+      </th>
+      <th scope="col" aria-sort="{{.StatusSort.Aria}}">
+        <form method="get" action="/fleet">
+          <input type="hidden" name="status" value="{{.Status}}">
+          <input type="hidden" name="dir" value="{{.StatusSort.NextDir}}">
+          <button class="th-sort" type="submit" name="sort" value="status"
+            hx-get="{{.StatusSort.Href}}" hx-target="#fleet-table" hx-swap="innerHTML">Status</button>
+        </form>
+      </th>
+      <th scope="col">Agent tools</th>
     </tr>
   </thead>
   <tbody>
@@ -33,6 +58,8 @@
       <td><span class="pill {{.Status}}">{{.Status}}</span></td>
       <td>{{range $i, $t := .Tools}}{{if $i}}, {{end}}{{$t}}{{end}}</td>
     </tr>
+    {{else}}
+    <tr><td colspan="7" class="muted">No repos match this filter.</td></tr>
     {{end}}
   </tbody>
 </table>
