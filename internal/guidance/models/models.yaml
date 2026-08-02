@@ -7,21 +7,28 @@ vendors:
         tier: frontier
         roles: [planning, plan-check, review]
         status: current
-        docs: [https://docs.claude.com/en/docs/about-claude/models]
+        docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/about-claude/models/choosing-a-model]
+        verified: 2026-08-02
+      - id: claude-fable-5
+        name: Claude Fable 5
+        tier: frontier
+        roles: [planning, plan-check, review]
+        status: current
+        docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/about-claude/models/choosing-a-model]
         verified: 2026-08-02
       - id: claude-sonnet-5
         name: Claude Sonnet 5
         tier: mid
         roles: [coding, review]
         status: current
-        docs: [https://docs.claude.com/en/docs/about-claude/models]
+        docs: [https://platform.claude.com/docs/en/about-claude/models/overview]
         verified: 2026-08-02
       - id: claude-haiku-4-5
         name: Claude Haiku 4.5
         tier: fast
         roles: [bulk]
         status: current
-        docs: [https://docs.claude.com/en/docs/about-claude/models]
+        docs: [https://platform.claude.com/docs/en/about-claude/models/overview]
         verified: 2026-08-02
   - key: openai
     name: OpenAI

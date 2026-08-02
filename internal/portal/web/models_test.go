@@ -61,8 +61,8 @@ func TestModelVendorPageRendersNoteModelsExamplesAnchors(t *testing.T) {
 		// transparently — net/http's query parsing, not this page, owns
 		// that guarantee, so it isn't re-asserted here.
 		`/models/anthropic/edit?file=examples%2fanthropic%2fmodel-routing.md`, // example Edit
-		"docs.claude.com", // doc host, not full URL
-		"<pre>",           // copyable raw example
+		"platform.claude.com", // doc host, not full URL
+		"<pre>",               // copyable raw example
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("/models/anthropic missing %q", want)
