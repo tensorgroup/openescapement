@@ -45,11 +45,16 @@ func TestChartsHaveAccessibleTitles(t *testing.T) {
 	h := s.Handler()
 
 	overview := get(t, h, "/", nil).Body.String()
-	if !strings.Contains(overview, `role="img"`) || !strings.Contains(overview, "<title>") {
-		t.Fatal("overview chart needs role=img and a <title>")
+	if !strings.Contains(overview, `role="img"><title>Governed repos over time</title>`) {
+		t.Fatal("overview chart svg needs role=img immediately followed by its <title>")
 	}
 	usage := get(t, h, "/usage", nil).Body.String()
-	if strings.Count(usage, "<title>") < 2 {
-		t.Fatal("both usage charts need <title>")
+	for _, want := range []string{
+		`role="img"><title>Tokens per day by model</title>`,
+		`role="img"><title>Cost per day by team</title>`,
+	} {
+		if !strings.Contains(usage, want) {
+			t.Fatalf("usage page missing chart svg title %q", want)
+		}
 	}
 }
