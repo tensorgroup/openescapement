@@ -8,7 +8,7 @@ import (
 )
 
 // pageRoutes are the full-page GET routes the degradation contract covers.
-var pageRoutes = []string{"/", "/fleet", "/usage", "/packs"}
+var pageRoutes = []string{"/", "/fleet", "/usage", "/packs", "/models", "/models/anthropic"}
 
 func TestEveryRouteRendersFullPageWithoutHX(t *testing.T) {
 	h := newTestServer(t, "").Handler()
@@ -72,5 +72,19 @@ func TestDiffEndpointFragmentRequiresHXHeader(t *testing.T) {
 	}
 	if frag := post(true); strings.Contains(frag, "<html") {
 		t.Fatal("diff with HX must be a fragment")
+	}
+}
+
+func TestModelEditRendersFullPageWithoutHX(t *testing.T) {
+	h := newTestServer(t, "").Handler() // embedded guidance is readable without a data dir
+	body := get(t, h, "/models/anthropic/edit?file=anthropic.md", nil).Body.String()
+	if !strings.Contains(body, "<html") {
+		t.Fatal("edit route must be a full page")
+	}
+	if !strings.Contains(body, "esc <strong>portal</strong>") {
+		t.Fatal("edit route missing sidebar")
+	}
+	if !strings.Contains(body, "<textarea") {
+		t.Fatal("edit route missing textarea")
 	}
 }
