@@ -146,6 +146,7 @@ type overviewData struct {
 	layoutData
 	Stats         store.OverviewStats
 	AdoptionChart template.HTML
+	ModelVendor   map[string]string
 }
 
 // render executes the named page template against the shared layout with a
@@ -311,10 +312,18 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 	for i, p := range stats.Adoption {
 		pts[i] = charts.Point{X: p.Day, Y: float64(p.Governed)}
 	}
+	g := s.loadGuidance()
+	modelVendor := make(map[string]string, len(stats.Models))
+	for _, m := range stats.Models {
+		if vk, ok := g.VendorForModel(m); ok {
+			modelVendor[m] = vk
+		}
+	}
 	data := overviewData{
 		layoutData:    s.baseData("overview"),
 		Stats:         stats,
 		AdoptionChart: charts.Line("Governed repos over time", pts, 640, 220),
+		ModelVendor:   modelVendor,
 	}
 	s.render(w, "overview", data)
 }
@@ -634,6 +643,7 @@ type usageData struct {
 	Rows        []usageModelRow
 	TotalTokens int64
 	TotalCost   float64
+	ModelVendor map[string]string
 }
 
 func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
@@ -773,6 +783,21 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 		rows = append(rows, usageModelRow{Model: m, Tokens: tok, Cost: cost, Share: share})
 	}
 
+	g := s.loadGuidance()
+	modelVendor := make(map[string]string, len(models))
+	for _, m := range models {
+		if vk, ok := g.VendorForModel(m); ok {
+			modelVendor[m] = vk
+		}
+	}
+	for _, row := range rows {
+		if _, done := modelVendor[row.Model]; !done {
+			if vk, ok := g.VendorForModel(row.Model); ok {
+				modelVendor[row.Model] = vk
+			}
+		}
+	}
+
 	data := usageData{
 		layoutData:  s.baseData("usage"),
 		Teams:       teams,
@@ -785,6 +810,7 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 		Rows:        rows,
 		TotalTokens: totalTokens,
 		TotalCost:   totalCost,
+		ModelVendor: modelVendor,
 	}
 	if isHX(r) {
 		s.renderFragment(w, "usage", "usage-results", data)

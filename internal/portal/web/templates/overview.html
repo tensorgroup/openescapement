@@ -19,6 +19,6 @@
 </section>
 <section>
   <h2>Models in use</h2>
-  <ul class="chips">{{range .Stats.Models}}<li>{{.}}</li>{{end}}</ul>
+  <ul class="chips">{{range .Stats.Models}}<li>{{$v := index $.ModelVendor .}}{{if $v}}<a href="/models/{{$v}}#{{.}}">{{.}}</a>{{else}}{{.}}{{end}}</li>{{end}}</ul>
 </section>
 {{end}}

@@ -45,7 +45,7 @@
   <tbody>
     {{range .Rows}}
     <tr>
-      <td>{{.Model}}</td>
+      <td>{{$v := index $.ModelVendor .Model}}{{if $v}}<a href="/models/{{$v}}#{{.Model}}">{{.Model}}</a>{{else}}{{.Model}}{{end}}</td>
       <td>{{abbrev .Tokens}}</td>
       <td>{{printf "$%.2f" .Cost}}</td>
       <td>{{printf "%.0f%%" .Share}}</td>

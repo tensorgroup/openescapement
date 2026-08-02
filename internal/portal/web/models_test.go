@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tensorgroup/openescapement/internal/guidance"
 	"github.com/tensorgroup/openescapement/internal/portal/store"
@@ -103,6 +104,46 @@ func TestModelEditRoundTrip(t *testing.T) {
 	body := get(t, h, "/models/anthropic", nil).Body.String()
 	if !strings.Contains(body, "Updated guidance body.") {
 		t.Fatal("next GET did not show the saved edit")
+	}
+}
+
+func newTestServerWithGuidanceAndEvents(t *testing.T) *Server {
+	t.Helper()
+	dataDir := t.TempDir()
+	if err := guidance.Seed(dataDir); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendEvent(store.Event{
+		TS:     time.Now().UTC().Add(-time.Hour),
+		Kind:   "provider_usage",
+		TeamID: "t1",
+		Model:  "claude-sonnet-5",
+		Tokens: &store.Tokens{Input: 100, Output: 50, CostUSD: 1},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s := New(st, nil, "", "test")
+	s.GuidanceDir = dataDir + "/guidance"
+	return s
+}
+
+func TestOverviewAndUsageLinkModelsToGuidance(t *testing.T) {
+	// Overview/Usage need seeded telemetry, so drive them through a seeded
+	// demo store plus guidance. Reuse the existing overview/usage fixtures'
+	// approach: a store with events whose models are in the registry.
+	s := newTestServerWithGuidanceAndEvents(t)
+	h := s.Handler()
+	ov := get(t, h, "/", nil).Body.String()
+	if !strings.Contains(ov, `href="/models/anthropic#claude-sonnet-5"`) {
+		t.Fatalf("overview chip not linked: %s", ov)
+	}
+	us := get(t, h, "/usage", nil).Body.String()
+	if !strings.Contains(us, `href="/models/anthropic#claude-sonnet-5"`) {
+		t.Fatalf("usage row not linked")
 	}
 }
 
