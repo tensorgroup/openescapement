@@ -1,23 +1,29 @@
 {{define "title"}}Usage{{end}}
 {{define "explainer"}}What your organization spends on AI models, by team and model. Aggregate token counts only — no prompts or code are ever collected.{{end}}
 {{define "content"}}
-<form class="filters" method="get" action="/usage">
+<form class="filters" method="get" action="/usage"
+  hx-get="/usage" hx-target="#usage-results" hx-swap="innerHTML">
   <input type="hidden" name="days" value="{{.Days}}">
-  <select name="team">
+  <select name="team" aria-label="Team">
     <option value="">All teams</option>
     {{range .Teams}}<option value="{{.ID}}"{{if eq .ID $.Team}} selected{{end}}>{{.Name}}</option>{{end}}
   </select>
-  <select name="model">
+  <select name="model" aria-label="Model">
     <option value="">All models</option>
     {{range .Models}}<option value="{{.}}"{{if eq . $.Model}} selected{{end}}>{{.}}</option>{{end}}
   </select>
   <button type="submit">Filter</button>
+  <span class="htmx-indicator muted">Updating&hellip;</span>
   <div class="segmented" role="group" aria-label="Time range">
-    {{if eq .Days 7}}<span class="seg active" aria-current="true">7d</span>{{else}}<a class="seg" href="?team={{.Team}}&amp;model={{.Model}}&amp;days=7">7d</a>{{end}}
-    {{if eq .Days 30}}<span class="seg active" aria-current="true">30d</span>{{else}}<a class="seg" href="?team={{.Team}}&amp;model={{.Model}}&amp;days=30">30d</a>{{end}}
-    {{if eq .Days 60}}<span class="seg active" aria-current="true">60d</span>{{else}}<a class="seg" href="?team={{.Team}}&amp;model={{.Model}}&amp;days=60">60d</a>{{end}}
+    {{if eq .Days 7}}<span class="seg active" aria-current="true">7d</span>{{else}}<a class="seg" href="?team={{.Team}}&amp;model={{.Model}}&amp;days=7" hx-get="/usage?team={{.Team}}&amp;model={{.Model}}&amp;days=7" hx-target="#usage-results" hx-swap="innerHTML">7d</a>{{end}}
+    {{if eq .Days 30}}<span class="seg active" aria-current="true">30d</span>{{else}}<a class="seg" href="?team={{.Team}}&amp;model={{.Model}}&amp;days=30" hx-get="/usage?team={{.Team}}&amp;model={{.Model}}&amp;days=30" hx-target="#usage-results" hx-swap="innerHTML">30d</a>{{end}}
+    {{if eq .Days 60}}<span class="seg active" aria-current="true">60d</span>{{else}}<a class="seg" href="?team={{.Team}}&amp;model={{.Model}}&amp;days=60" hx-get="/usage?team={{.Team}}&amp;model={{.Model}}&amp;days=60" hx-target="#usage-results" hx-swap="innerHTML">60d</a>{{end}}
   </div>
 </form>
+<div id="usage-results" aria-live="polite">{{template "usage-results" .}}</div>
+{{end}}
+
+{{define "usage-results"}}
 <section>
   <h2>Tokens per day, by model</h2>
   {{.TokensChart}}
@@ -30,10 +36,10 @@
 <table>
   <thead>
     <tr>
-      <th>Model</th>
-      <th>Total tokens</th>
-      <th>Est. cost</th>
-      <th>Share</th>
+      <th scope="col">Model</th>
+      <th scope="col">Total tokens</th>
+      <th scope="col">Est. cost</th>
+      <th scope="col">Share</th>
     </tr>
   </thead>
   <tbody>
@@ -44,6 +50,8 @@
       <td>{{printf "$%.2f" .Cost}}</td>
       <td>{{printf "%.0f%%" .Share}}</td>
     </tr>
+    {{else}}
+    <tr><td colspan="4" class="muted">No usage in this range.</td></tr>
     {{end}}
   </tbody>
   <tfoot>

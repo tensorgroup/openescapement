@@ -714,5 +714,9 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 		TotalTokens: totalTokens,
 		TotalCost:   totalCost,
 	}
+	if isHX(r) {
+		s.renderFragment(w, "usage", "usage-results", data)
+		return
+	}
 	s.render(w, "usage", data)
 }
