@@ -8,6 +8,15 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- Model starters and adopt flow: every current full-depth-vendor model
+  (Anthropic, OpenAI, Google) ships a starter rule-pack fragment encoding its
+  routing position, review-gate, and cost guidance, seeded and portal-editable
+  like the other guidance files. Each vendor page renders the starter with an
+  Add to rule pack button; the adopt form writes the starter into a chosen
+  writable pack through the publish pipeline (validate, add to the manifest,
+  bump version, commit, tag) and never overwrites an existing fragment.
+  Portal markdown is now rendered by goldmark (display-only, raw HTML
+  disabled), turning Markdown links and bare http/https URLs into anchors.
 - Models guidance: a new portal **Models** section with curated, sourced,
   editable guidance per vendor (Anthropic, OpenAI, Google, Kimi, Deepseek,
   Grok). A strict `models.yaml` registry (fixed vendor order), per-vendor
