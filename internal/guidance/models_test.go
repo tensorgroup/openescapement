@@ -52,3 +52,14 @@ func TestParseRegistryReordersAndRejects(t *testing.T) {
 		}
 	}
 }
+
+func TestParseRegistryValidatesStarter(t *testing.T) {
+	missing := "vendors:\n  - key: anthropic\n    name: A\n    models: [{id: x, name: X, tier: mid, roles: [coding], status: current, docs: [], verified: 2026-08-02, starter: examples/anthropic/does-not-exist.md}]\n"
+	if _, err := ParseRegistry([]byte(missing)); err == nil {
+		t.Fatal("starter naming a missing embedded file must be rejected")
+	}
+	unset := "vendors:\n  - key: anthropic\n    name: A\n    models: [{id: x, name: X, tier: mid, roles: [coding], status: current, docs: [], verified: 2026-08-02}]\n"
+	if _, err := ParseRegistry([]byte(unset)); err != nil {
+		t.Fatalf("unset starter must be fine: %v", err)
+	}
+}

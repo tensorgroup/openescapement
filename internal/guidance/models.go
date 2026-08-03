@@ -40,6 +40,7 @@ type Model struct {
 	Status   string   `yaml:"status"`
 	Docs     []string `yaml:"docs"`
 	Verified string   `yaml:"verified"`
+	Starter  string   `yaml:"starter,omitempty"`
 }
 
 // Vendor groups a vendor's models. Name is normalized from the canonical map.
@@ -99,6 +100,11 @@ func ParseRegistry(data []byte) (*Registry, error) {
 			}
 			if _, err := time.Parse("2006-01-02", m.Verified); err != nil {
 				return nil, fmt.Errorf("guidance: model %s: invalid verified date %q", m.ID, m.Verified)
+			}
+			if m.Starter != "" {
+				if _, err := embeddedModels.ReadFile("models/" + m.Starter); err != nil {
+					return nil, fmt.Errorf("guidance: model %s: starter %q not found in embedded tree", m.ID, m.Starter)
+				}
 			}
 		}
 		v.Name = vendorName[v.Key]
