@@ -153,7 +153,7 @@ func TestModernCSSMarkup(t *testing.T) {
 	}
 
 	css := get(t, h, "/static/style.css", nil).Body.String()
-	for _, want := range []string{"@view-transition", "prefers-reduced-motion", ":focus-visible", "@media (max-width: 700px)", ".htmx-indicator"} {
+	for _, want := range []string{"@view-transition", "prefers-reduced-motion", ":focus-visible", "@media (max-width: 700px)", ".htmx-indicator", ".button"} {
 		if !strings.Contains(css, want) {
 			t.Fatalf("style.css missing %q", want)
 		}
