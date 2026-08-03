@@ -75,6 +75,17 @@ func TestDiffEndpointFragmentRequiresHXHeader(t *testing.T) {
 	}
 }
 
+func TestModelAdoptRendersFullPageWithoutHX(t *testing.T) {
+	h := newTestServerWithPacksAndGuidance(t).Handler()
+	body := get(t, h, "/models/anthropic/adopt?model=claude-sonnet-5", nil).Body.String()
+	if !strings.Contains(body, "<html") {
+		t.Fatal("adopt route must be a full page")
+	}
+	if !strings.Contains(body, "esc <strong>portal</strong>") {
+		t.Fatal("adopt route missing sidebar")
+	}
+}
+
 func TestModelEditRendersFullPageWithoutHX(t *testing.T) {
 	h := newTestServer(t, "").Handler() // embedded guidance is readable without a data dir
 	body := get(t, h, "/models/anthropic/edit?file=anthropic.md", nil).Body.String()

@@ -223,6 +223,72 @@ func TestOverviewAndUsageLinkModelsToGuidance(t *testing.T) {
 	}
 }
 
+func TestAdoptGETRendersForm(t *testing.T) {
+	h := newTestServerWithPacksAndGuidance(t).Handler()
+	rr := get(t, h, "/models/anthropic/adopt?model=claude-sonnet-5", nil)
+	if rr.Code != 200 {
+		t.Fatalf("adopt GET code=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	for _, want := range []string{`<select name="pack"`, "org-baseline", "rules/model-claude-sonnet-5.md", "Starter preview", "Route day-to-day coding"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("adopt form missing %q", want)
+		}
+	}
+}
+
+func TestAdoptGET404s(t *testing.T) {
+	withPacks := newTestServerWithPacksAndGuidance(t).Handler()
+	if get(t, withPacks, "/models/anthropic/adopt?model=nope", nil).Code != 404 {
+		t.Fatal("unknown model should 404")
+	}
+	if get(t, withPacks, "/models/nope/adopt?model=claude-sonnet-5", nil).Code != 404 {
+		t.Fatal("unknown vendor should 404")
+	}
+	noPacks := newTestServerWithGuidance(t).Handler() // Packs nil
+	if get(t, noPacks, "/models/anthropic/adopt?model=claude-sonnet-5", nil).Code != 404 {
+		t.Fatal("no packs should 404")
+	}
+}
+
+func adoptPost(t *testing.T, h http.Handler, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest("POST", "/models/anthropic/adopt", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	return rr
+}
+
+func TestAdoptPOSTPublishesAndRedirects(t *testing.T) {
+	h := newTestServerWithPacksAndGuidance(t).Handler()
+	rr := adoptPost(t, h, url.Values{
+		"model": {"claude-sonnet-5"}, "pack": {"org-baseline"}, "version": {"1.3.0"},
+	})
+	if rr.Code != 303 || rr.Header().Get("Location") != "/packs/org-baseline?published=v1.3.0" {
+		t.Fatalf("adopt POST: code=%d loc=%s body=%s", rr.Code, rr.Header().Get("Location"), rr.Body.String())
+	}
+	detail := get(t, h, "/packs/org-baseline", nil).Body.String()
+	if !strings.Contains(detail, "rules/model-claude-sonnet-5.md") {
+		t.Fatal("adopted fragment not visible on pack detail")
+	}
+}
+
+func TestAdoptPOSTCollision422(t *testing.T) {
+	h := newTestServerWithPacksAndGuidance(t).Handler()
+	if rr := adoptPost(t, h, url.Values{"model": {"claude-sonnet-5"}, "pack": {"org-baseline"}, "version": {"1.3.0"}}); rr.Code != 303 {
+		t.Fatalf("first adopt: %d", rr.Code)
+	}
+	rr := adoptPost(t, h, url.Values{"model": {"claude-sonnet-5"}, "pack": {"org-baseline"}, "version": {"1.4.0"}})
+	if rr.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("collision code=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "Edit that fragment") || !strings.Contains(body, `<select name="pack"`) {
+		t.Fatalf("collision page missing message or preserved form: %s", body)
+	}
+}
+
 func TestModelEditRejectsForeignAndUnknownFiles(t *testing.T) {
 	s := newTestServerWithGuidance(t)
 	h := s.Handler()

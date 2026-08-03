@@ -1,0 +1,29 @@
+{{define "title"}}Adopt starter: {{.ModelName}}{{end}}
+{{define "explainer"}}Add the {{.ModelName}} starter to a rule pack.{{end}}
+{{define "content"}}
+{{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+<form method="post" action="/models/{{.VendorKey}}/adopt">
+  <input type="hidden" name="model" value="{{.ModelID}}">
+  <p>
+    <label>Rule pack
+      <select name="pack">
+        {{range .Packs}}<option value="{{.Name}}"{{if eq .Name $.PackName}} selected{{end}}>{{.Name}} (next {{.SuggestedVersion}})</option>{{end}}
+      </select>
+    </label>
+  </p>
+  <p>Destination fragment: <code>{{.Dest}}</code></p>
+  <p>
+    <label>Version
+      <input name="version" value="{{.Version}}">
+    </label>
+  </p>
+  <p><button type="submit">Add to rule pack</button></p>
+</form>
+<section hx-disable>
+  <h3>Starter preview</h3>
+  <article class="fragment">
+    {{.StarterHTML}}
+    <pre>{{.StarterRaw}}</pre>
+  </article>
+</section>
+{{end}}

@@ -51,7 +51,7 @@ type Server struct {
 
 // pageNames are the page templates parsed at startup. Each defines the
 // "title", "explainer", and "content" blocks that override the layout.
-var pageNames = []string{"overview", "fleet", "packs", "pack", "pack_edit", "usage", "models", "model_vendor", "model_edit"}
+var pageNames = []string{"overview", "fleet", "packs", "pack", "pack_edit", "usage", "models", "model_vendor", "model_edit", "model_adopt"}
 
 // New builds a Server with its templates parsed and ready to serve.
 func New(st *store.Store, packs *publish.Manager, token, version string) *Server {
@@ -216,6 +216,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /models/{vendor}", s.handleModelVendor)
 	mux.HandleFunc("GET /models/{vendor}/edit", s.handleModelEdit)
 	mux.HandleFunc("POST /models/{vendor}/edit", s.handleModelEditSave)
+	mux.HandleFunc("GET /models/{vendor}/adopt", s.handleModelAdopt)
+	mux.HandleFunc("POST /models/{vendor}/adopt", s.handleModelAdoptSave)
 	mux.HandleFunc("POST /api/v1/events", s.handleEvents)
 	mux.Handle("/static/", noStore(http.FileServerFS(staticFS)))
 

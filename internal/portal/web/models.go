@@ -2,11 +2,14 @@ package web
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"html/template"
 	"net/http"
 	"net/url"
 	"strings"
 
+	"github.com/tensorgroup/openescapement/internal/esc"
 	"github.com/tensorgroup/openescapement/internal/guidance"
 	"github.com/tensorgroup/openescapement/internal/portal/publish"
 )
@@ -227,4 +230,162 @@ func (s *Server) handleModelEditSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/models/"+vendor, http.StatusSeeOther)
+}
+
+// starterModel returns the vendor's model with the given id when it has a
+// starter set.
+func starterModel(v guidance.Vendor, id string) (guidance.Model, bool) {
+	for _, m := range v.Models {
+		if m.ID == id && m.Starter != "" {
+			return m, true
+		}
+	}
+	return guidance.Model{}, false
+}
+
+// packOption is one writable pack in the adopt selector.
+type packOption struct {
+	Name             string
+	SuggestedVersion string
+}
+
+// modelAdoptData is the /models/{vendor}/adopt page's data.
+type modelAdoptData struct {
+	layoutData
+	VendorKey   string
+	VendorName  string
+	ModelID     string
+	ModelName   string
+	Dest        string
+	StarterHTML template.HTML
+	StarterRaw  string
+	Packs       []packOption
+	PackName    string
+	Version     string
+	Error       string
+}
+
+// packOptions maps writable packs to selector options with a suggested next
+// version each.
+func packOptions(infos []publish.PackInfo) []packOption {
+	opts := make([]packOption, len(infos))
+	for i, p := range infos {
+		opts[i] = packOption{Name: p.Name, SuggestedVersion: nextPatchVersion(p.Version)}
+	}
+	return opts
+}
+
+func (s *Server) handleModelAdopt(w http.ResponseWriter, r *http.Request) {
+	vendor := r.PathValue("vendor")
+	g := s.loadGuidance()
+	v, ok := findVendor(g.Registry, vendor)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	m, ok := starterModel(v, r.URL.Query().Get("model"))
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	content, _, err := g.ReadFile(m.Starter)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	infos, err := s.writablePacks(r.Context())
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	if len(infos) == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	opts := packOptions(infos)
+	s.render(w, "model_adopt", modelAdoptData{
+		layoutData:  s.baseData("models"),
+		VendorKey:   v.Key,
+		VendorName:  v.Name,
+		ModelID:     m.ID,
+		ModelName:   m.Name,
+		Dest:        "rules/model-" + m.ID + ".md",
+		StarterHTML: mdHTML(content),
+		StarterRaw:  string(content),
+		Packs:       opts,
+		PackName:    opts[0].Name,
+		Version:     opts[0].SuggestedVersion,
+	})
+}
+
+func (s *Server) handleModelAdoptSave(w http.ResponseWriter, r *http.Request) {
+	vendor := r.PathValue("vendor")
+	g := s.loadGuidance()
+	v, ok := findVendor(g.Registry, vendor)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	m, ok := starterModel(v, r.FormValue("model"))
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	content, _, err := g.ReadFile(m.Starter)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	infos, err := s.writablePacks(r.Context())
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	if len(infos) == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	packName := r.FormValue("pack")
+	version := r.FormValue("version")
+	valid := false
+	for _, p := range infos {
+		if p.Name == packName {
+			valid = true
+		}
+	}
+	if !valid {
+		http.NotFound(w, r)
+		return
+	}
+	dest := "rules/model-" + m.ID + ".md"
+	if err := s.Packs.AddFragment(r.Context(), packName, dest, content, version); err != nil {
+		if errors.Is(err, publish.ErrFragmentExists) || errors.Is(err, esc.ErrManifest) {
+			msg := err.Error()
+			if errors.Is(err, publish.ErrFragmentExists) {
+				msg = "This pack already has " + dest + ". Edit that fragment in the pack instead; adopting never overwrites."
+			}
+			s.renderStatus(w, http.StatusUnprocessableEntity, "model_adopt", modelAdoptData{
+				layoutData:  s.baseData("models"),
+				VendorKey:   v.Key,
+				VendorName:  v.Name,
+				ModelID:     m.ID,
+				ModelName:   m.Name,
+				Dest:        dest,
+				StarterHTML: mdHTML(content),
+				StarterRaw:  string(content),
+				Packs:       packOptions(infos),
+				PackName:    packName,
+				Version:     version,
+				Error:       msg,
+			})
+			return
+		}
+		serverError(w, err)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/packs/%s?published=v%s", packName, version), http.StatusSeeOther)
 }
