@@ -13,6 +13,7 @@ These are the canonical instructions for any coding agent working in this repo. 
 ## Gotchas and invariants
 
 - **Single external dependency policy:** `gopkg.in/yaml.v3` only. Everything else is stdlib; system `git` via `os/exec`. This is a security posture (this tool writes instructions agents execute), not a preference. Adding a dependency needs explicit justification.
+  - Exception (display-only): `github.com/yuin/goldmark` renders markdown for the admin portal's browser views. Scope is strictly display: it never runs in the renderer or engine that writes instruction files. It carries zero transitive dependencies (empty require graph), is pinned by `go.sum`, and runs with raw HTML disabled (no `html.WithUnsafe`). Any wider use, or any second display dependency, needs the same explicit justification.
 - Sentinel errors in `internal/esc` map to exit codes: 0 ok, 1 drift/constraint, 2 usage, 3 integrity/signature, 4 other. New failure modes go through them.
 - Renderer invariants, all golden-testable: bytes outside a managed block are never modified; nothing is written after a verification or constraint failure; all writes are atomic; renderer output is deterministic.
 
