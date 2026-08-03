@@ -16,6 +16,18 @@
     <ul class="chips"><li>{{.Tier}}</li>{{range .Roles}}<li>{{.}}</li>{{end}}<li>{{.Status}}</li></ul>
     <p class="muted">Verified {{.Verified}}</p>
     {{if .Docs}}<ul>{{range .Docs}}<li><a href="{{.}}" rel="noreferrer">{{host .}}</a></li>{{end}}</ul>{{end}}
+    {{if .HasStarter}}
+    <div class="starter" hx-disable>
+      <h5>Starter rule pack <a href="/models/{{$.VendorKey}}/edit?file={{.StarterFile}}">Edit</a></h5>
+      {{.StarterHTML}}
+      <pre>{{.StarterRaw}}</pre>
+    </div>
+    {{if $.PacksAvailable}}
+    <p><a class="button" href="/models/{{$.VendorKey}}/adopt?model={{.ID}}">Add to rule pack</a></p>
+    {{else}}
+    <p><button type="button" disabled>Add to rule pack</button> <span class="muted">Configure a rule pack repo to enable adoption.</span></p>
+    {{end}}
+    {{end}}
   </article>
   {{else}}
   <p class="muted">No models catalogued yet.</p>

@@ -1,12 +1,14 @@
 package web
 
 import (
+	"context"
 	"html/template"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/tensorgroup/openescapement/internal/guidance"
+	"github.com/tensorgroup/openescapement/internal/portal/publish"
 )
 
 // loadGuidance reads the guidance tree from disk on every request (embedded
@@ -56,16 +58,36 @@ type exampleView struct {
 	Raw  string
 }
 
+// writablePacks lists the configured pack clones the adopt flow can publish
+// into. Nil manager (no repos configured) yields an empty slice, not an error.
+func (s *Server) writablePacks(ctx context.Context) ([]publish.PackInfo, error) {
+	if s.Packs == nil {
+		return nil, nil
+	}
+	return s.Packs.List(ctx)
+}
+
+// modelView pairs a registry Model with its rendered starter fragment (when
+// one is set) for the vendor page's per-model starter block.
+type modelView struct {
+	guidance.Model
+	StarterFile string
+	StarterHTML template.HTML
+	StarterRaw  string
+	HasStarter  bool
+}
+
 // modelVendorData is the /models/{vendor} guidance page's data.
 type modelVendorData struct {
 	layoutData
-	VendorKey  string
-	VendorName string
-	NoteHTML   template.HTML
-	NoteFile   string
-	Models     []guidance.Model
-	Examples   []exampleView
-	Degraded   []string
+	VendorKey      string
+	VendorName     string
+	NoteHTML       template.HTML
+	NoteFile       string
+	Models         []modelView
+	Examples       []exampleView
+	PacksAvailable bool
+	Degraded       []string
 }
 
 func (s *Server) handleModelVendor(w http.ResponseWriter, r *http.Request) {
@@ -100,15 +122,37 @@ func (s *Server) handleModelVendor(w http.ResponseWriter, r *http.Request) {
 		examples = append(examples, exampleView{File: rel, HTML: mdHTML(content), Raw: string(content)})
 	}
 
+	models := make([]modelView, 0, len(v.Models))
+	for _, m := range v.Models {
+		mv := modelView{Model: m}
+		if m.Starter != "" {
+			if content, deg, rerr := g.ReadFile(m.Starter); rerr == nil {
+				mv.HasStarter = true
+				mv.StarterFile = m.Starter
+				mv.StarterHTML = mdHTML(content)
+				mv.StarterRaw = string(content)
+				if deg {
+					degraded = append(degraded, m.Starter)
+				}
+			}
+		}
+		models = append(models, mv)
+	}
+	packsAvailable := false
+	if infos, perr := s.writablePacks(r.Context()); perr == nil && len(infos) > 0 {
+		packsAvailable = true
+	}
+
 	s.render(w, "model_vendor", modelVendorData{
-		layoutData: s.baseData("models"),
-		VendorKey:  v.Key,
-		VendorName: v.Name,
-		NoteHTML:   mdHTML(note),
-		NoteFile:   noteFile,
-		Models:     v.Models,
-		Examples:   examples,
-		Degraded:   degraded,
+		layoutData:     s.baseData("models"),
+		VendorKey:      v.Key,
+		VendorName:     v.Name,
+		NoteHTML:       mdHTML(note),
+		NoteFile:       noteFile,
+		Models:         models,
+		Examples:       examples,
+		PacksAvailable: packsAvailable,
+		Degraded:       degraded,
 	})
 }
 

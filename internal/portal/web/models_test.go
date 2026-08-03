@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tensorgroup/openescapement/internal/guidance"
+	"github.com/tensorgroup/openescapement/internal/portal/publish"
 	"github.com/tensorgroup/openescapement/internal/portal/store"
 )
 
@@ -25,6 +26,47 @@ func newTestServerWithGuidance(t *testing.T) *Server {
 	s := New(st, nil, "", "test")
 	s.GuidanceDir = dataDir + "/guidance"
 	return s
+}
+
+func newTestServerWithPacksAndGuidance(t *testing.T) *Server {
+	t.Helper()
+	dataDir := t.TempDir()
+	if err := guidance.Seed(dataDir); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	packs := publish.NewManager(newPackClone(t))
+	s := New(st, packs, "", "test")
+	s.GuidanceDir = dataDir + "/guidance"
+	return s
+}
+
+func TestVendorPageRendersStarterAndAdoptButton(t *testing.T) {
+	h := newTestServerWithPacksAndGuidance(t).Handler()
+	body := get(t, h, "/models/anthropic", nil).Body.String()
+	for _, want := range []string{
+		"Starter rule pack",
+		`/models/anthropic/edit?file=examples%2fanthropic%2fstarter-claude-sonnet-5.md`,
+		`/models/anthropic/adopt?model=claude-sonnet-5`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("/models/anthropic missing %q", want)
+		}
+	}
+}
+
+func TestVendorPageAdoptDisabledWithoutPacks(t *testing.T) {
+	h := newTestServerWithGuidance(t).Handler() // Packs nil
+	body := get(t, h, "/models/anthropic", nil).Body.String()
+	if !strings.Contains(body, "Configure a rule pack repo") {
+		t.Fatal("expected disabled-adopt hint")
+	}
+	if strings.Contains(body, `/models/anthropic/adopt?model=claude-sonnet-5`) {
+		t.Fatal("adopt link must not render when no packs configured")
+	}
 }
 
 func TestModelsOverviewListsEveryVendor(t *testing.T) {
