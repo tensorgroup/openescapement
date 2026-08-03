@@ -363,7 +363,7 @@ func (s *Server) handleModelAdoptSave(w http.ResponseWriter, r *http.Request) {
 	}
 	dest := "rules/model-" + m.ID + ".md"
 	if err := s.Packs.AddFragment(r.Context(), packName, dest, content, version); err != nil {
-		if errors.Is(err, publish.ErrFragmentExists) || errors.Is(err, esc.ErrManifest) {
+		if errors.Is(err, publish.ErrFragmentExists) || errors.Is(err, esc.ErrManifest) || errors.Is(err, publish.ErrBadVersion) {
 			msg := err.Error()
 			if errors.Is(err, publish.ErrFragmentExists) {
 				msg = "This pack already has " + dest + ". Edit that fragment in the pack instead; adopting never overwrites."

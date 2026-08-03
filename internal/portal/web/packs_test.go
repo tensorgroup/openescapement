@@ -201,3 +201,24 @@ func TestPublishValidationErrorKeepsContent(t *testing.T) {
 		t.Fatal("error page must preserve content and show error")
 	}
 }
+
+func TestPublishBadVersion422(t *testing.T) {
+	s := newTestServerWithPacks(t)
+	form := url.Values{
+		"frag":    {"rules/security.md"},
+		"content": {"---\ntargets: [claude, agents]\n---\n# Security\n\n- New rule.\n"},
+		"version": {"garbage"},
+		"action":  {"publish"},
+	}
+	req := httptest.NewRequest("POST", "/packs/org-baseline/publish", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != 422 {
+		t.Fatalf("code %d body %s", rr.Code, rr.Body.String())
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "New rule") || !strings.Contains(body, "must match") {
+		t.Fatal("bad-version page must preserve content and show error")
+	}
+}

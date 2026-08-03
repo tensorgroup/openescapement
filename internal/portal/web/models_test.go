@@ -289,6 +289,33 @@ func TestAdoptPOSTCollision422(t *testing.T) {
 	}
 }
 
+func TestAdoptPOSTBadVersion422(t *testing.T) {
+	h := newTestServerWithPacksAndGuidance(t).Handler()
+	rr := adoptPost(t, h, url.Values{"model": {"claude-sonnet-5"}, "pack": {"org-baseline"}, "version": {"garbage"}})
+	if rr.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("bad version code=%d body=%s", rr.Code, rr.Body.String())
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "must match") || !strings.Contains(body, `<select name="pack"`) {
+		t.Fatalf("bad-version page missing message or preserved form: %s", body)
+	}
+}
+
+func TestAdoptPOSTVersionTagExists422(t *testing.T) {
+	h := newTestServerWithPacksAndGuidance(t).Handler()
+	if rr := adoptPost(t, h, url.Values{"model": {"claude-sonnet-5"}, "pack": {"org-baseline"}, "version": {"1.3.0"}}); rr.Code != 303 {
+		t.Fatalf("first adopt: %d", rr.Code)
+	}
+	rr := adoptPost(t, h, url.Values{"model": {"claude-opus-5"}, "pack": {"org-baseline"}, "version": {"1.3.0"}})
+	if rr.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("reused version code=%d body=%s", rr.Code, rr.Body.String())
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "already exists") || !strings.Contains(body, `<select name="pack"`) {
+		t.Fatalf("reused-version page missing message or preserved form: %s", body)
+	}
+}
+
 func TestModelEditRejectsForeignAndUnknownFiles(t *testing.T) {
 	s := newTestServerWithGuidance(t)
 	h := s.Handler()

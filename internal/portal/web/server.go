@@ -598,7 +598,7 @@ func (s *Server) handlePackPublish(w http.ResponseWriter, r *http.Request) {
 		s.render(w, "pack_edit", data)
 	case "publish":
 		if err := s.Packs.Publish(r.Context(), name, frag, []byte(content), version); err != nil {
-			if errors.Is(err, esc.ErrManifest) {
+			if errors.Is(err, esc.ErrManifest) || errors.Is(err, publish.ErrBadVersion) {
 				data := packEditData{
 					layoutData:       s.baseData("packs"),
 					Name:             name,

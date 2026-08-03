@@ -61,6 +61,13 @@ var versionRE = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 // to edit that fragment instead; v1 never overwrites.
 var ErrFragmentExists = errors.New("fragment already exists in pack")
 
+// ErrBadVersion reports that a user-supplied version string is malformed
+// (fails versionRE) or already published as a git tag. Both Publish and
+// AddFragment wrap it with descriptive text; the portal maps it to a 422
+// with the submitted form state preserved, since the version field is
+// user-editable free text a typo can easily break.
+var ErrBadVersion = errors.New("invalid or already-published version")
+
 // gitRun runs git in dir, capturing combined output into the error. It is a
 // package-level var (not a plain func) so tests can substitute a wrapper to
 // simulate a failure at a specific point in the Publish sequence without
@@ -371,7 +378,7 @@ func (m *Manager) Publish(ctx context.Context, name, frag string, content []byte
 
 	// Step 1: guards.
 	if !versionRE.MatchString(newVersion) {
-		return fmt.Errorf("invalid version %q: must match %s", newVersion, versionRE.String())
+		return fmt.Errorf("%w: invalid version %q: must match %s", ErrBadVersion, newVersion, versionRE.String())
 	}
 	fragPath, err := safeFragPath(dir, frag)
 	if err != nil {
@@ -383,7 +390,7 @@ func (m *Manager) Publish(ctx context.Context, name, frag string, content []byte
 		return err
 	}
 	if strings.TrimSpace(existing) != "" {
-		return fmt.Errorf("tag %s already exists", tagName)
+		return fmt.Errorf("%w: tag %s already exists", ErrBadVersion, tagName)
 	}
 
 	// Step 2: write fragment + rewrite manifest version.
@@ -506,7 +513,7 @@ func (m *Manager) AddFragment(ctx context.Context, name, frag string, content []
 	dir := filepath.Join(m.Dir, name)
 
 	if !versionRE.MatchString(newVersion) {
-		return fmt.Errorf("invalid version %q: must match %s", newVersion, versionRE.String())
+		return fmt.Errorf("%w: invalid version %q: must match %s", ErrBadVersion, newVersion, versionRE.String())
 	}
 	fragPath, err := safeFragPath(dir, frag)
 	if err != nil {
@@ -518,7 +525,7 @@ func (m *Manager) AddFragment(ctx context.Context, name, frag string, content []
 		return err
 	}
 	if strings.TrimSpace(existing) != "" {
-		return fmt.Errorf("tag %s already exists", tagName)
+		return fmt.Errorf("%w: tag %s already exists", ErrBadVersion, tagName)
 	}
 	// Collision guard: never overwrite an existing fragment. This runs before
 	// anything is written, so no restore is needed on this path.
