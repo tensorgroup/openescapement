@@ -56,6 +56,11 @@ func NewManager(dir string) *Manager {
 // versionRE constrains publish versions to strict semver-shaped x.y.z.
 var versionRE = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 
+// ErrFragmentExists reports that AddFragment's destination path is already
+// present in the pack on disk. The portal maps it to a 422 directing the user
+// to edit that fragment instead; v1 never overwrites.
+var ErrFragmentExists = errors.New("fragment already exists in pack")
+
 // gitRun runs git in dir, capturing combined output into the error. It is a
 // package-level var (not a plain func) so tests can substitute a wrapper to
 // simulate a failure at a specific point in the Publish sequence without
@@ -397,10 +402,17 @@ func (m *Manager) Publish(ctx context.Context, name, frag string, content []byte
 		return fmt.Errorf("%w: pack validation failed: %v", esc.ErrManifest, err)
 	}
 
-	// Step 4: commit + tag. preCommitHead is captured before the commit so
-	// a failed tag step can unwind exactly that commit — `git reset --hard
-	// HEAD` alone would only undo the worktree/index, leaving a
-	// committed-but-untagged clone behind.
+	// Step 4: commit + tag.
+	return commitAndTag(ctx, dir, name, newVersion)
+}
+
+// commitAndTag stages, commits, and annotated-tags the pack clone at dir as
+// v<newVersion>. It captures the pre-commit SHA so a failed tag step unwinds
+// exactly that commit, and only while it is still HEAD; any failure restores
+// the clone before returning. Shared by Publish (edit an existing fragment)
+// and AddFragment (adopt a new one).
+func commitAndTag(ctx context.Context, dir, name, newVersion string) error {
+	tagName := "v" + newVersion
 	preCommitHead, err := gitRun(ctx, dir, "rev-parse", "HEAD")
 	if err != nil {
 		return restoreAndErr(ctx, dir, "HEAD", err)
@@ -420,9 +432,6 @@ func (m *Manager) Publish(ctx context.Context, name, frag string, content []byte
 
 	newHead, err := gitRun(ctx, dir, "rev-parse", "HEAD")
 	if err != nil {
-		// The commit landed but we can't confirm HEAD. preCommitHead is an
-		// exact SHA, not a relative ref, so unwinding to it is still safe
-		// even without that confirmation.
 		return restoreAndErr(ctx, dir, preCommitHead, err)
 	}
 	newHead = strings.TrimSpace(newHead)
@@ -432,13 +441,113 @@ func (m *Manager) Publish(ctx context.Context, name, frag string, content []byte
 		"-c", "user.name=esc portal", "-c", "user.email=portal@escapement.local", "-c", "tag.gpgsign=false",
 		"tag", "-a", tagName, "-m", tagMsg,
 	); err != nil {
-		// Only unwind the commit if it's still HEAD: if something else
-		// landed a commit in between, blindly resetting to preCommitHead
-		// would destroy that work too.
 		if curHead, herr := gitRun(ctx, dir, "rev-parse", "HEAD"); herr == nil && strings.TrimSpace(curHead) == newHead {
 			return restoreAndErr(ctx, dir, preCommitHead, err)
 		}
 		return fmt.Errorf("tag failed and the commit could not be safely unwound (HEAD moved): %v", err)
 	}
 	return nil
+}
+
+// addRuleToManifest appends rel to the top-level "rules" sequence of the
+// pack.yaml at path, creating the key if absent. It round-trips through
+// yaml.Node so comments and key order survive, mirroring rewriteVersion.
+func addRuleToManifest(path, rel string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		return err
+	}
+	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return fmt.Errorf("pack.yaml: expected a top-level mapping")
+	}
+	mapping := doc.Content[0]
+	var rules *yaml.Node
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == "rules" {
+			rules = mapping.Content[i+1]
+			break
+		}
+	}
+	if rules == nil {
+		mapping.Content = append(mapping.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "rules"},
+			&yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"})
+		rules = mapping.Content[len(mapping.Content)-1]
+	}
+	if rules.Kind != yaml.SequenceNode {
+		rules.Kind = yaml.SequenceNode
+		rules.Tag = "!!seq"
+		rules.Value = ""
+	}
+	rules.Content = append(rules.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: rel})
+	out, err := yaml.Marshal(&doc)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0o644)
+}
+
+// AddFragment adopts a brand-new fragment into the named pack: it writes
+// content to frag, adds frag to pack.yaml's rules list, bumps the version to
+// newVersion, validates, and commits + tags v<newVersion>. It refuses to
+// overwrite: if frag already exists on disk it returns ErrFragmentExists and
+// touches nothing. Like Publish, any failure after the working tree is
+// modified restores the clone before returning, and calls for the same pack
+// serialize.
+func (m *Manager) AddFragment(ctx context.Context, name, frag string, content []byte, newVersion string) error {
+	lock := m.lockFor(name)
+	lock.Lock()
+	defer lock.Unlock()
+
+	dir := filepath.Join(m.Dir, name)
+
+	if !versionRE.MatchString(newVersion) {
+		return fmt.Errorf("invalid version %q: must match %s", newVersion, versionRE.String())
+	}
+	fragPath, err := safeFragPath(dir, frag)
+	if err != nil {
+		return err
+	}
+	tagName := "v" + newVersion
+	existing, err := gitRun(ctx, dir, "tag", "-l", tagName)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(existing) != "" {
+		return fmt.Errorf("tag %s already exists", tagName)
+	}
+	// Collision guard: never overwrite an existing fragment. This runs before
+	// anything is written, so no restore is needed on this path.
+	if _, err := os.Stat(fragPath); err == nil {
+		return ErrFragmentExists
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(fragPath), 0o755); err != nil {
+		return restoreAndErr(ctx, dir, "HEAD", err)
+	}
+	if err := os.WriteFile(fragPath, content, 0o644); err != nil {
+		return restoreAndErr(ctx, dir, "HEAD", err)
+	}
+	manifestPath := filepath.Join(dir, "pack.yaml")
+	if err := addRuleToManifest(manifestPath, frag); err != nil {
+		return restoreAndErr(ctx, dir, "HEAD", err)
+	}
+	if err := rewriteVersion(manifestPath, newVersion); err != nil {
+		return restoreAndErr(ctx, dir, "HEAD", err)
+	}
+
+	if _, err := pack.Load(dir); err != nil {
+		if rerr := restore(ctx, dir, "HEAD"); rerr != nil {
+			return fmt.Errorf("%w: pack validation failed: %v (restore also failed: %v)", esc.ErrManifest, err, rerr)
+		}
+		return fmt.Errorf("%w: pack validation failed: %v", esc.ErrManifest, err)
+	}
+
+	return commitAndTag(ctx, dir, name, newVersion)
 }
