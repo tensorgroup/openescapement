@@ -9,6 +9,7 @@ vendors:
         status: current
         docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/about-claude/models/choosing-a-model]
         verified: 2026-08-02
+        starter: examples/anthropic/starter-claude-opus-5.md
       - id: claude-fable-5
         name: Claude Fable 5
         tier: frontier
@@ -16,6 +17,7 @@ vendors:
         status: current
         docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/about-claude/models/choosing-a-model]
         verified: 2026-08-02
+        starter: examples/anthropic/starter-claude-fable-5.md
       - id: claude-sonnet-5
         name: Claude Sonnet 5
         tier: mid
@@ -23,6 +25,7 @@ vendors:
         status: current
         docs: [https://platform.claude.com/docs/en/about-claude/models/overview]
         verified: 2026-08-02
+        starter: examples/anthropic/starter-claude-sonnet-5.md
       - id: claude-haiku-4-5
         name: Claude Haiku 4.5
         tier: fast
@@ -30,6 +33,7 @@ vendors:
         status: current
         docs: [https://platform.claude.com/docs/en/about-claude/models/overview]
         verified: 2026-08-02
+        starter: examples/anthropic/starter-claude-haiku-4-5.md
   - key: openai
     name: OpenAI
     models:
@@ -40,6 +44,7 @@ vendors:
         status: current
         docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-5.6-sol]
         verified: 2026-08-02
+        starter: examples/openai/starter-gpt-5.6-sol.md
       - id: gpt-5.6-terra
         name: GPT-5.6 Terra
         tier: mid
@@ -47,6 +52,7 @@ vendors:
         status: current
         docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-5.6-terra]
         verified: 2026-08-02
+        starter: examples/openai/starter-gpt-5.6-terra.md
       - id: gpt-5.6-luna
         name: GPT-5.6 Luna
         tier: fast
@@ -54,6 +60,7 @@ vendors:
         status: current
         docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-5.6-luna]
         verified: 2026-08-02
+        starter: examples/openai/starter-gpt-5.6-luna.md
       - id: gpt-5.2
         name: GPT-5.2
         tier: frontier
@@ -71,6 +78,7 @@ vendors:
         status: current
         docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview]
         verified: 2026-08-02
+        starter: examples/google/starter-gemini-3.1-pro-preview.md
       - id: gemini-3.6-flash
         name: Gemini 3.6 Flash
         tier: mid
@@ -78,6 +86,7 @@ vendors:
         status: current
         docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash]
         verified: 2026-08-02
+        starter: examples/google/starter-gemini-3.6-flash.md
       - id: gemini-3.5-flash-lite
         name: Gemini 3.5 Flash-Lite
         tier: fast
@@ -85,6 +94,7 @@ vendors:
         status: current
         docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite]
         verified: 2026-08-02
+        starter: examples/google/starter-gemini-3.5-flash-lite.md
       - id: gemini-3-pro
         name: Gemini 3 Pro Preview
         tier: frontier

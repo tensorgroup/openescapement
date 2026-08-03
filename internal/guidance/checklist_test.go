@@ -32,3 +32,25 @@ func TestEveryVendorNoteHasSources(t *testing.T) {
 		}
 	}
 }
+
+func TestEveryCurrentFullDepthModelHasStarter(t *testing.T) {
+	s := Load("") // embedded
+	fullDepth := map[string]bool{"anthropic": true, "openai": true, "google": true}
+	for _, v := range s.Registry.Vendors {
+		if !fullDepth[v.Key] {
+			continue
+		}
+		for _, m := range v.Models {
+			if m.Status != "current" {
+				continue
+			}
+			if m.Starter == "" {
+				t.Errorf("current model %s (%s) has no starter", m.ID, v.Key)
+				continue
+			}
+			if _, _, err := s.ReadFile(m.Starter); err != nil {
+				t.Errorf("starter %q for %s not readable: %v", m.Starter, m.ID, err)
+			}
+		}
+	}
+}
