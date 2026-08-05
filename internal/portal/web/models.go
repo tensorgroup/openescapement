@@ -339,8 +339,8 @@ type modelAdoptData struct {
 	Routing     bool
 	Label       string
 	Dest        string
-	StarterHTML template.HTML
-	StarterRaw  string
+	PreviewHTML template.HTML
+	PreviewRaw  string
 	Packs       []packOption
 	PackName    string
 	Version     string
@@ -385,8 +385,8 @@ func (s *Server) handleModelAdopt(w http.ResponseWriter, r *http.Request) {
 		Routing:     routing,
 		Label:       adoptLabel(v, sel.Models, routing),
 		Dest:        adoptDest(v, sel.Models, routing),
-		StarterHTML: mdHTML(content),
-		StarterRaw:  string(content),
+		PreviewHTML: mdHTML(content),
+		PreviewRaw:  string(content),
 		Packs:       opts,
 		PackName:    opts[0].Name,
 		Version:     opts[0].SuggestedVersion,
@@ -405,8 +405,8 @@ func (s *Server) handleModelAdoptSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
 	}
-	routing := r.FormValue("routing") != ""
-	sel, ok := resolveAdoptSelection(g, v, r.Form["model"], routing)
+	routing := r.PostForm.Get("routing") != ""
+	sel, ok := resolveAdoptSelection(g, v, r.PostForm["model"], routing)
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -452,8 +452,8 @@ func (s *Server) handleModelAdoptSave(w http.ResponseWriter, r *http.Request) {
 				Routing:     routing,
 				Label:       adoptLabel(v, sel.Models, routing),
 				Dest:        dest,
-				StarterHTML: mdHTML(content),
-				StarterRaw:  string(content),
+				PreviewHTML: mdHTML(content),
+				PreviewRaw:  string(content),
 				Packs:       packOptions(infos),
 				PackName:    packName,
 				Version:     version,

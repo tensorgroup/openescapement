@@ -416,6 +416,27 @@ func TestModelEditRejectsForeignAndUnknownFiles(t *testing.T) {
 	}
 }
 
+func TestAdoptEmptySelection404s(t *testing.T) {
+	h := newTestServerWithPacksAndGuidance(t).Handler()
+	if get(t, h, "/models/anthropic/adopt", nil).Code != 404 {
+		t.Fatal("adopt with no selection should 404")
+	}
+	if adoptPost(t, h, url.Values{"pack": {"org-baseline"}, "version": {"1.3.0"}}).Code != 404 {
+		t.Fatal("adopt POST with no selection should 404")
+	}
+}
+
+func TestAdoptDuplicateIDsDedupe(t *testing.T) {
+	h := newTestServerWithPacksAndGuidance(t).Handler()
+	rr := get(t, h, "/models/anthropic/adopt?model=claude-sonnet-5&model=claude-sonnet-5", nil)
+	if rr.Code != 200 {
+		t.Fatalf("duplicate-id adopt GET code=%d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "rules/model-claude-sonnet-5.md") {
+		t.Fatal("duplicate ids must dedupe to a single-model selection with the per-model dest")
+	}
+}
+
 func TestVendorPageRendersStarterSetPanel(t *testing.T) {
 	h := newTestServerWithPacksAndGuidance(t).Handler()
 	body := get(t, h, "/models/anthropic", nil).Body.String()
