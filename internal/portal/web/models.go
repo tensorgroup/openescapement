@@ -11,6 +11,7 @@ import (
 
 	"github.com/tensorgroup/openescapement/internal/esc"
 	"github.com/tensorgroup/openescapement/internal/guidance"
+	"github.com/tensorgroup/openescapement/internal/pack"
 	"github.com/tensorgroup/openescapement/internal/portal/publish"
 )
 
@@ -232,37 +233,10 @@ func (s *Server) handleModelEditSave(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/models/"+vendor, http.StatusSeeOther)
 }
 
-// starterModel returns the vendor's model with the given id when it has a
-// starter set.
-func starterModel(v guidance.Vendor, id string) (guidance.Model, bool) {
-	for _, m := range v.Models {
-		if m.ID == id && m.Starter != "" {
-			return m, true
-		}
-	}
-	return guidance.Model{}, false
-}
-
 // packOption is one writable pack in the adopt selector.
 type packOption struct {
 	Name             string
 	SuggestedVersion string
-}
-
-// modelAdoptData is the /models/{vendor}/adopt page's data.
-type modelAdoptData struct {
-	layoutData
-	VendorKey   string
-	VendorName  string
-	ModelID     string
-	ModelName   string
-	Dest        string
-	StarterHTML template.HTML
-	StarterRaw  string
-	Packs       []packOption
-	PackName    string
-	Version     string
-	Error       string
 }
 
 // packOptions maps writable packs to selector options with a suggested next
@@ -275,6 +249,91 @@ func packOptions(infos []publish.PackInfo) []packOption {
 	return opts
 }
 
+// adoptSelection is a validated adopt request: the chosen registry models in
+// registry order, and the fragment bytes to compose (routing overview first).
+type adoptSelection struct {
+	Models []guidance.Model
+	Parts  [][]byte
+}
+
+// resolveAdoptSelection resolves requested starter ids plus the optional
+// routing example against the vendor's registry. All-or-nothing: any unknown
+// or starter-less id fails the whole request. Every path read here is either
+// registry-declared or built from the vendor key alone — the request never
+// contributes a file path.
+func resolveAdoptSelection(g *guidance.Set, v guidance.Vendor, ids []string, routing bool) (adoptSelection, bool) {
+	requested := map[string]bool{}
+	for _, id := range ids {
+		requested[id] = true
+	}
+	var sel adoptSelection
+	if routing {
+		content, _, err := g.ReadFile("examples/" + v.Key + "/model-routing.md")
+		if err != nil {
+			return adoptSelection{}, false
+		}
+		sel.Parts = append(sel.Parts, content)
+	}
+	for _, m := range v.Models {
+		if m.Starter == "" || !requested[m.ID] {
+			continue
+		}
+		delete(requested, m.ID)
+		content, _, err := g.ReadFile(m.Starter)
+		if err != nil {
+			return adoptSelection{}, false
+		}
+		sel.Models = append(sel.Models, m)
+		sel.Parts = append(sel.Parts, content)
+	}
+	if len(requested) > 0 || len(sel.Parts) == 0 {
+		return adoptSelection{}, false
+	}
+	return sel, true
+}
+
+// adoptDest names the destination fragment: the historical per-model path for
+// a single starter, one vendor-set file for any composed selection.
+func adoptDest(v guidance.Vendor, models []guidance.Model, routing bool) string {
+	if len(models) == 1 && !routing {
+		return "rules/model-" + models[0].ID + ".md"
+	}
+	return "rules/models-" + v.Key + ".md"
+}
+
+// adoptLabel names the selection for page titles and headings.
+func adoptLabel(v guidance.Vendor, models []guidance.Model, routing bool) string {
+	names := make([]string, len(models))
+	for i, m := range models {
+		names[i] = m.Name
+	}
+	label := strings.Join(names, ", ")
+	if routing {
+		if label == "" {
+			return v.Name + " model routing"
+		}
+		label += " + model routing"
+	}
+	return label
+}
+
+// modelAdoptData is the /models/{vendor}/adopt page's data.
+type modelAdoptData struct {
+	layoutData
+	VendorKey   string
+	VendorName  string
+	Selection   []guidance.Model
+	Routing     bool
+	Label       string
+	Dest        string
+	StarterHTML template.HTML
+	StarterRaw  string
+	Packs       []packOption
+	PackName    string
+	Version     string
+	Error       string
+}
+
 func (s *Server) handleModelAdopt(w http.ResponseWriter, r *http.Request) {
 	vendor := r.PathValue("vendor")
 	g := s.loadGuidance()
@@ -283,14 +342,16 @@ func (s *Server) handleModelAdopt(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	m, ok := starterModel(v, r.URL.Query().Get("model"))
+	q := r.URL.Query()
+	routing := q.Get("routing") != ""
+	sel, ok := resolveAdoptSelection(g, v, q["model"], routing)
 	if !ok {
 		http.NotFound(w, r)
 		return
 	}
-	content, _, err := g.ReadFile(m.Starter)
+	content, err := pack.ComposeFragments(sel.Parts)
 	if err != nil {
-		http.NotFound(w, r)
+		serverError(w, err)
 		return
 	}
 	infos, err := s.writablePacks(r.Context())
@@ -307,9 +368,10 @@ func (s *Server) handleModelAdopt(w http.ResponseWriter, r *http.Request) {
 		layoutData:  s.baseData("models"),
 		VendorKey:   v.Key,
 		VendorName:  v.Name,
-		ModelID:     m.ID,
-		ModelName:   m.Name,
-		Dest:        "rules/model-" + m.ID + ".md",
+		Selection:   sel.Models,
+		Routing:     routing,
+		Label:       adoptLabel(v, sel.Models, routing),
+		Dest:        adoptDest(v, sel.Models, routing),
 		StarterHTML: mdHTML(content),
 		StarterRaw:  string(content),
 		Packs:       opts,
@@ -330,14 +392,15 @@ func (s *Server) handleModelAdoptSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
 	}
-	m, ok := starterModel(v, r.FormValue("model"))
+	routing := r.FormValue("routing") != ""
+	sel, ok := resolveAdoptSelection(g, v, r.Form["model"], routing)
 	if !ok {
 		http.NotFound(w, r)
 		return
 	}
-	content, _, err := g.ReadFile(m.Starter)
+	content, err := pack.ComposeFragments(sel.Parts)
 	if err != nil {
-		http.NotFound(w, r)
+		serverError(w, err)
 		return
 	}
 	infos, err := s.writablePacks(r.Context())
@@ -361,7 +424,7 @@ func (s *Server) handleModelAdoptSave(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	dest := "rules/model-" + m.ID + ".md"
+	dest := adoptDest(v, sel.Models, routing)
 	if err := s.Packs.AddFragment(r.Context(), packName, dest, content, version); err != nil {
 		if errors.Is(err, publish.ErrFragmentExists) || errors.Is(err, esc.ErrManifest) || errors.Is(err, publish.ErrBadVersion) {
 			msg := err.Error()
@@ -372,8 +435,9 @@ func (s *Server) handleModelAdoptSave(w http.ResponseWriter, r *http.Request) {
 				layoutData:  s.baseData("models"),
 				VendorKey:   v.Key,
 				VendorName:  v.Name,
-				ModelID:     m.ID,
-				ModelName:   m.Name,
+				Selection:   sel.Models,
+				Routing:     routing,
+				Label:       adoptLabel(v, sel.Models, routing),
 				Dest:        dest,
 				StarterHTML: mdHTML(content),
 				StarterRaw:  string(content),

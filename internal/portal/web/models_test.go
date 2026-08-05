@@ -230,7 +230,7 @@ func TestAdoptGETRendersForm(t *testing.T) {
 		t.Fatalf("adopt GET code=%d", rr.Code)
 	}
 	body := rr.Body.String()
-	for _, want := range []string{`<select name="pack"`, "org-baseline", "rules/model-claude-sonnet-5.md", "Starter preview", "Route day-to-day coding"} {
+	for _, want := range []string{`<select name="pack"`, "org-baseline", "rules/model-claude-sonnet-5.md", "Preview", "Route day-to-day coding"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("adopt form missing %q", want)
 		}
@@ -313,6 +313,87 @@ func TestAdoptPOSTVersionTagExists422(t *testing.T) {
 	body := rr.Body.String()
 	if !strings.Contains(body, "already exists") || !strings.Contains(body, `<select name="pack"`) {
 		t.Fatalf("reused-version page missing message or preserved form: %s", body)
+	}
+}
+
+func TestAdoptGETMultiRendersComposedPreview(t *testing.T) {
+	h := newTestServerWithPacksAndGuidance(t).Handler()
+	rr := get(t, h, "/models/anthropic/adopt?model=claude-opus-5&model=claude-sonnet-5&routing=1", nil)
+	if rr.Code != 200 {
+		t.Fatalf("multi adopt GET code=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	for _, want := range []string{
+		"rules/models-anthropic.md",
+		"Model routing (Anthropic)",
+		"Claude Opus 5 governance",
+		"Claude Sonnet 5 governance",
+		`name="model" value="claude-opus-5"`,
+		`name="routing" value="1"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("multi adopt form missing %q", want)
+		}
+	}
+}
+
+func TestAdoptPOSTMultiPublishesVendorSet(t *testing.T) {
+	h := newTestServerWithPacksAndGuidance(t).Handler()
+	rr := adoptPost(t, h, url.Values{
+		"model": {"claude-opus-5", "claude-sonnet-5"}, "routing": {"1"},
+		"pack": {"org-baseline"}, "version": {"1.3.0"},
+	})
+	if rr.Code != 303 || rr.Header().Get("Location") != "/packs/org-baseline?published=v1.3.0" {
+		t.Fatalf("multi adopt POST: code=%d loc=%s body=%s", rr.Code, rr.Header().Get("Location"), rr.Body.String())
+	}
+	detail := get(t, h, "/packs/org-baseline", nil).Body.String()
+	if !strings.Contains(detail, "rules/models-anthropic.md") {
+		t.Fatal("vendor-set fragment not visible on pack detail")
+	}
+}
+
+func TestAdoptRoutingOnly(t *testing.T) {
+	h := newTestServerWithPacksAndGuidance(t).Handler()
+	rr := get(t, h, "/models/anthropic/adopt?routing=1", nil)
+	if rr.Code != 200 || !strings.Contains(rr.Body.String(), "rules/models-anthropic.md") {
+		t.Fatalf("routing-only adopt: code=%d", rr.Code)
+	}
+}
+
+func TestAdoptRejectsUnknownOrForeignSelection(t *testing.T) {
+	h := newTestServerWithPacksAndGuidance(t).Handler()
+	for _, q := range []string{
+		"model=claude-sonnet-5&model=nope",        // unknown id poisons the whole set
+		"model=claude-sonnet-5&model=gpt-5.6-sol", // real id, wrong vendor
+	} {
+		if get(t, h, "/models/anthropic/adopt?"+q, nil).Code != 404 {
+			t.Fatalf("adopt GET %s should 404", q)
+		}
+	}
+	if get(t, h, "/models/kimi/adopt?routing=1", nil).Code != 404 {
+		t.Fatal("routing adopt for a vendor without examples should 404")
+	}
+	if adoptPost(t, h, url.Values{"model": {"claude-sonnet-5", "nope"}, "pack": {"org-baseline"}, "version": {"1.3.0"}}).Code != 404 {
+		t.Fatal("adopt POST with unknown id should 404")
+	}
+}
+
+func TestAdoptMultiCollisionPreservesSelection(t *testing.T) {
+	h := newTestServerWithPacksAndGuidance(t).Handler()
+	form := url.Values{"model": {"claude-opus-5", "claude-sonnet-5"}, "routing": {"1"}, "pack": {"org-baseline"}, "version": {"1.3.0"}}
+	if rr := adoptPost(t, h, form); rr.Code != 303 {
+		t.Fatalf("first adopt: %d", rr.Code)
+	}
+	form.Set("version", "1.4.0")
+	rr := adoptPost(t, h, form)
+	if rr.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("collision code=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	for _, want := range []string{"Edit that fragment", `name="model" value="claude-opus-5"`, `name="model" value="claude-sonnet-5"`, `name="routing" value="1"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("collision page missing %q", body)
+		}
 	}
 }
 

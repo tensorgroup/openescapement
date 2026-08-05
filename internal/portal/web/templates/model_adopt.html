@@ -1,9 +1,10 @@
-{{define "title"}}Adopt starter: {{.ModelName}}{{end}}
-{{define "explainer"}}Add the {{.ModelName}} starter to a rule pack.{{end}}
+{{define "title"}}Adopt: {{.Label}}{{end}}
+{{define "explainer"}}Add {{.VendorName}} starter guidance to a rule pack.{{end}}
 {{define "content"}}
 {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
 <form method="post" action="/models/{{.VendorKey}}/adopt">
-  <input type="hidden" name="model" value="{{.ModelID}}">
+  {{range .Selection}}<input type="hidden" name="model" value="{{.ID}}">{{end}}
+  {{if .Routing}}<input type="hidden" name="routing" value="1">{{end}}
   <p>
     <label>Rule pack
       <select name="pack">
@@ -20,7 +21,7 @@
   <p><button type="submit">Add to rule pack</button></p>
 </form>
 <section hx-disable>
-  <h3>Starter preview</h3>
+  <h3>Preview</h3>
   <article class="fragment">
     {{.StarterHTML}}
     <pre>{{.StarterRaw}}</pre>
