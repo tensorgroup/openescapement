@@ -8,6 +8,12 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- Vendor starter sets: each full-depth vendor page grows a starter-set panel
+  that adopts any selection of model starters plus the model-routing overview
+  as one composed fragment (`rules/models-<vendor>.md`). Single-model adoption
+  and its `rules/model-<id>.md` naming are unchanged. Starter and example
+  fragments no longer carry absolute prices — relative cost guidance stays in
+  the fragments; dollar figures live in the vendor guidance pages.
 - Model starters and adopt flow: every current full-depth-vendor model
   (Anthropic, OpenAI, Google) ships a starter rule-pack fragment encoding its
   routing position, review-gate, and cost guidance, seeded and portal-editable
