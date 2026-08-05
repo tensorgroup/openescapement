@@ -83,6 +83,16 @@ tagged releases begin.
   runs under the strict CSP with eval, history, and injected indicator styles
   disabled, and hx-disable wrapping all pack-authored markdown.
 
+### Changed
+- Guidance seeding now refreshes unedited files to the latest embedded content
+  instead of create-if-missing only, tracked by a
+  `<data-dir>/guidance/.seeded.json` hash manifest; hand-edited and
+  portal-edited files are still never overwritten, and pre-manifest dirs are
+  migrated by recording only files that still match the shipped content.
+- `esc serve --demo` now resets its demo-owned data (org store, pack repos,
+  demo repo, guidance) to pristine on every startup and prints
+  `esc: demo data reset`. Non-demo servers are unaffected.
+
 Planned — see `docs/roadmap/`:
 - v0.2: MCP server surface (live policy queries, connection telemetry, agent-initiated registration)
 - Dashboards & metrics: tool/LLM usage, token consumption per model, pack customization vs. defaults, sync freshness

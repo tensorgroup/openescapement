@@ -75,11 +75,13 @@ drift status, rule-pack browsing with portal-side publishing (validate → commi
 and usage. The portal never pushes rules into repos — packs it publishes still reach a
 repo only when someone runs `esc sync` there, same as any other pack source.
 
+`esc serve --demo` resets its example data to pristine on every startup and prints `esc: demo data reset`, so the demo always shows current content. Anything you change during a demo (published pack versions, adopted starters, guidance edits) is discarded when you restart. Non-demo servers keep your data and only refresh guidance files you have not edited.
+
 The portal is server-rendered with a strict CSP; its one third-party asset, htmx, is
 vendored and embedded (pinned by SHA-256 in `internal/portal/web/HTMX-VENDOR.md`), never
 fetched at runtime, and every interaction still works with JavaScript disabled.
 
-The portal's **Models** section is curated, sourced guidance on each vendor's models (Anthropic, OpenAI, Google, Kimi, Deepseek, Grok): what each model class is good at, which roles it suits (planning, review, coding, bulk), how to govern it, and example rule-pack fragments to adopt. Every claim carries a source. The guidance ships embedded and is seeded to your data directory on first run, so you can hand-edit it or edit it from the portal. Raw HTML in guidance or fragment markdown is dropped by the safe renderer; write markdown.
+The portal's **Models** section is curated, sourced guidance on each vendor's models (Anthropic, OpenAI, Google, Kimi, Deepseek, Grok): what each model class is good at, which roles it suits (planning, review, coding, bulk), how to govern it, and example rule-pack fragments to adopt. Every claim carries a source. The guidance ships embedded and is seeded to `<data-dir>/guidance/` on first run. Files you have not edited are refreshed to the latest embedded content on later runs, so upgrades reach you automatically; any file you edit by hand or from the portal is never overwritten. To restore a shipped file, delete it and restart. Raw HTML in guidance or fragment markdown is dropped by the safe renderer; write markdown.
 
 ## How it works
 
