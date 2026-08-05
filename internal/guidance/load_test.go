@@ -114,7 +114,7 @@ func TestSeedRecordsManifestOnCreate(t *testing.T) {
 	// No temp files left behind by the atomic writes.
 	entries, _ := os.ReadDir(gdir)
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".seeded-") || strings.HasPrefix(e.Name(), ".guidance-") {
+		if strings.HasPrefix(e.Name(), ".seed-") {
 			t.Fatalf("leftover temp file: %s", e.Name())
 		}
 	}
