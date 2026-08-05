@@ -415,3 +415,25 @@ func TestModelEditRejectsForeignAndUnknownFiles(t *testing.T) {
 		t.Fatalf("POST models.yaml should 404, got %d", rr.Code)
 	}
 }
+
+func TestVendorPageRendersStarterSetPanel(t *testing.T) {
+	h := newTestServerWithPacksAndGuidance(t).Handler()
+	body := get(t, h, "/models/anthropic", nil).Body.String()
+	for _, want := range []string{
+		"Vendor starter set",
+		`<input type="checkbox" name="model" value="claude-opus-5" checked>`,
+		`<input type="checkbox" name="routing" value="1" checked>`,
+		"Use the vendor starter set panel above",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("/models/anthropic missing %q", want)
+		}
+	}
+	noPacks := newTestServerWithGuidance(t).Handler()
+	if strings.Contains(get(t, noPacks, "/models/anthropic", nil).Body.String(), "Vendor starter set") {
+		t.Fatal("starter-set panel must not render when no packs configured")
+	}
+	if strings.Contains(get(t, h, "/models/kimi", nil).Body.String(), "Vendor starter set") {
+		t.Fatal("starter-set panel must not render for vendors without starters")
+	}
+}

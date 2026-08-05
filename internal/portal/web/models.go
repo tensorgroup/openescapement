@@ -91,6 +91,8 @@ type modelVendorData struct {
 	Models         []modelView
 	Examples       []exampleView
 	PacksAvailable bool
+	HasRouting     bool
+	ShowSet        bool
 	Degraded       []string
 }
 
@@ -147,6 +149,15 @@ func (s *Server) handleModelVendor(w http.ResponseWriter, r *http.Request) {
 		packsAvailable = true
 	}
 
+	starters := 0
+	for _, mv := range models {
+		if mv.HasStarter {
+			starters++
+		}
+	}
+	hasRouting := g.KnownFiles()["examples/"+v.Key+"/model-routing.md"]
+	showSet := packsAvailable && (starters >= 2 || (starters == 1 && hasRouting))
+
 	s.render(w, "model_vendor", modelVendorData{
 		layoutData:     s.baseData("models"),
 		VendorKey:      v.Key,
@@ -156,6 +167,8 @@ func (s *Server) handleModelVendor(w http.ResponseWriter, r *http.Request) {
 		Models:         models,
 		Examples:       examples,
 		PacksAvailable: packsAvailable,
+		HasRouting:     hasRouting,
+		ShowSet:        showSet,
 		Degraded:       degraded,
 	})
 }

@@ -8,6 +8,21 @@
     {{.NoteHTML}}
   </article>
 </section>
+{{if .ShowSet}}
+<section>
+  <h3>Vendor starter set</h3>
+  <p class="muted">Adopt several starters and the routing overview as one composed fragment.</p>
+  <form method="get" action="/models/{{.VendorKey}}/adopt">
+    {{range .Models}}{{if .HasStarter}}
+    <label><input type="checkbox" name="model" value="{{.ID}}" checked> {{.Name}}</label>
+    {{end}}{{end}}
+    {{if .HasRouting}}
+    <label><input type="checkbox" name="routing" value="1" checked> Model routing overview</label>
+    {{end}}
+    <p><button type="submit">Review &amp; adopt selection</button></p>
+  </form>
+</section>
+{{end}}
 <section>
   <h3>Models</h3>
   {{range .Models}}
@@ -23,7 +38,7 @@
       <pre>{{.StarterRaw}}</pre>
     </div>
     {{if $.PacksAvailable}}
-    <p><a class="button" href="/models/{{$.VendorKey}}/adopt?model={{.ID}}">Add to rule pack</a></p>
+    <p><a class="button" href="/models/{{$.VendorKey}}/adopt?model={{.ID}}">Add to rule pack</a>{{if $.ShowSet}} <span class="muted">Adopting the whole {{$.VendorName}} set? Use the vendor starter set panel above.</span>{{end}}</p>
     {{else}}
     <p><button type="button" disabled>Add to rule pack</button> <span class="muted">Configure a rule pack repo to enable adoption.</span></p>
     {{end}}
