@@ -53,6 +53,13 @@ func cmdServe(root string, args []string, stdout, stderr io.Writer) int {
 		dir = filepath.Join(home, ".escapement", "server")
 	}
 
+	if *demo {
+		if err := resetDemo(dir, stdout); err != nil {
+			fmt.Fprintf(stderr, "esc: %v\n", err)
+			return 4
+		}
+	}
+
 	if err := guidance.Seed(dir); err != nil {
 		fmt.Fprintf(stderr, "esc: %v\n", err)
 		return 4
@@ -61,10 +68,9 @@ func cmdServe(root string, args []string, stdout, stderr io.Writer) int {
 	token := ""
 	demoRepo := ""
 	if *demo {
-		// Re-seed every start (registry + events) for a clean pitch, then
-		// materialize the demo pack + governed repos if they aren't there
-		// yet (Repos is idempotent, so a returning demo session keeps
-		// whatever the user published last time).
+		// resetDemo above already wiped every demo-owned path, so this
+		// rebuilds registry, events, the demo pack, and the governed repo
+		// from scratch on every start — no stale state carries over.
 		if err := seed.Demo(dir, time.Now().UTC()); err != nil {
 			fmt.Fprintf(stderr, "esc: %v\n", err)
 			return 4
@@ -129,6 +135,20 @@ func cmdServe(root string, args []string, stdout, stderr io.Writer) int {
 		}
 		return 0
 	}
+}
+
+// resetDemo removes the demo-owned paths under dir so `esc serve --demo`
+// always boots pristine example data. It deletes only these specific paths,
+// never the data dir itself, so the reset is bounded even when --demo is
+// pointed at a directory. Non-demo mode never calls this.
+func resetDemo(dir string, stdout io.Writer) error {
+	for _, p := range []string{"registry.json", "events.jsonl", "packs", "demo-repo", "guidance"} {
+		if err := os.RemoveAll(filepath.Join(dir, p)); err != nil {
+			return err
+		}
+	}
+	fmt.Fprintln(stdout, "esc: demo data reset")
+	return nil
 }
 
 // isLoopback reports whether addr's host resolves to a loopback address or
