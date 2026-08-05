@@ -1,6 +1,9 @@
 package guidance
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -149,12 +152,122 @@ func (s *Set) VendorForModel(id string) (string, bool) {
 	return "", false
 }
 
-// Seed writes the embedded guidance tree into <dataDir>/guidance/,
-// create-if-missing: existing files are left untouched (same posture as the
-// demo repo seed; delete the directory to re-seed after an upgrade).
+const seedManifest = ".seeded.json"
+
+func sha256Hex(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
+// atomicWrite writes b to dst via temp-plus-rename, so a concurrent reader
+// never sees a partial file. Callers guarantee filepath.Dir(dst) exists.
+func atomicWrite(dst string, b []byte, perm os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(dst), ".seed-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	if _, err := tmp.Write(b); err != nil {
+		tmp.Close()
+		os.Remove(name)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(name)
+		return err
+	}
+	if err := os.Chmod(name, perm); err != nil {
+		os.Remove(name)
+		return err
+	}
+	if err := os.Rename(name, dst); err != nil {
+		os.Remove(name)
+		return err
+	}
+	return nil
+}
+
+// readManifest loads the seed manifest. An absent or unparseable manifest
+// returns (nil, nil): the caller treats nil as "pre-manifest, migrate". A
+// corrupt machine-managed file is not a hard failure (fail-soft posture).
+func readManifest(path string) (map[string]string, error) {
+	b, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]string
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, nil
+	}
+	return m, nil
+}
+
+// writeManifest atomically persists the manifest. Map keys are marshaled in
+// sorted order, so the output is deterministic.
+func writeManifest(path string, m map[string]string) error {
+	data, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return atomicWrite(path, append(data, '\n'), 0o644)
+}
+
+// migrateManifest records disk files under root that still byte-match the
+// current embedded content (provably unmodified). Non-matching and absent
+// files are left unrecorded: old-seed-unmodified and user-edited are
+// indistinguishable without history.
+func migrateManifest(root string, recorded map[string]string) error {
+	return fs.WalkDir(embeddedModels, "models", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || p == "models" {
+			return err
+		}
+		rel := strings.TrimPrefix(p, "models/")
+		emb, rerr := embeddedModels.ReadFile(p)
+		if rerr != nil {
+			return rerr
+		}
+		disk, derr := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if derr != nil {
+			return nil // absent -> not recorded
+		}
+		if sha256Hex(disk) == sha256Hex(emb) {
+			recorded[rel] = sha256Hex(emb)
+		}
+		return nil
+	})
+}
+
+// Seed writes the embedded guidance tree into <dataDir>/guidance/ with
+// create-or-refresh-unmodified semantics tracked by a hash manifest at
+// <dataDir>/guidance/.seeded.json. Absent files are written and recorded.
+// A file whose disk hash matches its recorded hash (never edited) is
+// refreshed when the embedded content has changed, and its record updated.
+// A file whose disk hash differs from its recorded hash (hand-edited or
+// portal-edited) is left untouched. Files no longer in the embedded tree are
+// left on disk with their record retained. Pre-manifest dirs are migrated:
+// only files still matching embedded are recorded.
 func Seed(dataDir string) error {
 	root := filepath.Join(dataDir, "guidance")
-	return fs.WalkDir(embeddedModels, "models", func(p string, d fs.DirEntry, err error) error {
+	manifestPath := filepath.Join(root, seedManifest)
+
+	recorded, err := readManifest(manifestPath)
+	if err != nil {
+		return err
+	}
+	if recorded == nil {
+		recorded = map[string]string{}
+		if err := migrateManifest(root, recorded); err != nil {
+			return err
+		}
+	}
+
+	err = fs.WalkDir(embeddedModels, "models", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -166,16 +279,39 @@ func Seed(dataDir string) error {
 		if d.IsDir() {
 			return os.MkdirAll(dst, 0o755)
 		}
-		if _, statErr := os.Stat(dst); statErr == nil {
-			return nil // create-if-missing
+		emb, rerr := embeddedModels.ReadFile(p)
+		if rerr != nil {
+			return rerr
 		}
-		b, readErr := embeddedModels.ReadFile(p)
-		if readErr != nil {
-			return readErr
+		sum := sha256Hex(emb)
+		disk, derr := os.ReadFile(dst)
+		switch {
+		case os.IsNotExist(derr):
+			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+				return err
+			}
+			if err := atomicWrite(dst, emb, 0o644); err != nil {
+				return err
+			}
+			recorded[rel] = sum
+		case derr != nil:
+			return derr
+		default:
+			diskSum := sha256Hex(disk)
+			if diskSum == recorded[rel] { // unedited
+				if diskSum != sum { // embedded changed -> refresh
+					if err := atomicWrite(dst, emb, 0o644); err != nil {
+						return err
+					}
+				}
+				recorded[rel] = sum
+			}
+			// else: hand-edited -> leave, record unchanged
 		}
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return err
-		}
-		return os.WriteFile(dst, b, 0o644)
+		return nil
 	})
+	if err != nil {
+		return err
+	}
+	return writeManifest(manifestPath, recorded)
 }
