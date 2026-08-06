@@ -1,0 +1,25 @@
+schema: 1
+name: anthropic-models
+version: 0.1.0
+description: Model selection guidance for Anthropic Claude. Which model, when, and why.
+
+rules:
+  - rules/model-selection.md
+
+catalog:
+  - name: Claude Opus 5 (claude-opus-5)
+    category: model
+    status: preferred
+    notes: The recommended starting point. Strong on most work, from everyday coding to complex agentic tasks. $5/$25 per 1M tokens.
+  - name: Claude Sonnet 5 (claude-sonnet-5)
+    category: model
+    status: allowed
+    notes: Cost and latency saver. Near Opus quality on routine coding, high-volume pipelines, and subagents. $3/$15 per 1M tokens.
+  - name: Claude Haiku 4.5 (claude-haiku-4-5)
+    category: model
+    status: allowed
+    notes: High-volume simple tasks such as classification and extraction. $1/$5 per 1M tokens.
+  - name: Claude Fable 5 (claude-fable-5)
+    category: model
+    status: allowed
+    notes: Reserve for the deepest reasoning, reviews, and problems that have failed elsewhere or are not simple or obvious. $10/$50 per 1M tokens; requires 30-day data retention.
