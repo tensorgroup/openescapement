@@ -154,8 +154,8 @@ func TestStatusNoticeWordingByLevel(t *testing.T) {
 		level string
 		want  string
 	}{
-		{"metrics", "\nLocal amendments are reported upstream, counts and hashes only.\n(pack policy; set report_amendments: metrics or off in .escapement.yaml to withhold)\n"},
-		{"content", "\nLocal amendments are reported upstream, including content.\n(pack policy; set report_amendments: metrics or off in .escapement.yaml to withhold)\n"},
+		{"metrics", "\nLocal amendments will be reported upstream once a publisher is configured, counts and hashes only.\n(pack policy; set report_amendments: metrics or off in .escapement.yaml to withhold)\n"},
+		{"content", "\nLocal amendments will be reported upstream once a publisher is configured, including content.\n(pack policy; set report_amendments: metrics or off in .escapement.yaml to withhold)\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.level, func(t *testing.T) {

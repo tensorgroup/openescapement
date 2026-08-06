@@ -100,7 +100,7 @@ func TestReportCommandAndSkippedShape(t *testing.T) {
 	}
 
 	syncRepWithSkip := NewReport(&StatusResult{}, Collection{}, &SyncResult{
-		Skipped: []Skipped{{Path: "CLAUDE.md", Kind: KindBlock, Reason: "hand-edited"}},
+		Skipped: []Skipped{{Subject: "CLAUDE.md", Kind: KindBlock, Reason: "hand-edited"}},
 	})
 	out, err = json.Marshal(syncRepWithSkip)
 	if err != nil {

@@ -436,3 +436,83 @@ func TestCustomTargetDiffAgainstFilteredOut(t *testing.T) {
 		t.Errorf("filtered-out custom target content must not appear in diff:\n%s", out)
 	}
 }
+
+// TestOrphanBlockHandEditIsNotSilentlyDeleted covers the skip gate on the
+// orphan-block removal path. The main sync path declines to overwrite a
+// hand-edited managed region; deleting that same region outright is strictly
+// more destructive, so it cannot be the one write that bypasses the gate.
+// Before the fix, a hand-edit inside a block whose target had left the
+// effective set was deleted with no warning, no skip entry, and exit 0 — and
+// status could not warn first either, since orphan findings hard-coded
+// Local: LocalNone and never compared the block against the lockfile.
+//
+// Bytes outside the block must still be preserved exactly, in every branch.
+func TestOrphanBlockHandEditIsNotSilentlyDeleted(t *testing.T) {
+	repo := newCustomPackRepo(t, "acme-org", "1.0.0", copilotPackYAML, copilotFragment)
+	root := governedWith(t, repo, "v1.0.0", "allow_custom_target_files:\n  - .github/copilot-instructions.md\n")
+	writeFiles(t, root, map[string]string{".github/copilot-instructions.md": "# Existing user content\n"})
+	runEsc(t, root, "sync")
+
+	// Hand-edit inside the managed block.
+	p := filepath.Join(root, ".github", "copilot-instructions.md")
+	content, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := replaceOnce(t, string(content), "Use Vault.", "Use whatever, we edited this.")
+	if err := os.WriteFile(p, []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Orphan the target: repin to a pack version that does not declare it.
+	repo2 := newCustomPackRepo(t, "acme-org", "2.0.0",
+		"schema: 1\nname: acme-org\nversion: 2.0.0\nrules:\n  - rules/main.md\n",
+		"## Claude rule\nbody\n")
+	writeFiles(t, root, map[string]string{
+		".escapement/config.yaml": "schema: 1\npacks:\n  - source: file://" + repo2 + "\n    ref: v2.0.0\n    trust: unsigned\n",
+	})
+
+	// Status must say so before sync is ever asked to delete it.
+	out, code := runEscOut(t, root, "status")
+	if code != 0 {
+		t.Fatalf("status on an orphan should exit 0, got %d:\n%s", code, out)
+	}
+	if !strings.Contains(out, "hand-edited") {
+		t.Errorf("status must report the orphaned block's hand-edit, got:\n%s", out)
+	}
+
+	if code, out := run(t, root, "sync"); code != 0 {
+		t.Fatalf("a declined orphan must not fail the rollout, exit=%d:\n%s", code, out)
+	}
+	got, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), "Use whatever, we edited this.") {
+		t.Errorf("sync silently deleted a hand-edited orphaned block:\n%s", got)
+	}
+	if !strings.Contains(string(got), "# Existing user content") {
+		t.Errorf("bytes outside the block must be preserved:\n%s", got)
+	}
+
+	// The orphan must still be reported after the skip: dropping the lock
+	// entry would leave an undeleted managed block in a repo status calls clean.
+	if out, _ := runEscOut(t, root, "status"); !strings.Contains(strings.ToLower(out), "orphan") {
+		t.Errorf("a skipped orphan must still be reported on the next status:\n%s", out)
+	}
+
+	// --force is the documented way through, and still preserves the outside.
+	if code, out := run(t, root, "sync", "--force"); code != 0 {
+		t.Fatalf("sync --force: %d\n%s", code, out)
+	}
+	got, err = os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(got), "escapement:begin") {
+		t.Errorf("sync --force must remove the orphaned block:\n%s", got)
+	}
+	if !strings.Contains(string(got), "# Existing user content") {
+		t.Errorf("--force must still preserve bytes outside the block:\n%s", got)
+	}
+}

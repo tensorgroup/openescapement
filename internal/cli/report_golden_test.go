@@ -296,15 +296,17 @@ func TestSyncJSONExitCodeParity(t *testing.T) {
 	if jsonCode != humanCode {
 		t.Fatalf("sync --json with a declined artifact: want exit %d (parity with plain sync), got %d:\n%s", humanCode, jsonCode, jsonOut)
 	}
+	// "subject", not "path": skipped[] and findings[] name the same concept
+	// in one document, so they carry the same key (engine.Skipped.Subject).
 	var rep struct {
 		Skipped []struct {
-			Path string `json:"path"`
+			Subject string `json:"subject"`
 		} `json:"skipped"`
 	}
 	if err := json.Unmarshal([]byte(jsonOut), &rep); err != nil {
 		t.Fatalf("sync --json did not produce valid JSON: %v\n%s", err, jsonOut)
 	}
-	if len(rep.Skipped) != 1 || rep.Skipped[0].Path != "CLAUDE.md" {
+	if len(rep.Skipped) != 1 || rep.Skipped[0].Subject != "CLAUDE.md" {
 		t.Errorf("report.skipped = %+v, want one entry for CLAUDE.md", rep.Skipped)
 	}
 }

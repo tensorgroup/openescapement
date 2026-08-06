@@ -332,7 +332,7 @@ func syncOnce(ctx context.Context, root string, force bool, stdout, stderr io.Wr
 	updatecheck.RecordSync(ctx, root, plan.PackObjs)
 	skipped := make(map[string]bool, len(res.Skipped))
 	for _, s := range res.Skipped {
-		skipped[s.Path] = true
+		skipped[s.Subject] = true
 	}
 	// Applied and skipped counts both go on stdout: len(plan.Artifacts)
 	// alone would report a declined artifact as "synced" to anyone reading
@@ -350,7 +350,7 @@ func syncOnce(ctx context.Context, root string, force bool, stdout, stderr io.Wr
 	// Exit-0 from sync no longer asserts the repo matches policy; compliance
 	// gating belongs on `esc status --check`.
 	for _, s := range res.Skipped {
-		fmt.Fprintf(stderr, "  skipped %s: %s\n", s.Path, s.Reason)
+		fmt.Fprintf(stderr, "  skipped %s: %s\n", s.Subject, s.Reason)
 	}
 	if len(res.Skipped) > 0 {
 		fmt.Fprintln(stderr, "  `esc diff` to inspect, `esc sync --force` to overwrite")
@@ -435,12 +435,18 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 		// Unconditional: a team must be able to discover that its own
 		// additions are reported upstream without reading the pack
 		// manifest. Never gated behind a verbose flag.
+		//
+		// Future tense, deliberately. v0.1 ships no publisher: esc resolves
+		// the reporting level and displays it, and nothing is transmitted
+		// anywhere. A present-tense claim here would be a false statement
+		// about the user's own data, made by the tool itself, which is worse
+		// than the same slip in prose. Update this when a publisher lands.
 		if coll.Amendments != engine.ReportOff && anyAmendment(st.Findings) {
 			what := "counts and hashes only"
 			if coll.Amendments == engine.ReportContent {
 				what = "including content"
 			}
-			fmt.Fprintf(stdout, "\nLocal amendments are reported upstream, %s.\n", what)
+			fmt.Fprintf(stdout, "\nLocal amendments will be reported upstream once a publisher is configured, %s.\n", what)
 			fmt.Fprintln(stdout, "(pack policy; set report_amendments: metrics or off in .escapement.yaml to withhold)")
 		}
 	}

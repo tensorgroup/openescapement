@@ -431,3 +431,130 @@ func TestSkillDirPristineSyncReportsInSync(t *testing.T) {
 		t.Error("a pristine sync must report clean")
 	}
 }
+
+// TestSkillDirAlteredIsNotSweptUpAsOrphan is the non-vacuity test for the
+// desiredDirs assignment sitting BEFORE the skip gate in Apply, whose own
+// comment calls that placement load-bearing but which nothing exercised.
+//
+// A hand-edited skill directory is declined by the skip gate, which
+// `continue`s past the rest of the artifact loop. If desiredDirs were
+// recorded after the gate instead of before it, that declined directory
+// would be absent from the effective set as far as the orphaned-dir pass
+// below is concerned, and the pass would then delete every pack-provided
+// file in it — turning "we declined to touch your edit" into "we deleted the
+// file your edit was in."
+func TestSkillDirAlteredIsNotSweptUpAsOrphan(t *testing.T) {
+	repo := setupGovernedRepoWithSkills(t)
+	runEsc(t, repo, "sync")
+
+	dir := filepath.Join(repo, ".claude", "skills", "esc-acme-org-esc-security")
+	skill := filepath.Join(dir, "SKILL.md")
+	edited := "---\nname: esc-security\ndescription: demo\n---\n\nRules, hand-edited.\n"
+	if err := os.WriteFile(skill, []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Precondition: this really is the declined path, not just an in-sync one.
+	st, err := engine.Status(context.Background(), repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const skillPath = ".claude/skills/esc-acme-org-esc-security"
+	var altered bool
+	for _, f := range st.Findings {
+		if f.Kind == engine.KindDir && f.Subject == skillPath && f.State == engine.Altered {
+			altered = true
+		}
+	}
+	if !altered {
+		t.Fatal("precondition: the hand-edited skill dir should classify as altered")
+	}
+
+	runEsc(t, repo, "sync")
+
+	got, err := os.ReadFile(skill)
+	if err != nil {
+		t.Fatalf("a declined skill dir was swept up by the orphaned-dir pass: %v", err)
+	}
+	if string(got) != edited {
+		t.Errorf("declined skill dir was overwritten: %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "EXTRA.md")); err != nil {
+		t.Errorf("orphan pass removed a pack file from a dir still in the effective set: %v", err)
+	}
+}
+
+// TestSkillDirRemovalThroughNestedSymlinkFailsClosed is the non-vacuity test
+// for the refuseSymlinks call in mergeDir's REMOVAL loop. The existing
+// nested-symlink test covers the write loop's call; deleting the removal
+// loop's left the suite green, because that loop runs first and its
+// containedPath check is purely lexical.
+//
+// Setup: the pack ships skills/esc-security/sub/note.md, then drops it in
+// v1.0.1, making it a removal target. Between the update and the sync, the
+// synced "sub" directory is swapped for a symlink out of the repo. Without
+// the check, os.Remove resolves through that symlinked component and deletes
+// the file it points at.
+func TestSkillDirRemovalThroughNestedSymlinkFailsClosed(t *testing.T) {
+	packRepo := newPackRepo(t, "1.0.0")
+	files := map[string]string{
+		"org/skills/esc-security/SKILL.md":    "---\nname: esc-security\ndescription: demo\n---\n\nRules.\n",
+		"org/skills/esc-security/sub/note.md": "Nested pack content.\n",
+	}
+	files["org/pack.yaml"] = withExtraSkill(t, packRepo, "skills/esc-security")
+	writeFiles(t, packRepo, files)
+	gitIn(t, packRepo, "add", ".")
+	gitIn(t, packRepo, "commit", "-m", "add nested skill file")
+	gitIn(t, packRepo, "tag", "-f", "v1.0.0")
+	repo := newGoverned(t, packRepo, "v1.0.0")
+	runEsc(t, repo, "sync")
+
+	dir := filepath.Join(repo, ".claude", "skills", "esc-acme-org-esc-security")
+	if _, err := os.Stat(filepath.Join(dir, "sub", "note.md")); err != nil {
+		t.Fatalf("precondition: %v", err)
+	}
+
+	// Publish v1.0.1 without sub/note.md, under a new tag (see
+	// TestSkillDirRemovesPackDroppedFiles for why a new tag, not a retag).
+	if err := os.RemoveAll(filepath.Join(packRepo, "org", "skills", "esc-security", "sub")); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := os.ReadFile(filepath.Join(packRepo, "org", "pack.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bumped := strings.Replace(string(manifest), "version: 1.0.0\n", "version: 1.0.1\n", 1)
+	if bumped == string(manifest) {
+		t.Fatal("precondition: expected pack.yaml to declare version: 1.0.0")
+	}
+	writeFiles(t, packRepo, map[string]string{"org/pack.yaml": bumped})
+	gitIn(t, packRepo, "add", "-A")
+	gitIn(t, packRepo, "commit", "-m", "drop sub/note.md")
+	gitIn(t, packRepo, "tag", "-a", "v1.0.1", "-m", "v1.0.1")
+	runEsc(t, repo, "update", "--ref", "v1.0.1")
+
+	// Only now swap "sub" for a symlink, so the pending removal of
+	// sub/note.md is the thing that walks through it.
+	outside := t.TempDir()
+	victim := filepath.Join(outside, "note.md")
+	if err := os.WriteFile(victim, []byte("do not touch\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Join(dir, "sub")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "sub")); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+
+	if _, code := runEscOut(t, repo, "sync"); code == 0 {
+		t.Fatal("removing a pack-dropped file through a symlinked subdirectory should fail closed, not exit 0")
+	}
+	got, err := os.ReadFile(victim)
+	if err != nil {
+		t.Fatalf("the removal loop deleted a file outside the repo: %v", err)
+	}
+	if string(got) != "do not touch\n" {
+		t.Errorf("file outside the repo was modified: %q", got)
+	}
+}

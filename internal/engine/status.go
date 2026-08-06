@@ -149,13 +149,31 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 				continue // already gone
 			}
 			if block, err := render.Extract(content); err == nil && block != nil {
-				res.Findings = append(res.Findings, Finding{
-					// la.Kind is guaranteed KindBlock by the filter above:
-					// orphan detection only ever walks block-kind lock
-					// entries.
+				// la.Kind is guaranteed KindBlock by the filter above:
+				// orphan detection only ever walks block-kind lock entries.
+				f := Finding{
 					Subject: la.Path, Kind: la.Kind, State: Orphan, Local: LocalNone,
 					Detail: "carries an esc block for a target no longer in the effective set — run `esc sync` to remove it",
-				})
+				}
+				// Orphans get both axes, like every other finding. Local was
+				// hard-coded to LocalNone here, which made status claim a
+				// file had no local content in the one report a user reads
+				// before letting sync delete part of it.
+				if surround, serr := render.BlockSurround(content); serr == nil {
+					if am := newAmendment(surround, nil); am != nil {
+						f.Local, f.Amendment = LocalAmended, am
+					}
+				}
+				// A hand-edit inside an orphaned block is what Apply's skip
+				// gate declines to delete, so status has to say so first:
+				// otherwise the user's only signal is a directory-style
+				// "run sync to remove it" for something sync will then
+				// refuse to remove.
+				if actual := render.BodyHash(block.Body); actual != la.Hash {
+					f.Alteration = &Alteration{ExpectedHash: la.Hash, ActualHash: actual}
+					f.Detail = "carries a hand-edited esc block for a target no longer in the effective set; `esc sync` leaves it in place, `esc sync --force` removes it"
+				}
+				res.Findings = append(res.Findings, f)
 			}
 		}
 	}

@@ -49,11 +49,17 @@ func refuseSymlinks(root, rel string) error {
 	return nil
 }
 
-// Skipped is one artifact Apply declined to write because a human hand-edited
-// its managed region. Sync leaves it exactly as found, converges everything
-// else, and reports it here rather than silently overwriting local work.
+// Skipped is one artifact Apply declined to write or remove because local
+// work stands in the way: a human hand-edited its managed region, or a
+// retiring skill directory still holds files the team added. Sync leaves it
+// exactly as found, converges everything else, and reports it here rather
+// than silently overwriting or deleting local work.
+//
+// Subject names the artifact, matching Finding.Subject: the two describe the
+// same concept in one JSON document (a status report's findings[] and a sync
+// report's skipped[]), so they must not disagree on what to call it.
 type Skipped struct {
-	Path         string `json:"path"`
+	Subject      string `json:"subject"`
 	Kind         string `json:"kind"`
 	Reason       string `json:"reason"`
 	ExpectedHash string `json:"expected_hash"`
@@ -152,7 +158,7 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 			prev := prevLock.Artifact(a.Path)
 			if f := classify(root, a, prevLock); handEdited(f, prev) {
 				res.Skipped = append(res.Skipped, Skipped{
-					Path: a.Path, Kind: a.Kind, Reason: f.Detail,
+					Subject: a.Path, Kind: a.Kind, Reason: f.Detail,
 					ExpectedHash: a.Hash, ActualHash: alterationActual(f),
 				})
 				// Carry the previous lock entry forward unchanged. classify
@@ -213,23 +219,91 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 		res.Applied = append(res.Applied, a.Path)
 	}
 
-	// Remove owned skill dirs that no longer exist in any pack. Only paths
-	// carrying the escapement ownership prefix are ever removed.
+	// Remove owned skill dirs that no longer exist in any pack — but only the
+	// files escapement itself wrote there.
+	//
+	// This used to be a single os.RemoveAll over the whole tree, which is
+	// precisely the data loss mergeDir exists to prevent: mergeDir carefully
+	// never deletes an unmanaged file on an ordinary sync, and then a pack
+	// dropping the skill deleted the team's work wholesale, silently, at exit
+	// 0. The retirement of a directory is not consent to delete what the team
+	// put in it. So: remove exactly the paths the previous manifest recorded,
+	// and remove the directory itself only if that leaves it empty.
+	//
+	// Every removal carries the same two checks the sibling block-removal loop
+	// below and mergeDir already use, for the same reasons documented there.
 	if prevLock != nil {
 		for _, prev := range prevLock.Artifacts {
 			if prev.Kind != KindDir || desiredDirs[prev.Path] {
 				continue
 			}
+			// Ownership is decided on the repo-relative artifact path, never
+			// on the absolute one. An absolute-path test is vacuous: a repo
+			// that merely happens to live under a directory named e.g.
+			// "esc-tools" satisfies it for every lockfile entry, so a hostile
+			// lockfile could aim these removals at any in-repo path. Skill
+			// dirs are always .claude/skills/esc-<pack>-<base> (engine.go's
+			// TargetSkills case), so the "esc-" prefix on the final element
+			// is the ownership marker — checked there, not anywhere in the
+			// string, so a team-owned dir nested under an owned one
+			// (".claude/skills/esc-x/team-notes") can never match either.
+			if !strings.HasPrefix(path.Base(prev.Path), "esc-") {
+				return nil, fmt.Errorf("refusing to remove %q: not an escapement-owned directory", prev.Path)
+			}
 			abs, err := containedPath(root, prev.Path)
 			if err != nil {
 				return nil, err
 			}
-			if !strings.Contains(abs, string(filepath.Separator)+"esc-") {
-				return nil, fmt.Errorf("refusing to remove %q: not an escapement-owned directory", prev.Path)
-			}
-			if err := os.RemoveAll(abs); err != nil {
+			// containedPath is purely lexical, so it alone cannot see a
+			// symlinked parent (".claude -> /etc"): without refuseSymlinks
+			// these removals reach outside the repo entirely.
+			if err := refuseSymlinks(root, prev.Path); err != nil {
 				return nil, err
 			}
+			// Enumerate before removing: what is left afterwards is the
+			// team's, and this is the only place that can still name it.
+			unmanaged, err := unmanagedDirFiles(abs, prev.Files)
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue // directory already gone
+				}
+				return nil, err
+			}
+			for _, f := range prev.Files {
+				target, err := containedPath(abs, f)
+				if err != nil {
+					return nil, fmt.Errorf("lockfile entry %q for %s: %w", f, prev.Path, err)
+				}
+				if target == abs {
+					return nil, fmt.Errorf("lockfile entry %q for %s resolves to the skill directory itself; refusing to remove it", f, prev.Path)
+				}
+				if err := refuseSymlinks(abs, f); err != nil {
+					return nil, err
+				}
+				if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+					return nil, err
+				}
+			}
+			if len(unmanaged) > 0 {
+				// Reported rather than merely left behind: a directory the
+				// user expects to disappear is still there, and without this
+				// the only way to find out why is to go looking. Skipped is
+				// the existing channel for "declined because local work is in
+				// the way" and already reaches both stderr and the JSON
+				// report, so this needs no new surface and, like every other
+				// skip, does not fail the rollout.
+				res.Skipped = append(res.Skipped, Skipped{
+					Subject: prev.Path, Kind: prev.Kind,
+					Reason: fmt.Sprintf("pack no longer provides this skill directory; kept because it still holds %d unmanaged file(s): %s",
+						len(unmanaged), strings.Join(unmanaged, ", ")),
+				})
+				continue
+			}
+			// Best effort: os.Remove succeeds only on an empty directory, so
+			// this deletes the directory exactly when nothing is left in it.
+			// A lingering empty subdirectory leaves it behind with ENOTEMPTY,
+			// which is cosmetic; no user content was lost either way.
+			_ = os.Remove(abs)
 		}
 	}
 
@@ -260,6 +334,38 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 			}
 			if err != nil {
 				return nil, err
+			}
+			// The skip gate applies here too. The main path declines to
+			// overwrite a hand-edited managed region; removing that same
+			// region outright is strictly more destructive, so it cannot be
+			// the one deletion that bypasses the gate. Compared against
+			// prev.Hash (what escapement last actually wrote) for the same
+			// reason classify does: an unedited orphan still matches it and
+			// is removed silently, which is the self-healing behavior the
+			// orphan pass exists for. Only Extract's success path is gated;
+			// its error branches (corrupt markers) fall through to
+			// RemoveBlock, which fails closed as before, rather than being
+			// converted into a silent skip.
+			if !force {
+				if block, berr := render.Extract(existing); berr == nil && block != nil {
+					if actual := render.BodyHash(block.Body); actual != prev.Hash {
+						res.Skipped = append(res.Skipped, Skipped{
+							Subject: prev.Path, Kind: prev.Kind,
+							Reason:       "managed block was hand-edited and its target has left the effective set; left in place instead of being removed",
+							ExpectedHash: prev.Hash, ActualHash: actual,
+						})
+						// Carry the entry forward. The block is still on disk
+						// and still escapement's content; dropping the entry
+						// would make status stop reporting the orphan
+						// entirely, so the next run would show a clean repo
+						// with an undeleted managed block sitting in it. The
+						// orphaned-dir pass above drops its entry instead,
+						// and correctly: there, the managed files really were
+						// removed and only the team's own remain.
+						arts = append(arts, prev)
+						continue
+					}
+				}
 			}
 			out, removed, err := render.RemoveBlock(existing)
 			if err != nil {
@@ -347,8 +453,11 @@ func atomicWrite(path string, content []byte) error {
 // self-targeting entry aborts the whole sync (the error propagates) rather
 // than being silently skipped: the caller needs to know its lockfile is
 // carrying a hostile entry, the same fail-closed posture Apply already
-// takes for prev.Path at apply.go:132 and for a moved tag
-// (ErrLockMismatch). Every path under dst — both files staged for removal
+// takes for prev.Path and for a moved tag (ErrLockMismatch). Both
+// rejections deliberately return a plain error (exit 4), not
+// esc.ErrConstraint: exit 1 is the drift-and-constraint class, which any CI
+// gate reads as routine and expected, and a lockfile carrying a path
+// traversal is neither. Every path under dst — both files staged for removal
 // and files staged for writing — is also re-checked with refuseSymlinks
 // immediately before the filesystem call: a symlink committed inside an
 // escapement-owned dir (e.g. a nested "sub -> /etc") is not something the
@@ -407,7 +516,7 @@ func mergeDir(root, artPath, src, dst string, prevFiles []string) ([]string, err
 			return nil, fmt.Errorf("lockfile entry %q for %s: %w", prev, artPath, err)
 		}
 		if target == dst {
-			return nil, fmt.Errorf("%w: lockfile entry %q for %s resolves to the skill directory itself; refusing to remove it", esc.ErrConstraint, prev, artPath)
+			return nil, fmt.Errorf("lockfile entry %q for %s resolves to the skill directory itself; refusing to remove it", prev, artPath)
 		}
 		if err := refuseSymlinks(dst, prev); err != nil {
 			return nil, err
