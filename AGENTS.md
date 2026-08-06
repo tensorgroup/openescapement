@@ -22,6 +22,7 @@ These are the canonical instructions for any coding agent working in this repo. 
 - `ai-governance-product-spec.md` — canonical product spec (Draft v2). Read before any product or design discussion; it also defines the product boundaries (what this is *not*). Open questions are in §11.
 - `docs/superpowers/specs/` — design docs from the spec → plan → implementation cycle
 - `docs/roadmap/`, `docs/strategy/` — future pillars, licensing and open-core reasoning
+- `docs/ideas/` — uncommitted ideas and feature candidates; see its README for how ideas graduate to the spec or a roadmap doc
 - `docs/roadmap/vendor-guidance-tracking.md` — cadence for checking model vendors' instruction-file and context guidance (the format of this very file is a moving target)
 
 ## Working conventions
