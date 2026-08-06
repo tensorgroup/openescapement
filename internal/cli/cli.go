@@ -59,7 +59,7 @@ func Run(root string, args []string, stdout, stderr io.Writer) int {
 	case "init":
 		err = cmdInit(root, stdout)
 	case "sync":
-		err = cmdSync(ctx, root, args[1:], stdout, stderr)
+		return cmdSync(ctx, root, args[1:], stdout, stderr)
 	case "status":
 		return cmdStatus(ctx, root, args[1:], stdout, stderr)
 	case "diff":
@@ -172,7 +172,7 @@ func checkForUpdates(ctx context.Context, root string, stderr io.Writer) {
 		fmt.Fprintf(stderr, "esc: applying updates failed: %v\n", err)
 		return
 	}
-	if err := cmdSync(ctx, root, nil, stderr, stderr); err != nil {
+	if err := syncOnce(ctx, root, false, stderr, stderr); err != nil {
 		if !changed {
 			// bumpPins never touched config.yaml, so there is nothing to
 			// restore — reporting a restore would be spurious.
@@ -238,25 +238,49 @@ func bumpPins(root string, statuses []updatecheck.PackStatus) (changed bool, err
 	return true, nil
 }
 
-func cmdSync(ctx context.Context, root string, args []string, stdout, stderr io.Writer) error {
+// cmdSync parses sync's own flags and returns the process exit code
+// directly, matching cmdStatus/cmdDiff: a flag-parse failure is a usage
+// error (exit 2), not routed through exitCode's default (exit 4).
+func cmdSync(ctx context.Context, root string, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("sync", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	force := fs.Bool("force", false, "overwrite hand-edited managed regions instead of skipping them")
 	if err := fs.Parse(args); err != nil {
-		return err
+		return 2
 	}
+	return exitCode(syncOnce(ctx, root, *force, stdout, stderr), stderr)
+}
+
+// syncOnce runs one sync (fetch, verify, render, write) and reports the
+// result. Shared by cmdSync (which owns --force and usage-error handling)
+// and checkForUpdates' auto-sync after an accepted interactive update,
+// which has no flags of its own and needs the underlying error for its own
+// restore-on-failure message rather than a bare exit code.
+func syncOnce(ctx context.Context, root string, force bool, stdout, stderr io.Writer) error {
 	plan, err := engine.Plan(ctx, root)
 	if err != nil {
 		return err
 	}
-	res, err := engine.Apply(root, plan, *force)
+	res, err := engine.Apply(root, plan, force)
 	if err != nil {
 		return err
 	}
 	updatecheck.RecordSync(ctx, root, plan.PackObjs)
-	fmt.Fprintf(stdout, "Synced %d pack(s), %d artifact(s):\n", len(plan.Packs), len(plan.Artifacts))
+	skipped := make(map[string]bool, len(res.Skipped))
+	for _, s := range res.Skipped {
+		skipped[s.Path] = true
+	}
+	// Applied and skipped counts both go on stdout: len(plan.Artifacts)
+	// alone would report a declined artifact as "synced" to anyone reading
+	// only stdout, when its content is stderr-only.
+	fmt.Fprintf(stdout, "Synced %d pack(s), %d artifact(s) applied, %d skipped:\n",
+		len(plan.Packs), len(res.Applied), len(res.Skipped))
 	for _, a := range plan.Artifacts {
-		fmt.Fprintf(stdout, "  %-10s %s\n", a.Kind, a.Path)
+		mark := ""
+		if skipped[a.Path] {
+			mark = "  (skipped, see warning below)"
+		}
+		fmt.Fprintf(stdout, "  %-10s %s%s\n", a.Kind, a.Path, mark)
 	}
 	// A declined artifact must not fail the rollout: sync still exits 0.
 	// Exit-0 from sync no longer asserts the repo matches policy; compliance

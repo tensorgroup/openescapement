@@ -75,6 +75,37 @@ func alterationActual(f Finding) string {
 	return ""
 }
 
+// handEdited reports whether f describes a genuine human hand-edit of
+// content escapement previously wrote — the only condition under which
+// Apply declines to write an artifact. Three independent concerns, each an
+// early return so a future change to one can't silently paper over another:
+func handEdited(f Finding, prev *lockfile.LockArtifact) bool {
+	// 1. Only Altered is ever skip-worthy. Stale (pack moved on, no human
+	// touched anything) must keep converging silently — that's the tool's
+	// entire point — and every other state (Missing, InSync, ...) has
+	// nothing to decline.
+	if f.State != Altered {
+		return false
+	}
+	// 2. Alteration is set only on classify's hash-mismatch branches, never
+	// on its error branches (corrupt block markers, an unreadable dir via
+	// e.g. a hijacked symlink, unparsable JSON). Treating an error branch as
+	// a decline would invert fail-closed into skip-and-exit-0 for exactly
+	// the hostile cases that must not be silently accepted.
+	if f.Alteration == nil {
+		return false
+	}
+	// 3. A prior lock entry is required: a target that pre-exists with
+	// unrelated content before its first-ever sync (e.g. onboarding
+	// escapement against an existing .mcp.json) has no managed region yet
+	// to have deviated from, so it must converge normally rather than being
+	// mistaken for a decline.
+	if prev == nil {
+		return false
+	}
+	return true
+}
+
 // Apply writes the planned artifacts and the lockfile. It refuses to write
 // anything when the plan has constraint violations.
 //
@@ -119,19 +150,7 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 		}
 		if !force {
 			prev := prevLock.Artifact(a.Path)
-			// Skip only a genuine hand-edit of content escapement previously
-			// wrote: f.Alteration is set exclusively on classify's
-			// hash-mismatch branches, never on its error branches (corrupt
-			// block markers, an unreadable dir via e.g. a hijacked symlink,
-			// unparsable JSON). Those error cases must still fail closed
-			// through the normal write path below, not be swallowed as a
-			// declined artifact. prev != nil additionally requires a prior
-			// lock entry: a target that pre-exists with unrelated content
-			// before its first-ever sync (e.g. a repo onboarding escapement
-			// against an existing .mcp.json) has no managed region yet to
-			// have deviated from, so it must converge normally instead of
-			// being mistaken for a decline.
-			if f := classify(root, a, prevLock); f.State == Altered && f.Alteration != nil && prev != nil {
+			if f := classify(root, a, prevLock); handEdited(f, prev) {
 				res.Skipped = append(res.Skipped, Skipped{
 					Path: a.Path, Kind: a.Kind, Reason: f.Detail,
 					ExpectedHash: a.Hash, ActualHash: alterationActual(f),
