@@ -376,17 +376,6 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 	if err != nil {
 		return exitCode(err, stderr)
 	}
-	// st.Plan is never nil after a successful engine.Status in production,
-	// but guard it anyway rather than assume every caller (or future test)
-	// passes a fully-populated StatusResult (see writeJSONReport's identical
-	// guard).
-	var coll engine.Collection
-	if st.Plan != nil {
-		coll, err = engine.ResolveReporting(st.Plan.PackObjs, st.Plan.Config)
-		if err != nil {
-			return exitCode(err, stderr)
-		}
-	}
 	hasViolation := false
 	for _, f := range st.Findings {
 		if f.State == engine.ConstraintViolated {
@@ -398,9 +387,29 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 			return exitCode(err, stderr)
 		}
 	} else {
+		// st.Plan is never nil after a successful engine.Status in production,
+		// but guard it anyway rather than assume every caller (or future test)
+		// passes a fully-populated StatusResult (see writeJSONReport's identical
+		// guard). Resolved here, not before the *asJSON branch above, because
+		// only this human-output path consumes coll; writeJSONReport resolves
+		// its own independently, and the JSON path must not pay for a second
+		// resolution it never uses.
+		var coll engine.Collection
+		if st.Plan != nil {
+			coll, err = engine.ResolveReporting(st.Plan.PackObjs, st.Plan.Config)
+			if err != nil {
+				return exitCode(err, stderr)
+			}
+		}
 		for _, f := range st.Findings {
 			suffix := ""
 			if f.Amendment != nil {
+				// Items and Content are mutually exclusive in every producer
+				// today (newAmendment, internal/engine/amendment.go): block/file
+				// findings set Content, dir/json-keys findings set Items, never
+				// both. If a future amendment ever carried both, this switch
+				// would silently drop the Lines count in favor of the Items
+				// count; revisit this comment if that invariant ever changes.
 				switch {
 				case len(f.Amendment.Items) > 0:
 					suffix = fmt.Sprintf("  ·  %d unmanaged %s preserved",
