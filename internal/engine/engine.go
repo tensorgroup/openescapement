@@ -37,6 +37,9 @@ type Artifact struct {
 	Body string
 	// SrcDir is the pack directory to copy from (kind=dir).
 	SrcDir string
+	// Files is the pack-relative paths written for a dir artifact, filled in
+	// by Apply after mergeDir runs (kind=dir).
+	Files []string
 	// Servers are the owned MCP entries (kind=json-keys).
 	Servers map[string]map[string]any
 	// BlockPacks are the "name@version" labels recorded in a managed block's

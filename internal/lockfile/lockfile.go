@@ -23,10 +23,11 @@ type LockPack struct {
 }
 
 type LockArtifact struct {
-	Path string   `json:"path"`
-	Kind string   `json:"kind"` // block | file | dir | json-keys
-	Hash string   `json:"hash"`
-	Keys []string `json:"keys,omitempty"` // owned keys for json-keys artifacts
+	Path  string   `json:"path"`
+	Kind  string   `json:"kind"` // block | file | dir | json-keys
+	Hash  string   `json:"hash"`
+	Keys  []string `json:"keys,omitempty"`  // owned keys for json-keys artifacts
+	Files []string `json:"files,omitempty"` // pack-relative paths written for dir artifacts
 }
 
 type Lock struct {
@@ -56,6 +57,9 @@ func Load(root string) (*Lock, error) {
 // Save writes the lock deterministically (sorted artifacts, stable JSON).
 func (l *Lock) Save(root string) error {
 	sort.Slice(l.Artifacts, func(i, j int) bool { return l.Artifacts[i].Path < l.Artifacts[j].Path })
+	for i := range l.Artifacts {
+		sort.Strings(l.Artifacts[i].Files)
+	}
 	out, err := json.MarshalIndent(l, "", "  ")
 	if err != nil {
 		return err

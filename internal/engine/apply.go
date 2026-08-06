@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/tensorgroup/openescapement/internal/esc"
@@ -91,9 +92,15 @@ func Apply(root string, p *PlanResult) error {
 			}
 		case KindDir:
 			desiredDirs[a.Path] = true
-			if err := stageDir(a.SrcDir, abs); err != nil {
+			var prevFiles []string
+			if prev := prevLock.Artifact(a.Path); prev != nil {
+				prevFiles = prev.Files
+			}
+			files, err := mergeDir(a.SrcDir, abs, prevFiles)
+			if err != nil {
 				return err
 			}
+			a.Files = files
 		case KindJSONKeys:
 			existing, err := os.ReadFile(abs)
 			if err != nil && !os.IsNotExist(err) {
@@ -112,7 +119,7 @@ func Apply(root string, p *PlanResult) error {
 			}
 			a.Keys = owned
 		}
-		arts = append(arts, lockfile.LockArtifact{Path: a.Path, Kind: a.Kind, Hash: a.Hash, Keys: a.Keys})
+		arts = append(arts, lockfile.LockArtifact{Path: a.Path, Kind: a.Kind, Hash: a.Hash, Keys: a.Keys, Files: a.Files})
 	}
 
 	// Remove owned skill dirs that no longer exist in any pack. Only paths
@@ -210,26 +217,92 @@ func atomicWrite(path string, content []byte) error {
 	return os.Rename(tmp.Name(), path)
 }
 
-// stageDir replaces dst with a copy of src, staging the copy next to dst
-// first so a mid-copy failure never leaves dst half-written or deleted.
-func stageDir(src, dst string) error {
+// mergeDir reconciles dst against the pack tree at src. Files the pack
+// provides are written; files the previous manifest recorded but the pack no
+// longer provides are removed; anything else on disk is left alone as a local
+// amendment. Returns the pack-relative paths written, for the manifest.
+//
+// A pre-manifest lockfile has no prevFiles, so nothing unknown is removed on
+// the first sync after upgrade. That direction can leave one pack-dropped
+// file behind, reported as an amendment, rather than deleting a team's work.
+//
+// Atomicity tradeoff: stageDir used to swap the whole tree in one rename,
+// which is exactly what destroyed unmanaged files — a directory-level
+// rename has no way to skip files it didn't create. That guarantee is
+// deliberately weakened here: the pack tree is staged and fully validated in
+// a temp directory first, so a mid-copy pack failure can never touch dst,
+// but once that staging succeeds each file is written into dst individually
+// via atomicWrite (temp file + rename within dst). The result is "each file
+// swaps atomically, and dst is never touched until the source is
+// known-good" rather than "the whole tree swaps at once."
+func mergeDir(src, dst string, prevFiles []string) ([]string, error) {
 	parent := filepath.Dir(dst)
 	if err := os.MkdirAll(parent, 0o755); err != nil {
-		return err
+		return nil, err
 	}
-	tmp, err := os.MkdirTemp(parent, ".esc-stage-*")
+	staged, err := os.MkdirTemp(parent, ".esc-stage-*")
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer os.RemoveAll(tmp)
-	staged := filepath.Join(tmp, filepath.Base(dst))
-	if err := copyDir(src, staged); err != nil {
-		return err
+	defer os.RemoveAll(staged)
+	tree := filepath.Join(staged, filepath.Base(dst))
+	if err := copyDir(src, tree); err != nil {
+		return nil, err
 	}
-	if err := os.RemoveAll(dst); err != nil {
-		return err
+
+	var written []string
+	if err := filepath.WalkDir(tree, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, err := filepath.Rel(tree, p)
+		if err != nil {
+			return err
+		}
+		written = append(written, filepath.ToSlash(rel))
+		return nil
+	}); err != nil {
+		return nil, err
 	}
-	return os.Rename(staged, dst)
+	sort.Strings(written)
+
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return nil, err
+	}
+	// Remove what the pack dropped, before writing what it provides — a file
+	// that is both dropped and re-added under a different case or path would
+	// otherwise race the write below.
+	nowProvided := make(map[string]bool, len(written))
+	for _, f := range written {
+		nowProvided[f] = true
+	}
+	for _, prev := range prevFiles {
+		if nowProvided[prev] {
+			continue
+		}
+		if err := os.Remove(filepath.Join(dst, filepath.FromSlash(prev))); err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+	}
+	for _, f := range written {
+		from := filepath.Join(tree, filepath.FromSlash(f))
+		to := filepath.Join(dst, filepath.FromSlash(f))
+		content, err := os.ReadFile(from)
+		if err != nil {
+			return nil, err
+		}
+		info, err := os.Stat(from)
+		if err != nil {
+			return nil, err
+		}
+		if err := atomicWrite(to, content); err != nil {
+			return nil, err
+		}
+		if err := os.Chmod(to, info.Mode().Perm()); err != nil {
+			return nil, err
+		}
+	}
+	return written, nil
 }
 
 // copyDir copies a tree, preserving file modes. Symlinks fail closed — packs
