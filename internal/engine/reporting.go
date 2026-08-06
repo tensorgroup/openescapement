@@ -54,9 +54,18 @@ func ResolveReporting(packs []*pack.Pack, cfg *config.Config) (Collection, error
 	if !ok || want == ReportContent {
 		return Collection{}, fmt.Errorf("%w: report_amendments %q (want metrics or off)", esc.ErrConfig, want)
 	}
-	if rank >= reportRank[level] {
+	if rank > reportRank[level] {
 		return Collection{}, fmt.Errorf("%w: report_amendments %q cannot raise the level above the pack-declared %q",
 			esc.ErrConfig, want, level)
+	}
+	// Source is "repo-override" iff the effective level is strictly below the
+	// pack's declaration at resolution time. A config that merely restates the
+	// pack's level (rank == reportRank[level]) has withheld nothing today, so
+	// it must not read as a decline in the admin portal's Source field — even
+	// though the same pin becomes a genuine clamp automatically the moment a
+	// future pack sync raises the pack-declared level above it.
+	if rank == reportRank[level] {
+		return Collection{Amendments: level, Source: source}, nil
 	}
 	return Collection{Amendments: want, Source: "repo-override"}, nil
 }

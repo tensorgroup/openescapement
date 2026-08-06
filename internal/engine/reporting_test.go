@@ -31,7 +31,10 @@ func TestResolveReporting(t *testing.T) {
 		{"highest wins reversed", []*pack.Pack{pk("content"), pk("metrics")}, "", "content", "pack", false},
 		{"repo clamps down", []*pack.Pack{pk("content")}, "metrics", "metrics", "repo-override", false},
 		{"repo clamps off", []*pack.Pack{pk("content")}, "off", "off", "repo-override", false},
+		{"repo restates pack level", []*pack.Pack{pk("metrics")}, "metrics", "metrics", "pack", false},
+		{"repo restates default off", []*pack.Pack{pk("")}, "off", "off", "default", false},
 		{"repo cannot raise", []*pack.Pack{pk("metrics")}, "content", "", "", true},
+		{"repo cannot raise from off", []*pack.Pack{pk("")}, "metrics", "", "", true},
 		{"invalid pack level", []*pack.Pack{pk("everything")}, "", "", "", true},
 	}
 	for _, tc := range cases {
