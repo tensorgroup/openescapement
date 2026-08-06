@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/tensorgroup/openescapement/internal/esc"
@@ -51,7 +52,20 @@ func newAmendment(content string, items []string) *Amendment {
 	if content != "" && !strings.HasSuffix(content, "\n") {
 		a.Lines++
 	}
-	a.Hash = esc.HashBytes([]byte(content))
+	// The hash must cover Items as well as Content: for an items-only
+	// amendment (kind=json-keys today, kind=dir in Task 6) Content is always
+	// "", so hashing Content alone would give every distinct set of dropped
+	// items the same constant hash and the portal could never tell one
+	// team amendment from another across reports. Items are sorted into a
+	// local copy before hashing (never mutating the caller's slice) so the
+	// hash is independent of call-site ordering: producers already sort,
+	// but the hash must not depend on that silently. Content and the
+	// canonicalized items are joined with a NUL separator, which cannot
+	// appear in either, so no pair of distinct (content, items) inputs can
+	// collide by shifting a boundary between them.
+	sortedItems := append([]string(nil), items...)
+	sort.Strings(sortedItems)
+	a.Hash = esc.HashBytes([]byte(content + "\x00" + strings.Join(sortedItems, "\x00")))
 	a.Content = content
 	return a
 }

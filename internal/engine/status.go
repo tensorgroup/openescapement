@@ -81,7 +81,7 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 	for _, lp := range plan.Packs {
 		if lock.Pack(lp.Source, lp.Ref) == nil {
 			res.Findings = append(res.Findings, Finding{
-				Path: lp.Source, State: Stale,
+				Path: lp.Source, State: Stale, Local: LocalNone,
 				Detail: fmt.Sprintf("pack pin %s not in lockfile — run `esc sync`", lp.Ref),
 			})
 		}
@@ -111,7 +111,7 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 			}
 			if block, err := render.Extract(content); err == nil && block != nil {
 				res.Findings = append(res.Findings, Finding{
-					Path: la.Path, State: Orphan,
+					Path: la.Path, State: Orphan, Local: LocalNone,
 					Detail: "carries an esc block for a target no longer in the effective set — run `esc sync` to remove it",
 				})
 			}
@@ -119,7 +119,7 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 	}
 
 	for _, v := range plan.Violations {
-		res.Findings = append(res.Findings, Finding{Path: v.Path, State: ConstraintViolated, Detail: v.Rule})
+		res.Findings = append(res.Findings, Finding{Path: v.Path, State: ConstraintViolated, Local: LocalNone, Detail: v.Rule})
 	}
 
 	// Update-freshness findings (inert unless a pack declares update_check).
@@ -132,6 +132,7 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 					res.Findings = append(res.Findings, Finding{
 						Path:  ps.Source,
 						State: PackStale,
+						Local: LocalNone,
 						Detail: fmt.Sprintf("update available: %s -> %s (run `esc update` then `esc sync`)",
 							ps.Pinned, ps.Latest),
 					})
@@ -145,6 +146,7 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 			res.Findings = append(res.Findings, Finding{
 				Path:   "update-check",
 				State:  CheckOverdue,
+				Local:  LocalNone,
 				Detail: "no successful update check within cadence and the latest attempt failed",
 			})
 		}
@@ -173,14 +175,14 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 	case KindBlock:
 		content, err := os.ReadFile(abs)
 		if err != nil {
-			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Detail: "file does not exist — run `esc sync`"}
+			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "file does not exist — run `esc sync`"}
 		}
 		block, err := render.Extract(content)
 		if err != nil {
-			return Finding{Path: a.Path, Kind: a.Kind, State: Altered, Detail: err.Error()}
+			return Finding{Path: a.Path, Kind: a.Kind, State: Altered, Local: LocalNone, Detail: err.Error()}
 		}
 		if block == nil {
-			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Detail: "no managed block — run `esc sync`"}
+			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "no managed block — run `esc sync`"}
 		}
 		f := Finding{Path: a.Path, Kind: a.Kind, Local: LocalNone}
 		if surround, serr := render.BlockSurround(content); serr == nil {
@@ -201,7 +203,7 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 	case KindFile:
 		content, err := os.ReadFile(abs)
 		if err != nil {
-			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Detail: "file does not exist — run `esc sync`"}
+			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "file does not exist — run `esc sync`"}
 		}
 		f := Finding{Path: a.Path, Kind: a.Kind, Local: LocalNone}
 		actual := esc.HashBytes(content)
@@ -216,7 +218,7 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 		return f
 	case KindDir:
 		if info, err := os.Stat(abs); err != nil || !info.IsDir() {
-			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Detail: "skill directory missing — run `esc sync`"}
+			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "skill directory missing — run `esc sync`"}
 		}
 		// Local is deliberately LocalNone here: Task 6 adds directory
 		// amendment detection once Task 5's per-file manifest exists to
@@ -239,10 +241,32 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 	case KindJSONKeys:
 		content, err := os.ReadFile(abs)
 		if err != nil {
-			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Detail: "file does not exist — run `esc sync`"}
+			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "file does not exist — run `esc sync`"}
 		}
 		f := Finding{Path: a.Path, Kind: a.Kind, Local: LocalNone}
-		if names, nerr := render.UnownedMCPServers(content, a.Keys); nerr == nil {
+		// A server the pack no longer declares is still escapement's own
+		// content until the next sync removes it (that gap shows up as
+		// Stale, below, not Altered). Union the plan's desired keys with the
+		// lockfile's last-synced keys so a dropped-but-not-yet-reconciled
+		// server is never misattributed to the team as a local amendment.
+		owned := a.Keys
+		if locked != nil && len(locked.Keys) > 0 {
+			seen := make(map[string]bool, len(a.Keys)+len(locked.Keys))
+			owned = make([]string, 0, len(a.Keys)+len(locked.Keys))
+			for _, k := range a.Keys {
+				if !seen[k] {
+					seen[k] = true
+					owned = append(owned, k)
+				}
+			}
+			for _, k := range locked.Keys {
+				if !seen[k] {
+					seen[k] = true
+					owned = append(owned, k)
+				}
+			}
+		}
+		if names, nerr := render.UnownedMCPServers(content, owned); nerr == nil {
 			if am := newAmendment("", names); am != nil {
 				f.Local, f.Amendment = LocalAmended, am
 			}
@@ -262,5 +286,5 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 		}
 		return f
 	}
-	return Finding{Path: a.Path, Kind: a.Kind, State: Altered, Detail: "unknown artifact kind " + a.Kind}
+	return Finding{Path: a.Path, Kind: a.Kind, State: Altered, Local: LocalNone, Detail: "unknown artifact kind " + a.Kind}
 }
