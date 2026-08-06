@@ -150,10 +150,13 @@ hand-edited managed region and converge; `--force` only touches content
 escapement owns and never overwrites a local amendment.
 
 If a pack manifest declares `reporting: { amendments: metrics }` (or
-`content`), a repo reports local amendments upstream at that level; a repo's
+`content`), a repo will report local amendments upstream at that level once a
+publisher is configured; a repo's
 own `.escapement/config.yaml` can lower that via `report_amendments: metrics`
 or `off`, but never raise it above what the pack declared. With no
-`reporting` block at all, nothing is ever reported upstream. This governs
+`reporting` block at all, nothing is ever reported upstream. v0.1 ships no
+publisher: `esc` resolves the level and displays it, and nothing is
+transmitted anywhere. This governs
 only what a publisher forwards: your own `esc status` always shows your
 amendments in full, including content, on your own machine, regardless of
 the resolved level; see JSON output below.

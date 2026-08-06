@@ -149,8 +149,10 @@ blocking a rollout; this decides open question 2 below.
   other artifact it converged.
 - **Pack declares, repo may only decline.** A pack manifest may set
   `reporting: { amendments: metrics | content }` to ask that local
-  amendments be reported upstream: counts and hashes at `metrics`, full
-  content at `content`. Absent, nothing is ever sent, the same consent
+  amendments be reported upstream once a publisher is configured: counts and
+  hashes at `metrics`, full content at `content`. No publisher exists in
+  v0.1, so `esc` resolves and displays the level and transmits nothing.
+  Absent, nothing is ever sent, the same consent
   posture as the update-check model above: the unconnected open-source path
   stays silent by construction. A repo's own config may clamp the level
   down (`report_amendments: metrics | off`) but never raise it above what

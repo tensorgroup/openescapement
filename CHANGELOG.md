@@ -7,6 +7,20 @@ tagged releases begin.
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING for CI gating on `esc sync`.** Exit 0 from `esc sync` no longer
+  asserts that the repo matches policy. It now asserts only that everything
+  escapement was willing to apply was applied: an artifact whose managed
+  region was hand-edited, and a retired skill directory still holding files
+  the team added, are both reported and skipped, and sync still exits 0. Any
+  pipeline that treated `esc sync` exit 0 as a compliance check must move that
+  gate to `esc status --check`, which exits 1 on any artifact not in sync.
+  Skipped artifacts are listed on stderr and in the `skipped` array of
+  `esc sync --json`.
+- `esc sync --json` and `esc status --json` name an artifact with `subject` in
+  both `findings[]` and `skipped[]`. `skipped[].path` was renamed to
+  `skipped[].subject` for that consistency.
+
 ### Added
 - Local amendments: content escapement does not own is preserved everywhere, reported on a new `local` axis, and surfaced in `esc status`. Files added to skill directories are no longer deleted by sync.
 - `esc sync` skips artifacts whose managed region was hand-edited instead of overwriting them, warns, and exits 0. `esc sync --force` converges.
