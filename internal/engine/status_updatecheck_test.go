@@ -64,7 +64,8 @@ func ApplyPlan(t *testing.T, root string) error {
 	if err != nil {
 		return err
 	}
-	return Apply(root, p)
+	_, err = Apply(root, p, false)
+	return err
 }
 
 func TestStatusPackStale(t *testing.T) {

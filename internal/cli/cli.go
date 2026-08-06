@@ -30,7 +30,8 @@ const usage = `esc — deterministic governance for your AI usage
 
 Usage:
   esc init                       Scaffold .escapement/config.yaml
-  esc sync                       Fetch, verify, render, and write policy artifacts
+  esc sync [--force]             Fetch, verify, render, and write policy artifacts
+                                 --force overwrites hand-edited managed regions
   esc status [--check]           Report drift; --check exits non-zero on findings
   esc diff [--against REF [--source SRC]]
                                  Show drift diffs, or policy changes vs another ref
@@ -58,7 +59,7 @@ func Run(root string, args []string, stdout, stderr io.Writer) int {
 	case "init":
 		err = cmdInit(root, stdout)
 	case "sync":
-		err = cmdSync(ctx, root, stdout)
+		err = cmdSync(ctx, root, args[1:], stdout, stderr)
 	case "status":
 		return cmdStatus(ctx, root, args[1:], stdout, stderr)
 	case "diff":
@@ -171,7 +172,7 @@ func checkForUpdates(ctx context.Context, root string, stderr io.Writer) {
 		fmt.Fprintf(stderr, "esc: applying updates failed: %v\n", err)
 		return
 	}
-	if err := cmdSync(ctx, root, stderr); err != nil {
+	if err := cmdSync(ctx, root, nil, stderr, stderr); err != nil {
 		if !changed {
 			// bumpPins never touched config.yaml, so there is nothing to
 			// restore — reporting a restore would be spurious.
@@ -237,18 +238,34 @@ func bumpPins(root string, statuses []updatecheck.PackStatus) (changed bool, err
 	return true, nil
 }
 
-func cmdSync(ctx context.Context, root string, stdout io.Writer) error {
+func cmdSync(ctx context.Context, root string, args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("sync", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	force := fs.Bool("force", false, "overwrite hand-edited managed regions instead of skipping them")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 	plan, err := engine.Plan(ctx, root)
 	if err != nil {
 		return err
 	}
-	if err := engine.Apply(root, plan); err != nil {
+	res, err := engine.Apply(root, plan, *force)
+	if err != nil {
 		return err
 	}
 	updatecheck.RecordSync(ctx, root, plan.PackObjs)
 	fmt.Fprintf(stdout, "Synced %d pack(s), %d artifact(s):\n", len(plan.Packs), len(plan.Artifacts))
 	for _, a := range plan.Artifacts {
 		fmt.Fprintf(stdout, "  %-10s %s\n", a.Kind, a.Path)
+	}
+	// A declined artifact must not fail the rollout: sync still exits 0.
+	// Exit-0 from sync no longer asserts the repo matches policy; compliance
+	// gating belongs on `esc status --check`.
+	for _, s := range res.Skipped {
+		fmt.Fprintf(stderr, "  skipped %s: %s\n", s.Path, s.Reason)
+	}
+	if len(res.Skipped) > 0 {
+		fmt.Fprintln(stderr, "  `esc diff` to inspect, `esc sync --force` to overwrite")
 	}
 	return nil
 }

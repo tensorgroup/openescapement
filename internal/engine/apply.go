@@ -49,63 +49,133 @@ func refuseSymlinks(root, rel string) error {
 	return nil
 }
 
+// Skipped is one artifact Apply declined to write because a human hand-edited
+// its managed region. Sync leaves it exactly as found, converges everything
+// else, and reports it here rather than silently overwriting local work.
+type Skipped struct {
+	Path         string `json:"path"`
+	Kind         string `json:"kind"`
+	Reason       string `json:"reason"`
+	ExpectedHash string `json:"expected_hash"`
+	ActualHash   string `json:"actual_hash"`
+}
+
+// SyncResult reports what a sync wrote and what it declined to write.
+type SyncResult struct {
+	Applied []string  `json:"applied"`
+	Skipped []Skipped `json:"skipped,omitempty"`
+}
+
+// alterationActual returns the on-disk hash recorded on an Altered finding,
+// or "" when the finding carries no Alteration (e.g. an unreadable dir).
+func alterationActual(f Finding) string {
+	if f.Alteration != nil {
+		return f.Alteration.ActualHash
+	}
+	return ""
+}
+
 // Apply writes the planned artifacts and the lockfile. It refuses to write
 // anything when the plan has constraint violations.
-func Apply(root string, p *PlanResult) error {
+//
+// Unless force is set, an artifact whose managed region a human hand-edited
+// (classify reports Altered) is left exactly as found: sync converges every
+// other artifact, records the skip in the returned SyncResult, and still
+// succeeds. A repo that declines part of a policy update must not fail its
+// own rollout — that is enablement over enforcement, the product's whole
+// framing. force overwrites the managed region but never touches content
+// outside it (mergeDir, render.Splice, and render.MergeMCP already preserve
+// local amendments regardless of force; force only bypasses the classify
+// skip gate above them).
+func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 	if len(p.Violations) > 0 {
 		msgs := make([]string, len(p.Violations))
 		for i, v := range p.Violations {
 			msgs[i] = v.String()
 		}
-		return fmt.Errorf("%w:\n  %s", esc.ErrConstraint, strings.Join(msgs, "\n  "))
+		return nil, fmt.Errorf("%w:\n  %s", esc.ErrConstraint, strings.Join(msgs, "\n  "))
 	}
 	prevLock, err := lockfile.Load(root)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	res := &SyncResult{}
 	var arts []lockfile.LockArtifact
 	desiredDirs := map[string]bool{}
 	for _, a := range p.Artifacts {
 		abs, err := containedPath(root, a.Path)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if err := refuseSymlinks(root, a.Path); err != nil {
-			return err
+			return nil, err
+		}
+		if a.Kind == KindDir {
+			// Set regardless of a skip below: a directory left untouched
+			// because it's altered is still in the effective set and must
+			// not be swept up by the orphaned-dir removal pass further down.
+			desiredDirs[a.Path] = true
+		}
+		if !force {
+			prev := prevLock.Artifact(a.Path)
+			// Skip only a genuine hand-edit of content escapement previously
+			// wrote: f.Alteration is set exclusively on classify's
+			// hash-mismatch branches, never on its error branches (corrupt
+			// block markers, an unreadable dir via e.g. a hijacked symlink,
+			// unparsable JSON). Those error cases must still fail closed
+			// through the normal write path below, not be swallowed as a
+			// declined artifact. prev != nil additionally requires a prior
+			// lock entry: a target that pre-exists with unrelated content
+			// before its first-ever sync (e.g. a repo onboarding escapement
+			// against an existing .mcp.json) has no managed region yet to
+			// have deviated from, so it must converge normally instead of
+			// being mistaken for a decline.
+			if f := classify(root, a, prevLock); f.State == Altered && f.Alteration != nil && prev != nil {
+				res.Skipped = append(res.Skipped, Skipped{
+					Path: a.Path, Kind: a.Kind, Reason: f.Detail,
+					ExpectedHash: a.Hash, ActualHash: alterationActual(f),
+				})
+				// Carry the previous lock entry forward unchanged. classify
+				// distinguishes stale from altered by comparing against
+				// locked.Hash, so an entry that advanced past what we last
+				// actually wrote would make the alteration vanish from the
+				// next status run.
+				arts = append(arts, *prev)
+				continue
+			}
 		}
 		switch a.Kind {
 		case KindBlock:
 			existing, err := os.ReadFile(abs)
 			if err != nil && !os.IsNotExist(err) {
-				return err
+				return nil, err
 			}
 			out, err := render.Splice(existing, a.Body, render.BlockMeta{Packs: a.BlockPacks})
 			if err != nil {
-				return fmt.Errorf("%s: %w", a.Path, err)
+				return nil, fmt.Errorf("%s: %w", a.Path, err)
 			}
 			if err := atomicWrite(abs, out); err != nil {
-				return err
+				return nil, err
 			}
 		case KindFile:
 			if err := atomicWrite(abs, []byte(a.Body)); err != nil {
-				return err
+				return nil, err
 			}
 		case KindDir:
-			desiredDirs[a.Path] = true
 			var prevFiles []string
 			if prev := prevLock.Artifact(a.Path); prev != nil {
 				prevFiles = prev.Files
 			}
 			files, err := mergeDir(root, a.Path, a.SrcDir, abs, prevFiles)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			a.Files = files
 		case KindJSONKeys:
 			existing, err := os.ReadFile(abs)
 			if err != nil && !os.IsNotExist(err) {
-				return err
+				return nil, err
 			}
 			var prevOwned []string
 			if prev := prevLock.Artifact(a.Path); prev != nil {
@@ -113,14 +183,15 @@ func Apply(root string, p *PlanResult) error {
 			}
 			merged, owned, err := render.MergeMCP(existing, a.Servers, prevOwned)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if err := atomicWrite(abs, merged); err != nil {
-				return err
+				return nil, err
 			}
 			a.Keys = owned
 		}
 		arts = append(arts, lockfile.LockArtifact{Path: a.Path, Kind: a.Kind, Hash: a.Hash, Keys: a.Keys, Files: a.Files})
+		res.Applied = append(res.Applied, a.Path)
 	}
 
 	// Remove owned skill dirs that no longer exist in any pack. Only paths
@@ -132,13 +203,13 @@ func Apply(root string, p *PlanResult) error {
 			}
 			abs, err := containedPath(root, prev.Path)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if !strings.Contains(abs, string(filepath.Separator)+"esc-") {
-				return fmt.Errorf("refusing to remove %q: not an escapement-owned directory", prev.Path)
+				return nil, fmt.Errorf("refusing to remove %q: not an escapement-owned directory", prev.Path)
 			}
 			if err := os.RemoveAll(abs); err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
@@ -159,39 +230,42 @@ func Apply(root string, p *PlanResult) error {
 			}
 			abs, err := containedPath(root, prev.Path)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if err := refuseSymlinks(root, prev.Path); err != nil {
-				return err
+				return nil, err
 			}
 			existing, err := os.ReadFile(abs)
 			if os.IsNotExist(err) {
 				continue
 			}
 			if err != nil {
-				return err
+				return nil, err
 			}
 			out, removed, err := render.RemoveBlock(existing)
 			if err != nil {
-				return fmt.Errorf("%s: %w", prev.Path, err)
+				return nil, fmt.Errorf("%s: %w", prev.Path, err)
 			}
 			if !removed {
 				continue
 			}
 			if len(out) == 0 {
 				if err := os.Remove(abs); err != nil {
-					return err
+					return nil, err
 				}
 				continue
 			}
 			if err := atomicWrite(abs, out); err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
 
 	lock := &lockfile.Lock{Schema: 1, Packs: p.Packs, Artifacts: arts}
-	return lock.Save(root)
+	if err := lock.Save(root); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 // atomicWrite writes via a temp file + rename in the destination directory.

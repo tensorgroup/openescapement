@@ -177,10 +177,16 @@ func TestDriftDetection(t *testing.T) {
 	if code != 1 || !strings.Contains(out, "Use whatever.") {
 		t.Errorf("diff exit %d, output:\n%s", code, out)
 	}
-	// sync repairs.
+	// A plain sync declines the hand-edited artifact instead of repairing
+	// it (Task 7): the hand-edit must survive and status must still report
+	// drift. --force is what repairs it.
 	run(t, root, "sync")
+	if code, out := run(t, root, "status", "--check"); code != 1 {
+		t.Errorf("status after plain sync should still report drift (sync must not silently repair a hand-edit): exit %d\n%s", code, out)
+	}
+	run(t, root, "sync", "--force")
 	if code, out := run(t, root, "status", "--check"); code != 0 {
-		t.Errorf("status after repair sync: exit %d\n%s", code, out)
+		t.Errorf("status after --force sync: exit %d\n%s", code, out)
 	}
 
 	// Deleted artifact → missing.
