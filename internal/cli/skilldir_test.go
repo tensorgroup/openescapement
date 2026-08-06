@@ -210,6 +210,71 @@ func TestSkillDirLockTraversalFailsClosed(t *testing.T) {
 	}
 }
 
+// TestSkillDirLockTraversalWithinRepoFailsClosed is the second fix-round
+// regression test for finding 1: the first fix round contained removal
+// paths against root, not dst. Joining a prevFiles entry onto artPath and
+// only then containing the result against root lets ".." collapse before
+// containment is ever checked, so an entry with just enough ".." to land
+// back inside the repo — but still outside the skill directory — sails
+// through: root still contains it, only dst doesn't. This is exactly that
+// case: .claude/skills/esc-acme-org-esc-security is 3 path segments under
+// the repo root, and "../../../VICTIM.md" collapses to exactly the repo
+// root, an ordinary in-repo file with no ownership relationship to this
+// skill directory at all. Removal paths are now contained against dst
+// itself (containedPath(dst, prev)), so this must still fail closed.
+func TestSkillDirLockTraversalWithinRepoFailsClosed(t *testing.T) {
+	repo := setupGovernedRepoWithSkills(t)
+	runEsc(t, repo, "sync")
+
+	victim := filepath.Join(repo, "VICTIM.md")
+	if err := os.WriteFile(victim, []byte("do not touch\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	lockPath := filepath.Join(repo, ".escapement", "escapement.lock")
+	raw, err := os.ReadFile(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lock map[string]any
+	if err := json.Unmarshal(raw, &lock); err != nil {
+		t.Fatal(err)
+	}
+	arts, _ := lock["artifacts"].([]any)
+	found := false
+	for _, a := range arts {
+		art, _ := a.(map[string]any)
+		if art["kind"] == "dir" {
+			files, _ := art["files"].([]any)
+			files = append(files, "../../../VICTIM.md")
+			art["files"] = files
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("precondition: expected a dir artifact in the lock")
+	}
+	out, err := json.MarshalIndent(lock, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(lockPath, append(out, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, code := runEscOut(t, repo, "sync"); code == 0 {
+		t.Fatal("sync with an in-repo traversal entry in the lockfile should fail closed, not exit 0")
+	}
+
+	got, err := os.ReadFile(victim)
+	if err != nil {
+		t.Fatalf("an in-repo traversal entry deleted VICTIM.md: %v", err)
+	}
+	if string(got) != "do not touch\n" {
+		t.Errorf("in-repo victim file was modified: %q", got)
+	}
+}
+
 // TestSkillDirNestedSymlinkFailsClosed is the fix-round regression test for
 // finding 2 (Important): refuseSymlinks(root, a.Path) in Apply only checks
 // path components down to the skill directory itself, not the files

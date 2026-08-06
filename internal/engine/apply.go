@@ -239,20 +239,31 @@ func atomicWrite(path string, content []byte) error {
 // known-good" rather than "the whole tree swaps at once."
 //
 // Security: prevFiles comes from the lockfile, a committed, PR-reachable
-// artifact — it is not trusted input. Every removal path is run through
-// containedPath before use, exactly like the sibling prevLock.Path lookup in
-// Apply, so a lockfile entry such as "../../../../.zshrc" cannot escape dst
-// and delete something outside it. An escaping entry aborts the whole sync
-// (containedPath's error propagates) rather than being silently skipped:
-// the caller needs to know its lockfile is carrying a hostile entry, the
-// same fail-closed posture Apply already takes for prev.Path at
-// apply.go:132 and for a moved tag (ErrLockMismatch). Every path under dst
-// — both files staged for removal and files staged for writing — is also
-// re-checked with refuseSymlinks immediately before the filesystem call: a
-// symlink committed inside an escapement-owned dir (e.g. a nested
-// "sub -> /etc") is not something the initial refuseSymlinks(root, a.Path)
-// call in Apply can see, because that call only walks down to dst itself,
-// not the files mergeDir discovers underneath it.
+// artifact — it is not trusted input. Every removal path is resolved with
+// containedPath(dst, prev), i.e. contained against dst itself, not root:
+// joining prev onto artPath first and only then containing the result
+// against root would let ".." collapse before containment is ever checked,
+// so an entry with enough ".." segments to land back inside the repo (but
+// outside dst) would sail through — root still contains it, only dst
+// doesn't. Checking straight against dst is what actually stops a lockfile
+// entry like "../../../VICTIM.md" from reaching anything outside the skill
+// directory, in-repo or not. An entry that normalizes to dst itself (".",
+// "", or enough ".." to land exactly on dst) is rejected explicitly too,
+// rather than relying on os.Remove's ENOTEMPTY to incidentally block it —
+// an empty dst would otherwise be removed outright. An escaping or
+// self-targeting entry aborts the whole sync (the error propagates) rather
+// than being silently skipped: the caller needs to know its lockfile is
+// carrying a hostile entry, the same fail-closed posture Apply already
+// takes for prev.Path at apply.go:132 and for a moved tag
+// (ErrLockMismatch). Every path under dst — both files staged for removal
+// and files staged for writing — is also re-checked with refuseSymlinks
+// immediately before the filesystem call: a symlink committed inside an
+// escapement-owned dir (e.g. a nested "sub -> /etc") is not something the
+// initial refuseSymlinks(root, a.Path) call in Apply can see, because that
+// call only walks down to dst itself, not the files mergeDir discovers
+// underneath it. The removal loop's refuseSymlinks call uses the same
+// dst-relative base as its containedPath call, so the two checks agree on
+// what the boundary is.
 func mergeDir(root, artPath, src, dst string, prevFiles []string) ([]string, error) {
 	parent := filepath.Dir(dst)
 	if err := os.MkdirAll(parent, 0o755); err != nil {
@@ -298,12 +309,14 @@ func mergeDir(root, artPath, src, dst string, prevFiles []string) ([]string, err
 		if nowProvided[prev] {
 			continue
 		}
-		rel := path.Join(artPath, prev)
-		target, err := containedPath(root, rel)
+		target, err := containedPath(dst, prev)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("lockfile entry %q for %s: %w", prev, artPath, err)
 		}
-		if err := refuseSymlinks(root, rel); err != nil {
+		if target == dst {
+			return nil, fmt.Errorf("%w: lockfile entry %q for %s resolves to the skill directory itself; refusing to remove it", esc.ErrConstraint, prev, artPath)
+		}
+		if err := refuseSymlinks(dst, prev); err != nil {
 			return nil, err
 		}
 		if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
