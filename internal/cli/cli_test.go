@@ -120,7 +120,12 @@ func TestSyncEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(claude)
-	if !strings.HasPrefix(s, "# Team notes\n\nOur build uses pnpm.\n") {
+	// New blocks land after the leading H1, not at the end of the file: the
+	// heading is a prefix and the rest of the team content is a suffix.
+	if !strings.HasPrefix(s, "# Team notes\n\n") {
+		t.Errorf("heading not preserved:\n%s", s)
+	}
+	if !strings.HasSuffix(s, "Our build uses pnpm.\n") {
 		t.Errorf("team content not preserved:\n%s", s)
 	}
 	for _, want := range []string{"escapement:begin packs=acme-org@1.0.0", "## Secrets", "Tailscale"} {

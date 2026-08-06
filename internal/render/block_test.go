@@ -27,8 +27,14 @@ func TestSpliceAppendPreservesOutside(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(string(out), team) {
-		t.Errorf("team content not preserved as prefix:\n%s", out)
+	s := string(out)
+	// New blocks land after the leading H1, not at the end of the file, so
+	// the heading is a prefix and the rest of the team content is a suffix.
+	if !strings.HasPrefix(s, "# CLAUDE.md\n\n") {
+		t.Errorf("heading not preserved as prefix:\n%s", out)
+	}
+	if !strings.HasSuffix(s, "Our build uses pnpm.\n") {
+		t.Errorf("team content not preserved as suffix:\n%s", out)
 	}
 }
 
@@ -62,7 +68,11 @@ func TestSpliceReplacesExistingBlockOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(out)
-	if !strings.HasPrefix(s, "before\n") || !strings.HasSuffix(s, "\nafter\n") {
+	// "before\n" has no frontmatter or H1 to anchor on, so the block landed
+	// at the top of the file (before "before") on the first Splice; the
+	// second Splice must replace it in place, leaving "before"/"after" as a
+	// suffix in their original order.
+	if !strings.HasSuffix(s, "before\n\nafter\n") {
 		t.Errorf("outside bytes modified:\n%q", s)
 	}
 	if strings.Contains(s, "v1 body") || !strings.Contains(s, "v2 body") {
@@ -108,5 +118,65 @@ func TestExtractRoundTrip(t *testing.T) {
 	none, err := Extract([]byte("no block here\n"))
 	if err != nil || none != nil {
 		t.Errorf("no block: want nil,nil got %v,%v", none, err)
+	}
+}
+
+func TestSpliceTopPlacement(t *testing.T) {
+	meta := BlockMeta{Packs: []string{"p@1"}}
+	cases := []struct {
+		name, existing, wantPrefix string
+	}{
+		{"plain", "team rules\n", "<!-- escapement:begin "},
+		{"h1", "# Project\n\nteam rules\n", "# Project\n\n<!-- escapement:begin "},
+		{"h1 no blank", "# Project\nteam rules\n", "# Project\n<!-- escapement:begin "},
+		{"frontmatter", "---\ntitle: x\n---\nteam rules\n", "---\ntitle: x\n---\n<!-- escapement:begin "},
+		{"frontmatter and h1", "---\ntitle: x\n---\n# P\n\nteam\n", "---\ntitle: x\n---\n# P\n\n<!-- escapement:begin "},
+		{"hashtag not h1", "#hashtag\n", "<!-- escapement:begin "},
+		{"subheading not h1", "## Sub\n", "<!-- escapement:begin "},
+		{"unterminated frontmatter", "---\ntitle: x\n", "<!-- escapement:begin "},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := Splice([]byte(tc.existing), "body\n", meta)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.HasPrefix(string(out), tc.wantPrefix) {
+				t.Errorf("got:\n%s\nwant prefix:\n%s", out, tc.wantPrefix)
+			}
+			// Every original byte survives, in order.
+			if !strings.Contains(string(out), strings.TrimPrefix(tc.existing, tc.wantPrefix)) &&
+				!strings.Contains(string(out), "team") && tc.existing != "" {
+				t.Errorf("original content lost:\n%s", out)
+			}
+		})
+	}
+}
+
+func TestSpliceExistingBlockDoesNotMove(t *testing.T) {
+	meta := BlockMeta{Packs: []string{"p@1"}}
+	first, err := Splice([]byte("# P\n\nteam rules\n"), "body\n", meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate a block that lives at the bottom already.
+	bottom := "# P\n\nteam rules\n\n" + string(first[strings.Index(string(first), "<!-- escapement:begin "):])
+	out, err := Splice([]byte(bottom), "body2\n", meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(out), "# P\n\nteam rules\n") {
+		t.Errorf("existing block moved:\n%s", out)
+	}
+}
+
+func TestSplicePlaceholderWinsOverTopPlacement(t *testing.T) {
+	meta := BlockMeta{Packs: []string{"p@1"}}
+	out, err := Splice([]byte("# P\n\nteam\n"+Placeholder+"\n"), "body\n", meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(out), "# P\n\nteam\n") {
+		t.Errorf("placeholder ignored:\n%s", out)
 	}
 }

@@ -30,6 +30,37 @@ type Block struct {
 // BodyHash returns the canonical hash of a block body.
 func BodyHash(body string) string { return esc.HashBytes([]byte(body)) }
 
+// insertAt returns the offset where a new block belongs: the top of the file,
+// after leading YAML frontmatter and a leading H1 if either is present. Only
+// those two constructs are skipped; the rule set is closed deliberately so
+// output stays predictable.
+func insertAt(s string) int {
+	i := 0
+	if strings.HasPrefix(s, "---\n") {
+		if end := strings.Index(s[4:], "\n---"); end >= 0 {
+			after := 4 + end + len("\n---")
+			rest := s[after:]
+			if rest == "" || strings.HasPrefix(rest, "\n") {
+				i = after
+				if strings.HasPrefix(s[i:], "\n") {
+					i++
+				}
+			}
+		}
+	}
+	if strings.HasPrefix(s[i:], "# ") {
+		if nl := strings.IndexByte(s[i:], '\n'); nl >= 0 {
+			i += nl + 1
+			if strings.HasPrefix(s[i:], "\n") {
+				i++
+			}
+		} else {
+			i = len(s)
+		}
+	}
+	return i
+}
+
 func renderBlock(body string, meta BlockMeta) string {
 	if !strings.HasSuffix(body, "\n") {
 		body += "\n"
@@ -57,11 +88,15 @@ func Splice(existing []byte, body string, meta BlockMeta) ([]byte, error) {
 	if len(s) == 0 {
 		return []byte(block), nil
 	}
-	sep := "\n"
-	if !strings.HasSuffix(s, "\n") {
-		sep = "\n\n"
+	at := insertAt(s)
+	if at >= len(s) {
+		sep := "\n"
+		if strings.HasSuffix(s, "\n") || s == "" {
+			sep = ""
+		}
+		return []byte(s + sep + block), nil
 	}
-	return []byte(s + sep + block), nil
+	return []byte(s[:at] + block + "\n" + s[at:]), nil
 }
 
 // RemoveBlock returns file with its managed block removed, preserving every
