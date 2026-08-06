@@ -226,26 +226,21 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 			for _, p := range res.PackObjs {
 				for _, rel := range p.Manifest.Skills {
 					src := filepath.Join(p.Dir, filepath.FromSlash(rel))
-					h, err := pack.DirHash(src)
+					// One walk (pack.DirFiles) produces the file list that
+					// both the hash and Files are built from, so the two
+					// cannot disagree by construction — a second, ad hoc
+					// walk here previously skipped neither .git nor
+					// symlinks the way DirFiles does, which let Hash and
+					// Files diverge on a tree containing a nested .git
+					// directory and made a pristine sync report altered.
+					files, err := pack.DirFiles(src)
 					if err != nil {
 						return nil, err
 					}
-					var files []string
-					walkErr := filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
-						if err != nil || d.IsDir() {
-							return err
-						}
-						frel, err := filepath.Rel(src, path)
-						if err != nil {
-							return err
-						}
-						files = append(files, filepath.ToSlash(frel))
-						return nil
-					})
-					if walkErr != nil {
-						return nil, walkErr
+					h, err := pack.DirHashOf(src, files)
+					if err != nil {
+						return nil, err
 					}
-					sort.Strings(files)
 					name := "esc-" + p.Manifest.Name + "-" + filepath.Base(rel)
 					res.Artifacts = append(res.Artifacts, Artifact{
 						Path: filepath.ToSlash(filepath.Join(".claude", "skills", name)),

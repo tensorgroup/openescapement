@@ -2,6 +2,7 @@ package pack
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -339,5 +340,78 @@ func TestDirHashOfAgreesWithDirHash(t *testing.T) {
 	}
 	if subset == full {
 		t.Error("hashing a subset of files produced the same hash as the whole tree")
+	}
+}
+
+// TestDirFilesAgreesWithDirHashAcrossGitDir is the fix-round regression test
+// for the finding that plan-time Files and DirHash used to walk
+// independently with different filters: DirHash (via what is now DirFiles)
+// skips .git and rejects symlinks, but engine.go's original ad hoc walk did
+// neither. A skill directory with a nested .git — a real shape for a local
+// path source or a vendored repo — made Hash (over N files) and Files (over
+// N+k files) disagree on a completely pristine sync, permanently reporting
+// altered. This tree, unlike TestDirHashOfAgreesWithDirHash's 4-file fixture
+// with a merely shuffled rel order, actually exercises the .git skip: a
+// naive walk over the same tree, without the skip, provably disagrees with
+// DirHash, and DirFiles provably does not.
+func TestDirFilesAgreesWithDirHashAcrossGitDir(t *testing.T) {
+	files := validFiles()
+	files["skills/vault-usage/.git/HEAD"] = "ref: refs/heads/main\n"
+	files["skills/vault-usage/.git/config"] = "[core]\n\trepositoryformatversion = 0\n"
+	dir := writePack(t, files)
+	skillDir := filepath.Join(dir, "skills", "vault-usage")
+
+	canonical, err := DirFiles(skillDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range canonical {
+		if strings.Contains(f, ".git") {
+			t.Errorf("DirFiles must skip .git, got %q in %v", f, canonical)
+		}
+	}
+
+	dirHash, err := DirHash(skillDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The property this task depends on: the shared walker (DirFiles) feeds
+	// both the plan-time Files list and, via DirHashOf, the managed hash, so
+	// they cannot disagree.
+	agree, err := DirHashOf(skillDir, canonical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if agree != dirHash {
+		t.Errorf("DirHashOf(dir, DirFiles(dir)) = %s, want DirHash(dir) = %s", agree, dirHash)
+	}
+
+	// Reproduce the bug this test guards against: a naive walk with no .git
+	// skip (what engine.go's plan-time population did before this fix) picks
+	// up the .git contents, and hashing that superset must disagree with
+	// DirHash. If this assertion ever fails, the fixture no longer exercises
+	// the regression (e.g. .git stopped containing files) and needs revising.
+	var naive []string
+	walkErr := filepath.WalkDir(skillDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, err := filepath.Rel(skillDir, path)
+		if err != nil {
+			return err
+		}
+		naive = append(naive, filepath.ToSlash(rel))
+		return nil
+	})
+	if walkErr != nil {
+		t.Fatal(walkErr)
+	}
+	naiveHash, err := DirHashOf(skillDir, naive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if naiveHash == dirHash {
+		t.Fatal("naive walk (including .git) unexpectedly agreed with DirHash — fixture no longer exercises the .git-divergence bug")
 	}
 }

@@ -11,11 +11,24 @@ import (
 	"sort"
 )
 
-// DirHash computes a deterministic content hash of every regular file under
-// dir (sorted relative paths, path and content both hashed). .git is skipped.
-// Symlinks fail closed: a pack must not be able to reference files outside
-// itself, and link targets would make hashes host-dependent.
-func DirHash(dir string) (string, error) {
+// DirFiles walks dir and returns the sorted, slash-separated paths of every
+// regular file relative to dir. .git directories are skipped. Symlinks fail
+// closed: a pack must not be able to reference files outside itself, and
+// link targets would make the result host-dependent.
+//
+// This is the single source of truth for "what files make up this dir" —
+// DirHash's whole-tree hash and the plan-time population of a dir artifact's
+// Files (engine.go's TargetSkills branch) both call this instead of walking
+// independently. Two independent walks previously used different filters
+// (the ad hoc walk in engine.go skipped neither .git nor symlinks), which let
+// a pack's Hash and Files disagree on a tree containing a nested .git
+// directory — a real case for a local path source or a vendored repo — and
+// made a pristine sync report altered forever. A symlinked directory nested
+// under a skill dir still collapses to a single amendment item rather than
+// its contents once DirHash's own containing WalkDir traversal reaches it;
+// that's a pre-existing, separately tracked limitation, not something this
+// function changes.
+func DirFiles(dir string) ([]string, error) {
 	var files []string
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -38,21 +51,21 @@ func DirHash(dir string) (string, error) {
 		return nil
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	sort.Strings(files)
-	h := sha256.New()
-	for _, rel := range files {
-		io.WriteString(h, rel)
-		h.Write([]byte{0})
-		content, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
-		if err != nil {
-			return "", err
-		}
-		h.Write(content)
-		h.Write([]byte{0})
+	return files, nil
+}
+
+// DirHash computes a deterministic content hash of every regular file under
+// dir, as found by DirFiles (sorted relative paths, path and content both
+// hashed, .git skipped, symlinks rejected).
+func DirHash(dir string) (string, error) {
+	files, err := DirFiles(dir)
+	if err != nil {
+		return "", err
 	}
-	return "sha256:" + hex.EncodeToString(h.Sum(nil)), nil
+	return DirHashOf(dir, files)
 }
 
 // DirHashOf computes the same canonical hash as DirHash, but only over the

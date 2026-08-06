@@ -391,3 +391,43 @@ func TestSkillDirAmendmentReported(t *testing.T) {
 		t.Error("an amendment alone must not make status unclean")
 	}
 }
+
+// TestSkillDirPristineSyncReportsInSync locks in the false-positive
+// direction this task exists to eliminate: a skill directory with no team
+// additions must report in-sync/none on both axes right after `esc sync`,
+// with no fix-round regression (see
+// TestDirFilesAgreesWithDirHashAcrossGitDir in internal/pack for the unit
+// case this guards: plan-time Files and the managed Hash used to come from
+// two independently filtered walks, and a tree containing a nested .git
+// directory made them disagree even with nothing a team touched).
+func TestSkillDirPristineSyncReportsInSync(t *testing.T) {
+	repo := setupGovernedRepoWithSkills(t)
+	runEsc(t, repo, "sync")
+
+	st, err := engine.Status(context.Background(), repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var dirFindings int
+	for _, f := range st.Findings {
+		if f.Kind != engine.KindDir {
+			continue
+		}
+		dirFindings++
+		if f.State != engine.InSync {
+			t.Errorf("%s: managed axis = %q, want in-sync", f.Path, f.State)
+		}
+		if f.Local != engine.LocalNone {
+			t.Errorf("%s: local axis = %q, want none", f.Path, f.Local)
+		}
+		if f.Amendment != nil {
+			t.Errorf("%s: amendment = %+v, want nil", f.Path, f.Amendment)
+		}
+	}
+	if dirFindings != 2 {
+		t.Fatalf("expected 2 dir findings (vault-usage, esc-security), got %d", dirFindings)
+	}
+	if !st.Clean() {
+		t.Error("a pristine sync must report clean")
+	}
+}
