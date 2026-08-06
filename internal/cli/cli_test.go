@@ -164,8 +164,8 @@ func TestDriftDetection(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("want exit 1 on drift, got %d:\n%s", code, out)
 	}
-	if !strings.Contains(out, "modified") || !strings.Contains(out, "CLAUDE.md") {
-		t.Errorf("status output should name modified CLAUDE.md:\n%s", out)
+	if !strings.Contains(out, "altered") || !strings.Contains(out, "CLAUDE.md") {
+		t.Errorf("status output should name altered CLAUDE.md:\n%s", out)
 	}
 	// diff shows it, exit 1.
 	code, out = run(t, root, "diff")
@@ -226,7 +226,7 @@ func TestUpdateAndDiffAgainst(t *testing.T) {
 		t.Fatalf("diff --against: exit %d\n%s", code, out)
 	}
 
-	// Update pin: config + lock move, artifacts stay → stale, not modified.
+	// Update pin: config + lock move, artifacts stay → stale, not altered.
 	if code, out := run(t, root, "update", "--ref", "v2.0.0"); code != 0 {
 		t.Fatalf("update: exit %d\n%s", code, out)
 	}
@@ -234,8 +234,8 @@ func TestUpdateAndDiffAgainst(t *testing.T) {
 	if code != 1 || !strings.Contains(out, "stale") {
 		t.Fatalf("want stale after update, exit %d:\n%s", code, out)
 	}
-	if strings.Contains(out, "modified") {
-		t.Errorf("stale misclassified as modified:\n%s", out)
+	if strings.Contains(out, "altered") {
+		t.Errorf("stale misclassified as altered:\n%s", out)
 	}
 	run(t, root, "sync")
 	if code, out := run(t, root, "status", "--check"); code != 0 {

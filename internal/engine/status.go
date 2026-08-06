@@ -19,7 +19,7 @@ type State string
 
 const (
 	InSync             State = "in-sync"
-	Modified           State = "modified"
+	Altered            State = "altered"
 	Missing            State = "missing"
 	Stale              State = "stale"
 	ConstraintViolated State = "constraint-violated"
@@ -140,15 +140,15 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 
 // classify compares one artifact's desired state against disk, using the
 // lockfile to distinguish "pack moved on, file matches old sync" (stale)
-// from "human edited the managed content" (modified).
+// from "human edited the managed content" (altered).
 func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 	abs := filepath.Join(root, filepath.FromSlash(a.Path))
 	locked := lock.Artifact(a.Path)
-	staleOrModified := func(actualHash, detail string) Finding {
+	staleOrAltered := func(actualHash, detail string) Finding {
 		if locked != nil && locked.Hash == actualHash {
 			return Finding{a.Path, Stale, "rendered from an older pack state — run `esc sync`"}
 		}
-		return Finding{a.Path, Modified, detail}
+		return Finding{a.Path, Altered, detail}
 	}
 
 	switch a.Kind {
@@ -159,7 +159,7 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 		}
 		block, err := render.Extract(content)
 		if err != nil {
-			return Finding{a.Path, Modified, err.Error()}
+			return Finding{a.Path, Altered, err.Error()}
 		}
 		if block == nil {
 			return Finding{a.Path, Missing, "no managed block — run `esc sync`"}
@@ -168,7 +168,7 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 		if actual == a.Hash {
 			return Finding{a.Path, InSync, ""}
 		}
-		return staleOrModified(actual, "managed block was hand-edited (hash mismatch)")
+		return staleOrAltered(actual, "managed block was hand-edited (hash mismatch)")
 	case KindFile:
 		content, err := os.ReadFile(abs)
 		if err != nil {
@@ -178,19 +178,19 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 		if actual == a.Hash {
 			return Finding{a.Path, InSync, ""}
 		}
-		return staleOrModified(actual, "file was hand-edited (hash mismatch)")
+		return staleOrAltered(actual, "file was hand-edited (hash mismatch)")
 	case KindDir:
 		if info, err := os.Stat(abs); err != nil || !info.IsDir() {
 			return Finding{a.Path, Missing, "skill directory missing — run `esc sync`"}
 		}
 		actual, err := pack.DirHash(abs)
 		if err != nil {
-			return Finding{a.Path, Modified, err.Error()}
+			return Finding{a.Path, Altered, err.Error()}
 		}
 		if actual == a.Hash {
 			return Finding{a.Path, InSync, ""}
 		}
-		return staleOrModified(actual, "skill directory was modified")
+		return staleOrAltered(actual, "skill directory was modified")
 	case KindJSONKeys:
 		content, err := os.ReadFile(abs)
 		if err != nil {
@@ -198,12 +198,12 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 		}
 		actual, err := render.OwnedMCPHash(content, a.Keys)
 		if err != nil {
-			return Finding{a.Path, Modified, err.Error()}
+			return Finding{a.Path, Altered, err.Error()}
 		}
 		if actual == a.Hash {
 			return Finding{a.Path, InSync, ""}
 		}
-		return staleOrModified(actual, "managed mcp server entries were modified")
+		return staleOrAltered(actual, "managed mcp server entries were modified")
 	}
-	return Finding{a.Path, Modified, "unknown artifact kind " + a.Kind}
+	return Finding{a.Path, Altered, "unknown artifact kind " + a.Kind}
 }
