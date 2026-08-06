@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "command": "status",
+  "packs": [
+    {
+      "source": "file://<packrepo>",
+      "ref": "v1.0.0",
+      "pinned": "<hash>",
+      "signed": false
+    }
+  ],
+  "findings": [
+    {
+      "subject": "file://<packrepo>",
+      "kind": "pack",
+      "managed": "stale",
+      "local": "none",
+      "detail": "pack pin v1.0.0 not in lockfile — run `esc sync`"
+    },
+    {
+      "subject": "CLAUDE.md",
+      "kind": "block",
+      "managed": "missing",
+      "local": "none",
+      "detail": "no managed block — run `esc sync`"
+    },
+    {
+      "subject": "AGENTS.md",
+      "kind": "block",
+      "managed": "missing",
+      "local": "none",
+      "detail": "file does not exist — run `esc sync`"
+    },
+    {
+      "subject": "GEMINI.md",
+      "kind": "block",
+      "managed": "missing",
+      "local": "none",
+      "detail": "file does not exist — run `esc sync`"
+    },
+    {
+      "subject": "GOVERNANCE.md",
+      "kind": "file",
+      "managed": "missing",
+      "local": "none",
+      "detail": "file does not exist — run `esc sync`"
+    },
+    {
+      "subject": ".claude/skills/esc-acme-org-vault-usage",
+      "kind": "dir",
+      "managed": "missing",
+      "local": "none",
+      "detail": "skill directory missing — run `esc sync`"
+    },
+    {
+      "subject": ".mcp.json",
+      "kind": "json-keys",
+      "managed": "missing",
+      "local": "none",
+      "detail": "file does not exist — run `esc sync`"
+    },
+    {
+      "subject": "CLAUDE.md",
+      "kind": "constraint",
+      "managed": "constraint-violated",
+      "local": "none",
+      "detail": "matches forbidden_pattern \"disregard the governance\""
+    }
+  ],
+  "collection": {
+    "amendments": "off",
+    "source": "default"
+  }
+}

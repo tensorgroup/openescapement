@@ -2,8 +2,6 @@ package engine
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 
 	"github.com/tensorgroup/openescapement/internal/config"
 )
@@ -32,39 +30,71 @@ type ReportPack struct {
 // is the user's own machine and their own files, and an open-source user
 // whose pack declares no reporting block at all still gets a fully useful
 // local report.
+//
+// Deliberately excluded: a generated-at timestamp and an esc version field.
+// Both were considered and rejected — the global contract requires
+// deterministic output and the test strategy is golden files, so either
+// field would either break every golden or force a normalization step that
+// weakens what the goldens actually prove. A publisher that needs
+// generation-time provenance can stamp its own receipt time; that is a
+// property of ingestion, not of this document.
 type Report struct {
-	Schema     int          `json:"schema"`
+	Schema int `json:"schema"`
+	// Command names which esc command produced this document: "status" or
+	// "sync". Without it, a sync that skipped nothing is byte-identical to
+	// a status document, and any consumer that persists, batches, or
+	// forwards these documents — exactly what a contract meant to travel
+	// has to survive — loses that distinction the moment the document
+	// leaves the process that generated it.
+	Command    string       `json:"command"`
 	Packs      []ReportPack `json:"packs"`
-	Artifacts  []Finding    `json:"artifacts"`
+	Findings   []Finding    `json:"findings"`
 	Collection Collection   `json:"collection"`
-	Skipped    []Skipped    `json:"skipped,omitempty"`
+	// Skipped is a pointer so status (sync == nil) omits the key entirely
+	// while sync always emits the array, even empty ([]), rather than
+	// omitting it when nothing was skipped. json's omitempty treats a nil
+	// slice and an empty non-nil slice identically (both "empty", both
+	// dropped), so a plain []Skipped could not tell those two cases apart;
+	// a nil *[]Skipped is empty (omitted) and a non-nil pointer to an empty
+	// slice is not (renders "[]"). Command already carries this
+	// distinction too — this is belt-and-suspenders, not the only signal.
+	Skipped *[]Skipped `json:"skipped,omitempty"`
 }
 
-// NewReport assembles the document. sync may be nil for status runs.
+// NewReport assembles the document. sync is nil for a status report;
+// non-nil marks this as a sync report (Command: "sync") and its Skipped
+// entries are copied in as an always-present (possibly empty) array.
 func NewReport(st *StatusResult, coll Collection, sync *SyncResult) *Report {
-	r := &Report{Schema: 1, Collection: coll, Artifacts: st.Findings}
+	r := &Report{
+		Schema:     1,
+		Command:    "status",
+		Collection: coll,
+		Packs:      []ReportPack{},
+		Findings:   append([]Finding{}, st.Findings...), // never nil: see Report.Findings' contract
+	}
 	if st.Plan != nil {
-		for _, lp := range st.Plan.Packs {
+		for i, lp := range st.Plan.Packs {
 			r.Packs = append(r.Packs, ReportPack{
 				Source: lp.Source, Ref: lp.Ref, Pinned: lp.Hash,
 				Latest: st.LatestBySource[lp.Source],
-				Signed: packSigned(st.Plan.Config, lp.Source),
+				Signed: packSigned(st.Plan.Config, i),
 			})
 		}
 	}
 	if sync != nil {
-		r.Skipped = sync.Skipped
+		r.Command = "sync"
+		skipped := append([]Skipped{}, sync.Skipped...) // never nil: see Report.Skipped's contract
+		r.Skipped = &skipped
 	}
 	return r
 }
 
 // PopulateDiffs fills Alteration.Diff on every Altered block or file finding
-// in rep.Artifacts, re-deriving the artifact's prospective (expected)
-// content and diffing it against what is on disk now, via the same gitDiff
-// shell-out DriftDiff already uses. It is a separate pass from NewReport —
-// which stays a pure function of its three arguments — because it needs ctx
-// and root to do that shell-out, and because human output does not want to
-// pay for it (see cmdStatus/cmdSync's --json-only call site).
+// in rep.Findings, via the shared artifactDiff helper (diff.go) that
+// DriftDiff also uses. It is a separate pass from NewReport — which stays a
+// pure function of its three arguments — because it needs ctx and root to
+// do that shell-out, and because human output does not want to pay for it
+// (see cmdStatus/cmdSync's --json-only call site).
 //
 // Diff is populated for KindBlock and KindFile only:
 //
@@ -73,18 +103,22 @@ func NewReport(st *StatusResult, coll Collection, sync *SyncResult) *Report {
 //     single file's content hash. A `git diff` between two directory path
 //     strings would not be an empty diff, it would be a meaningless one —
 //     exactly the trap this function must not fall into.
-//   - KindJSONKeys is also skipped. Its hash covers only the owned-key
-//     subset (render.OwnedMCPHash), resolved from the union of the plan's
-//     desired keys and the lockfile's last-synced keys — the same
-//     locked-vs-desired reconciliation classify uses so a pack-dropped
-//     server isn't misattributed to the team before the next sync removes
-//     it (see classify's KindJSONKeys case). Reproducing that union here,
-//     outside classify, to build an accurate "expected" document was judged
-//     out of scope for this task: a naive whole-file diff would render
-//     entries the team owns nothing to do with as part of the alteration,
-//     the same class of misleading output the KindDir case above is called
-//     out to avoid. ExpectedHash/ActualHash still identify the alteration;
-//     only the human-readable Diff is left empty.
+//   - KindJSONKeys is also skipped, and for a sharper reason than "out of
+//     scope": a whole-file .mcp.json diff would ship the user's own
+//     UNOWNED MCP server entries — arbitrary local configuration escapement
+//     has no claim over — into a document a publisher consumes. That is a
+//     privacy leak, not a nicety to add later, and it is why this case
+//     must stay skipped even though computing *a* diff here would be easy.
+//     (For completeness: the owned-only hash is resolved from the union of
+//     the plan's desired keys and the lockfile's last-synced keys — the
+//     same reconciliation classify's KindJSONKeys case uses so a
+//     pack-dropped server isn't misattributed to the team before the next
+//     sync removes it — so even a "diff just the owned subset" version
+//     would have to duplicate that union outside classify to stay
+//     accurate. Nobody should build that here; if a future task wants an
+//     owned-subset diff, it belongs next to classify, not as a workaround
+//     in this function.) ExpectedHash/ActualHash still identify the
+//     alteration; only the human-readable Diff is left empty.
 func PopulateDiffs(ctx context.Context, root string, plan *PlanResult, rep *Report) error {
 	if plan == nil || rep == nil {
 		return nil
@@ -93,30 +127,19 @@ func PopulateDiffs(ctx context.Context, root string, plan *PlanResult, rep *Repo
 	for _, a := range plan.Artifacts {
 		byPath[a.Path] = a
 	}
-	for i := range rep.Artifacts {
-		f := &rep.Artifacts[i]
+	for i := range rep.Findings {
+		f := &rep.Findings[i]
 		if f.State != Altered || f.Alteration == nil {
 			continue
 		}
 		if f.Kind != KindBlock && f.Kind != KindFile {
 			continue
 		}
-		a, ok := byPath[f.Path]
+		a, ok := byPath[f.Subject]
 		if !ok {
 			continue
 		}
-		expected, err := prospectiveContent(root, a)
-		if err != nil {
-			return err
-		}
-		actual, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f.Path)))
-		if err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		if string(actual) == string(expected) {
-			continue
-		}
-		d, err := gitDiff(ctx, actual, expected, f.Path)
+		d, err := artifactDiff(ctx, root, a)
 		if err != nil {
 			return err
 		}
@@ -125,18 +148,24 @@ func PopulateDiffs(ctx context.Context, root string, plan *PlanResult, rep *Repo
 	return nil
 }
 
-// packSigned reports whether source's configured trust setting is the
-// signed default. Trust == "unsigned" is the only way a user explicitly
-// accepts an unsigned source (see verifyTrust); every other value, including
-// the empty default, means signed.
-func packSigned(cfg *config.Config, source string) bool {
-	if cfg == nil {
-		return true
+// packSigned reports whether the i'th pack pin's configured trust setting
+// is the signed default. Paired with st.Plan.Config.Packs by index, not by
+// matching Source: planFromConfig appends res.Packs in cfg.Packs order
+// (engine.go), so the indices already correspond 1:1, and two pack refs
+// that happen to share a Source (e.g. the same source pinned at two
+// different refs is not possible today, but nothing enforces uniqueness)
+// would otherwise make a Source-keyed lookup silently pair the wrong
+// Trust. Fails closed: an out-of-range index (a defensive case that should
+// never happen if the two slices are really parallel) reports false
+// (unsigned), never true — matching the security posture of "assume the
+// most cautious answer when the data doesn't line up" that the rest of
+// this package uses (see verifyTrust's fail-closed default in engine.go).
+// Trust == "unsigned" is the only value that skips signature verification
+// (see verifyTrust); every other value, including the empty default, means
+// signed.
+func packSigned(cfg *config.Config, i int) bool {
+	if cfg == nil || i < 0 || i >= len(cfg.Packs) {
+		return false
 	}
-	for _, ref := range cfg.Packs {
-		if ref.Source == source {
-			return ref.Trust != "unsigned"
-		}
-	}
-	return true
+	return cfg.Packs[i].Trust != "unsigned"
 }

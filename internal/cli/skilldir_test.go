@@ -370,7 +370,7 @@ func TestSkillDirAmendmentReported(t *testing.T) {
 	const skillPath = ".claude/skills/esc-acme-org-esc-security"
 	var found bool
 	for _, f := range st.Findings {
-		if f.Kind != engine.KindDir || f.Path != skillPath {
+		if f.Kind != engine.KindDir || f.Subject != skillPath {
 			continue
 		}
 		found = true
@@ -415,13 +415,13 @@ func TestSkillDirPristineSyncReportsInSync(t *testing.T) {
 		}
 		dirFindings++
 		if f.State != engine.InSync {
-			t.Errorf("%s: managed axis = %q, want in-sync", f.Path, f.State)
+			t.Errorf("%s: managed axis = %q, want in-sync", f.Subject, f.State)
 		}
 		if f.Local != engine.LocalNone {
-			t.Errorf("%s: local axis = %q, want none", f.Path, f.Local)
+			t.Errorf("%s: local axis = %q, want none", f.Subject, f.Local)
 		}
 		if f.Amendment != nil {
-			t.Errorf("%s: amendment = %+v, want nil", f.Path, f.Amendment)
+			t.Errorf("%s: amendment = %+v, want nil", f.Subject, f.Amendment)
 		}
 	}
 	if dirFindings != 2 {

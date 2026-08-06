@@ -6,6 +6,7 @@
       "source": "file://<packrepo>",
       "ref": "v1.0.0",
       "pinned": "<hash>",
+      "latest": "v2.0.0",
       "signed": false
     }
   ],
@@ -26,13 +27,7 @@
       "subject": "AGENTS.md",
       "kind": "block",
       "managed": "in-sync",
-      "local": "amended",
-      "amendment": {
-        "bytes": 25,
-        "lines": 4,
-        "hash": "<hash>",
-        "content": "\n## Team rules\n\nBe kind.\n"
-      }
+      "local": "none"
     },
     {
       "subject": "GEMINI.md",
@@ -57,6 +52,13 @@
       "kind": "json-keys",
       "managed": "in-sync",
       "local": "none"
+    },
+    {
+      "subject": "file://<packrepo>",
+      "kind": "pack",
+      "managed": "pack-stale",
+      "local": "none",
+      "detail": "update available: v1.0.0 -\u003e v2.0.0 (run `esc update` then `esc sync`)"
     }
   ],
   "collection": {

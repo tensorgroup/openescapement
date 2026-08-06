@@ -30,7 +30,31 @@ const (
 	Orphan             State = "orphan"
 )
 
-// Finding is one classified artifact (or pack pin) in a status report.
+// Non-artifact finding kinds. Status reports on things that are not on-disk
+// artifacts at all — a pack pin, the update-check subsystem, or a
+// constraint violation — and Kind is a total discriminator (see Finding's
+// doc comment): every Finding, artifact or not, carries one of these or one
+// of the Kind* artifact constants in engine.go. Defined here rather than
+// alongside KindBlock etc. because these three have no corresponding
+// Artifact — they exist only as Finding.Kind values.
+const (
+	KindPack        = "pack"         // a pack pin, not a file on disk (Subject is the pack source)
+	KindUpdateCheck = "update-check" // the update-check subsystem itself (Subject is the literal "update-check")
+	KindConstraint  = "constraint"   // a constraint violation (Subject is the violated path, which may or may not be a tracked artifact)
+)
+
+// Finding is one classified artifact, pack pin, or subsystem-level signal in
+// a status report.
+//
+// Kind is a total discriminator: every Finding carries one of the Kind*
+// artifact constants (block/file/dir/json-keys) when Subject names a real
+// on-disk artifact, or one of KindPack/KindUpdateCheck/KindConstraint above
+// when it does not. Splitting artifact and non-artifact findings into two
+// separate arrays was considered and rejected: a consumer's core question
+// ("is this repo compliant?") would then require merging two arrays
+// forever, and the boundary is arbitrary anyway — a constraint-violated
+// finding can point at a real artifact file. One array, always kinded, is
+// the simpler contract.
 //
 // Managed and local are orthogonal axes: State/Detail/Alteration describe
 // content escapement owns, Local/Amendment describe content sharing the
@@ -38,8 +62,15 @@ const (
 // carry an inadvertent edit inside a managed block at the same time, and one
 // enum would force dropping one of those facts.
 type Finding struct {
-	Path       string      `json:"path"`
-	Kind       string      `json:"kind,omitempty"`
+	// Subject is what this finding is about; interpretation is determined
+	// by Kind. For an artifact Kind (block/file/dir/json-keys) it is the
+	// artifact's repo-relative path. For KindPack it is the pack source
+	// URL. For KindUpdateCheck it is the literal string "update-check" —
+	// there is no on-disk file to name, the finding is about the
+	// subsystem itself. For KindConstraint it is the violated path, which
+	// may or may not coincide with a tracked artifact.
+	Subject    string      `json:"subject"`
+	Kind       string      `json:"kind"`
 	State      State       `json:"managed"`
 	Local      LocalState  `json:"local"`
 	Detail     string      `json:"detail,omitempty"`
@@ -89,7 +120,7 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 	for _, lp := range plan.Packs {
 		if lock.Pack(lp.Source, lp.Ref) == nil {
 			res.Findings = append(res.Findings, Finding{
-				Path: lp.Source, State: Stale, Local: LocalNone,
+				Subject: lp.Source, Kind: KindPack, State: Stale, Local: LocalNone,
 				Detail: fmt.Sprintf("pack pin %s not in lockfile — run `esc sync`", lp.Ref),
 			})
 		}
@@ -119,7 +150,10 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 			}
 			if block, err := render.Extract(content); err == nil && block != nil {
 				res.Findings = append(res.Findings, Finding{
-					Path: la.Path, State: Orphan, Local: LocalNone,
+					// la.Kind is guaranteed KindBlock by the filter above:
+					// orphan detection only ever walks block-kind lock
+					// entries.
+					Subject: la.Path, Kind: la.Kind, State: Orphan, Local: LocalNone,
 					Detail: "carries an esc block for a target no longer in the effective set — run `esc sync` to remove it",
 				})
 			}
@@ -127,7 +161,7 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 	}
 
 	for _, v := range plan.Violations {
-		res.Findings = append(res.Findings, Finding{Path: v.Path, State: ConstraintViolated, Local: LocalNone, Detail: v.Rule})
+		res.Findings = append(res.Findings, Finding{Subject: v.Path, Kind: KindConstraint, State: ConstraintViolated, Local: LocalNone, Detail: v.Rule})
 	}
 
 	// Update-freshness findings (inert unless a pack declares update_check).
@@ -140,9 +174,10 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 				res.LatestBySource[ps.Source] = ps.Latest
 				if ps.Updates {
 					res.Findings = append(res.Findings, Finding{
-						Path:  ps.Source,
-						State: PackStale,
-						Local: LocalNone,
+						Subject: ps.Source,
+						Kind:    KindPack,
+						State:   PackStale,
+						Local:   LocalNone,
 						Detail: fmt.Sprintf("update available: %s -> %s (run `esc update` then `esc sync`)",
 							ps.Pinned, ps.Latest),
 					})
@@ -154,10 +189,11 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 		attemptFailed := last != nil && last.Outcome == updatecheck.OutcomeError
 		if overdue && attemptFailed {
 			res.Findings = append(res.Findings, Finding{
-				Path:   "update-check",
-				State:  CheckOverdue,
-				Local:  LocalNone,
-				Detail: "no successful update check within cadence and the latest attempt failed",
+				Subject: "update-check",
+				Kind:    KindUpdateCheck,
+				State:   CheckOverdue,
+				Local:   LocalNone,
+				Detail:  "no successful update check within cadence and the latest attempt failed",
 			})
 		}
 	}
@@ -185,16 +221,16 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 	case KindBlock:
 		content, err := os.ReadFile(abs)
 		if err != nil {
-			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "file does not exist — run `esc sync`"}
+			return Finding{Subject: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "file does not exist — run `esc sync`"}
 		}
 		block, err := render.Extract(content)
 		if err != nil {
-			return Finding{Path: a.Path, Kind: a.Kind, State: Altered, Local: LocalNone, Detail: err.Error()}
+			return Finding{Subject: a.Path, Kind: a.Kind, State: Altered, Local: LocalNone, Detail: err.Error()}
 		}
 		if block == nil {
-			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "no managed block — run `esc sync`"}
+			return Finding{Subject: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "no managed block — run `esc sync`"}
 		}
-		f := Finding{Path: a.Path, Kind: a.Kind, Local: LocalNone}
+		f := Finding{Subject: a.Path, Kind: a.Kind, Local: LocalNone}
 		if surround, serr := render.BlockSurround(content); serr == nil {
 			if am := newAmendment(surround, nil); am != nil {
 				f.Local, f.Amendment = LocalAmended, am
@@ -213,9 +249,9 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 	case KindFile:
 		content, err := os.ReadFile(abs)
 		if err != nil {
-			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "file does not exist — run `esc sync`"}
+			return Finding{Subject: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "file does not exist — run `esc sync`"}
 		}
-		f := Finding{Path: a.Path, Kind: a.Kind, Local: LocalNone}
+		f := Finding{Subject: a.Path, Kind: a.Kind, Local: LocalNone}
 		actual := esc.HashBytes(content)
 		if actual == a.Hash {
 			f.State = InSync
@@ -228,12 +264,12 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 		return f
 	case KindDir:
 		if info, err := os.Stat(abs); err != nil || !info.IsDir() {
-			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "skill directory missing — run `esc sync`"}
+			return Finding{Subject: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "skill directory missing — run `esc sync`"}
 		}
-		f := Finding{Path: a.Path, Kind: a.Kind, Local: LocalNone}
+		f := Finding{Subject: a.Path, Kind: a.Kind, Local: LocalNone}
 		unmanaged, err := unmanagedDirFiles(abs, a.Files)
 		if err != nil {
-			return Finding{Path: a.Path, Kind: a.Kind, State: Altered, Local: LocalNone, Detail: err.Error()}
+			return Finding{Subject: a.Path, Kind: a.Kind, State: Altered, Local: LocalNone, Detail: err.Error()}
 		}
 		if am := newAmendment("", unmanaged); am != nil {
 			f.Local, f.Amendment = LocalAmended, am
@@ -259,9 +295,9 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 	case KindJSONKeys:
 		content, err := os.ReadFile(abs)
 		if err != nil {
-			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "file does not exist — run `esc sync`"}
+			return Finding{Subject: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "file does not exist — run `esc sync`"}
 		}
-		f := Finding{Path: a.Path, Kind: a.Kind, Local: LocalNone}
+		f := Finding{Subject: a.Path, Kind: a.Kind, Local: LocalNone}
 		// A server the pack no longer declares is still escapement's own
 		// content until the next sync removes it (that gap shows up as
 		// Stale, below, not Altered). Union the plan's desired keys with the
@@ -304,7 +340,7 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 		}
 		return f
 	}
-	return Finding{Path: a.Path, Kind: a.Kind, State: Altered, Local: LocalNone, Detail: "unknown artifact kind " + a.Kind}
+	return Finding{Subject: a.Path, Kind: a.Kind, State: Altered, Local: LocalNone, Detail: "unknown artifact kind " + a.Kind}
 }
 
 // unmanagedDirFiles walks dir and returns the sorted, slash-separated paths

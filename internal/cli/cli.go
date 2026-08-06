@@ -288,9 +288,17 @@ func syncJSON(ctx context.Context, root string, force bool, stdout io.Writer) er
 // stable, diffable output. Shared by cmdStatus and cmdSync's --json paths;
 // sync is nil for a status report.
 func writeJSONReport(ctx context.Context, root string, stdout io.Writer, st *engine.StatusResult, sync *engine.SyncResult) error {
-	coll, err := engine.ResolveReporting(st.Plan.PackObjs, st.Plan.Config)
-	if err != nil {
-		return err
+	// st.Plan is never nil after a successful engine.Status in production
+	// (Status always sets it before returning a nil error), but NewReport
+	// itself guards against a nil Plan, so this call site should too rather
+	// than assume a caller never passes a hand-built StatusResult.
+	var coll engine.Collection
+	if st.Plan != nil {
+		var err error
+		coll, err = engine.ResolveReporting(st.Plan.PackObjs, st.Plan.Config)
+		if err != nil {
+			return err
+		}
 	}
 	rep := engine.NewReport(st, coll, sync)
 	if err := engine.PopulateDiffs(ctx, root, st.Plan, rep); err != nil {
@@ -358,7 +366,12 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	checkForUpdates(ctx, root, stderr)
+	// The interactive update-check prompt writes progress to stderr and can
+	// read from stdin; --json's contract is a clean, non-interactive
+	// machine-readable document, so it must never trigger that prompt.
+	if !*asJSON {
+		checkForUpdates(ctx, root, stderr)
+	}
 	st, err := engine.Status(ctx, root)
 	if err != nil {
 		return exitCode(err, stderr)
@@ -376,9 +389,9 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 	} else {
 		for _, f := range st.Findings {
 			if f.State == engine.InSync {
-				fmt.Fprintf(stdout, "  ✓ %-20s in sync\n", f.Path)
+				fmt.Fprintf(stdout, "  ✓ %-20s in sync\n", f.Subject)
 			} else {
-				fmt.Fprintf(stdout, "  ✗ %-20s %s: %s\n", f.Path, f.State, f.Detail)
+				fmt.Fprintf(stdout, "  ✗ %-20s %s: %s\n", f.Subject, f.State, f.Detail)
 			}
 		}
 		if st.Clean() {

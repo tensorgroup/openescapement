@@ -1,5 +1,6 @@
 {
   "schema": 1,
+  "command": "status",
   "packs": [
     {
       "source": "file://<packrepo>",
@@ -8,9 +9,9 @@
       "signed": false
     }
   ],
-  "artifacts": [
+  "findings": [
     {
-      "path": "CLAUDE.md",
+      "subject": "CLAUDE.md",
       "kind": "block",
       "managed": "in-sync",
       "local": "amended",
@@ -22,31 +23,31 @@
       }
     },
     {
-      "path": "AGENTS.md",
+      "subject": "AGENTS.md",
       "kind": "block",
       "managed": "in-sync",
       "local": "none"
     },
     {
-      "path": "GEMINI.md",
+      "subject": "GEMINI.md",
       "kind": "block",
       "managed": "in-sync",
       "local": "none"
     },
     {
-      "path": "GOVERNANCE.md",
+      "subject": "GOVERNANCE.md",
       "kind": "file",
       "managed": "in-sync",
       "local": "none"
     },
     {
-      "path": ".claude/skills/esc-acme-org-vault-usage",
+      "subject": ".claude/skills/esc-acme-org-vault-usage",
       "kind": "dir",
       "managed": "in-sync",
       "local": "none"
     },
     {
-      "path": ".mcp.json",
+      "subject": ".mcp.json",
       "kind": "json-keys",
       "managed": "in-sync",
       "local": "none"

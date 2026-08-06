@@ -71,7 +71,7 @@ func TestSyncSkipsAlteredBlock(t *testing.T) {
 	}
 	found := false
 	for _, f := range st.Findings {
-		if f.Path != "AGENTS.md" {
+		if f.Subject != "AGENTS.md" {
 			continue
 		}
 		found = true
@@ -207,7 +207,7 @@ func TestSyncCarriesForwardLockAcrossPackUpdate(t *testing.T) {
 	}
 	found := false
 	for _, f := range st.Findings {
-		if f.Path != "AGENTS.md" {
+		if f.Subject != "AGENTS.md" {
 			continue
 		}
 		found = true

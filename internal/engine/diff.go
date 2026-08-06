@@ -21,24 +21,36 @@ func DriftDiff(ctx context.Context, root string, plan *PlanResult) (string, erro
 		if a.Kind != KindBlock && a.Kind != KindFile {
 			continue
 		}
-		expected, err := prospectiveContent(root, a)
-		if err != nil {
-			return "", err
-		}
-		actual, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(a.Path)))
-		if err != nil && !os.IsNotExist(err) {
-			return "", err
-		}
-		if string(actual) == string(expected) {
-			continue
-		}
-		d, err := gitDiff(ctx, actual, expected, a.Path)
+		d, err := artifactDiff(ctx, root, a)
 		if err != nil {
 			return "", err
 		}
 		out.WriteString(d)
 	}
 	return out.String(), nil
+}
+
+// artifactDiff returns the unified diff between what's on disk now and what
+// a would produce after sync (prospectiveContent), or "" if they match. It
+// only makes sense for KindBlock/KindFile — the two kinds where "diff"
+// means a single file's content rather than a whole-tree or owned-subset
+// hash — callers are responsible for filtering to those kinds first (both
+// DriftDiff above and PopulateDiffs in report.go do). Extracted so the
+// human `esc diff` path and the --json report's Alteration.Diff can never
+// disagree about what a diff looks like.
+func artifactDiff(ctx context.Context, root string, a Artifact) (string, error) {
+	expected, err := prospectiveContent(root, a)
+	if err != nil {
+		return "", err
+	}
+	actual, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(a.Path)))
+	if err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
+	if string(actual) == string(expected) {
+		return "", nil
+	}
+	return gitDiff(ctx, actual, expected, a.Path)
 }
 
 // PolicyDiff renders the policy text of the configured agent-file targets

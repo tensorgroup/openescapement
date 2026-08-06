@@ -36,7 +36,7 @@ func TestAmendedBlockReportsInSync(t *testing.T) {
 	}
 	var found bool
 	for _, f := range st.Findings {
-		if f.Path != "AGENTS.md" {
+		if f.Subject != "AGENTS.md" {
 			continue
 		}
 		found = true
@@ -130,7 +130,7 @@ mcp:
 	}
 	var found bool
 	for _, f := range st.Findings {
-		if f.Path != ".mcp.json" {
+		if f.Subject != ".mcp.json" {
 			continue
 		}
 		found = true
