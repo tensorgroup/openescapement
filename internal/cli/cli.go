@@ -376,6 +376,17 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 	if err != nil {
 		return exitCode(err, stderr)
 	}
+	// st.Plan is never nil after a successful engine.Status in production,
+	// but guard it anyway rather than assume every caller (or future test)
+	// passes a fully-populated StatusResult (see writeJSONReport's identical
+	// guard).
+	var coll engine.Collection
+	if st.Plan != nil {
+		coll, err = engine.ResolveReporting(st.Plan.PackObjs, st.Plan.Config)
+		if err != nil {
+			return exitCode(err, stderr)
+		}
+	}
 	hasViolation := false
 	for _, f := range st.Findings {
 		if f.State == engine.ConstraintViolated {
@@ -388,16 +399,40 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 		}
 	} else {
 		for _, f := range st.Findings {
+			suffix := ""
+			if f.Amendment != nil {
+				switch {
+				case len(f.Amendment.Items) > 0:
+					suffix = fmt.Sprintf("  ·  %d unmanaged %s preserved",
+						len(f.Amendment.Items), plural(len(f.Amendment.Items), "file", "files"))
+				default:
+					suffix = fmt.Sprintf("  ·  +%d lines local", f.Amendment.Lines)
+				}
+			}
 			if f.State == engine.InSync {
-				fmt.Fprintf(stdout, "  ✓ %-20s in sync\n", f.Subject)
-			} else {
-				fmt.Fprintf(stdout, "  ✗ %-20s %s: %s\n", f.Subject, f.State, f.Detail)
+				fmt.Fprintf(stdout, "  ✓ %-20s in sync%s\n", f.Subject, suffix)
+				continue
+			}
+			fmt.Fprintf(stdout, "  ✗ %-20s %s: %s%s\n", f.Subject, f.State, f.Detail, suffix)
+			if f.State == engine.Altered {
+				fmt.Fprintf(stdout, "  %-22s `esc diff` to inspect · `esc sync --force` to overwrite\n", "")
 			}
 		}
 		if st.Clean() {
 			fmt.Fprintln(stdout, "All policy artifacts in sync.")
 		} else {
 			fmt.Fprintln(stdout, "Drift detected. Run `esc diff` to inspect, `esc sync` to reconcile.")
+		}
+		// Unconditional: a team must be able to discover that its own
+		// additions are reported upstream without reading the pack
+		// manifest. Never gated behind a verbose flag.
+		if coll.Amendments != engine.ReportOff && anyAmendment(st.Findings) {
+			what := "counts and hashes only"
+			if coll.Amendments == engine.ReportContent {
+				what = "including content"
+			}
+			fmt.Fprintf(stdout, "\nLocal amendments are reported upstream, %s.\n", what)
+			fmt.Fprintln(stdout, "(pack policy; set report_amendments: metrics or off in .escapement.yaml to withhold)")
 		}
 	}
 	if st.Clean() {
@@ -413,6 +448,25 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 		return 1
 	}
 	return 0
+}
+
+// plural returns one when n == 1, many otherwise.
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
+// anyAmendment reports whether any finding carries a local amendment,
+// gating the collection notice in cmdStatus.
+func anyAmendment(fs []engine.Finding) bool {
+	for _, f := range fs {
+		if f.Amendment != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func cmdDiff(ctx context.Context, root string, args []string, stdout, stderr io.Writer) int {
