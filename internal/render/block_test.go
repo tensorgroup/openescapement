@@ -180,3 +180,30 @@ func TestSplicePlaceholderWinsOverTopPlacement(t *testing.T) {
 		t.Errorf("placeholder ignored:\n%s", out)
 	}
 }
+
+func TestBlockSurround(t *testing.T) {
+	meta := BlockMeta{Packs: []string{"p@1"}}
+	withBlock, err := Splice([]byte("# P\n\nteam rules\n"), "body\n", meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := BlockSurround(withBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "team rules") || strings.Contains(got, "escapement:begin") {
+		t.Errorf("surround = %q", got)
+	}
+
+	only, err := Splice(nil, "body\n", meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := BlockSurround(only); err != nil || got != "" {
+		t.Errorf("block-only file: got %q, err %v; want empty", got, err)
+	}
+
+	if got, err := BlockSurround([]byte("no block here\n")); err != nil || got != "" {
+		t.Errorf("no block: got %q, err %v; want empty", got, err)
+	}
+}

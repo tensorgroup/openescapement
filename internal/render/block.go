@@ -159,3 +159,22 @@ func Extract(file []byte) (*Block, error) {
 	}
 	return b, nil
 }
+
+// BlockSurround returns the content of file outside its managed block. It is
+// empty when the file has no block, or when nothing but whitespace surrounds
+// one. Errors match Extract: only a corrupt block structure fails.
+func BlockSurround(file []byte) (string, error) {
+	b, err := Extract(file)
+	if err != nil {
+		return "", err
+	}
+	if b == nil {
+		return "", nil
+	}
+	s := string(file)
+	out := s[:b.start] + s[b.end:]
+	if strings.TrimSpace(out) == "" {
+		return "", nil
+	}
+	return out, nil
+}

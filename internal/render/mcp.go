@@ -1,6 +1,7 @@
 package render
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -103,4 +104,29 @@ func DesiredMCPHash(servers map[string]map[string]any) (string, error) {
 		return "", err
 	}
 	return esc.HashBytes(canon), nil
+}
+
+// UnownedMCPServers returns the sorted names of server entries in file that
+// are not in owned. A missing or empty file has none.
+func UnownedMCPServers(file []byte, owned []string) ([]string, error) {
+	if len(bytes.TrimSpace(file)) == 0 {
+		return nil, nil
+	}
+	doc := map[string]any{}
+	if err := json.Unmarshal(file, &doc); err != nil {
+		return nil, fmt.Errorf("parsing .mcp.json: %w", err)
+	}
+	cur, _ := doc["mcpServers"].(map[string]any)
+	ownedSet := make(map[string]bool, len(owned))
+	for _, k := range owned {
+		ownedSet[k] = true
+	}
+	var out []string
+	for name := range cur {
+		if !ownedSet[name] {
+			out = append(out, name)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
 }
