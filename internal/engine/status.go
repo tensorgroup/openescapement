@@ -29,10 +29,20 @@ const (
 )
 
 // Finding is one classified artifact (or pack pin) in a status report.
+//
+// Managed and local are orthogonal axes: State/Detail/Alteration describe
+// content escapement owns, Local/Amendment describe content sharing the
+// artifact that it does not own. A team can both append its own rules and
+// carry an inadvertent edit inside a managed block at the same time, and one
+// enum would force dropping one of those facts.
 type Finding struct {
-	Path   string
-	State  State
-	Detail string
+	Path       string      `json:"path"`
+	Kind       string      `json:"kind,omitempty"`
+	State      State       `json:"managed"`
+	Local      LocalState  `json:"local"`
+	Detail     string      `json:"detail,omitempty"`
+	Amendment  *Amendment  `json:"amendment,omitempty"`
+	Alteration *Alteration `json:"alteration,omitempty"`
 }
 
 // StatusResult is the full drift report for a governed repo.
@@ -41,7 +51,11 @@ type StatusResult struct {
 	Plan     *PlanResult
 }
 
-// Clean reports whether every artifact is in sync and no constraint is violated.
+// Clean reports whether every artifact is in sync and no constraint is
+// violated. It consults f.State only: f.Local is a separate axis, and a
+// local amendment alone is expected behavior, not drift. A team that
+// appended its own rules must not flip this to unclean or change any exit
+// code.
 func (s *StatusResult) Clean() bool {
 	for _, f := range s.Findings {
 		if f.State != InSync {
@@ -140,70 +154,113 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 
 // classify compares one artifact's desired state against disk, using the
 // lockfile to distinguish "pack moved on, file matches old sync" (stale)
-// from "human edited the managed content" (altered).
+// from "human edited the managed content" (altered). It also reports the
+// orthogonal local axis for kinds where escapement shares the artifact with
+// content it does not own (KindBlock, KindJSONKeys); KindFile and KindDir
+// never carry a local amendment here (KindDir is Task 6's job, once the
+// per-file manifest lands).
 func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 	abs := filepath.Join(root, filepath.FromSlash(a.Path))
 	locked := lock.Artifact(a.Path)
-	staleOrAltered := func(actualHash, detail string) Finding {
+	staleOrAltered := func(actualHash, detail string) (State, string) {
 		if locked != nil && locked.Hash == actualHash {
-			return Finding{a.Path, Stale, "rendered from an older pack state — run `esc sync`"}
+			return Stale, "rendered from an older pack state — run `esc sync`"
 		}
-		return Finding{a.Path, Altered, detail}
+		return Altered, detail
 	}
 
 	switch a.Kind {
 	case KindBlock:
 		content, err := os.ReadFile(abs)
 		if err != nil {
-			return Finding{a.Path, Missing, "file does not exist — run `esc sync`"}
+			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Detail: "file does not exist — run `esc sync`"}
 		}
 		block, err := render.Extract(content)
 		if err != nil {
-			return Finding{a.Path, Altered, err.Error()}
+			return Finding{Path: a.Path, Kind: a.Kind, State: Altered, Detail: err.Error()}
 		}
 		if block == nil {
-			return Finding{a.Path, Missing, "no managed block — run `esc sync`"}
+			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Detail: "no managed block — run `esc sync`"}
+		}
+		f := Finding{Path: a.Path, Kind: a.Kind, Local: LocalNone}
+		if surround, serr := render.BlockSurround(content); serr == nil {
+			if am := newAmendment(surround, nil); am != nil {
+				f.Local, f.Amendment = LocalAmended, am
+			}
 		}
 		actual := render.BodyHash(block.Body)
 		if actual == a.Hash {
-			return Finding{a.Path, InSync, ""}
+			f.State = InSync
+			return f
 		}
-		return staleOrAltered(actual, "managed block was hand-edited (hash mismatch)")
+		f.State, f.Detail = staleOrAltered(actual, "managed block was hand-edited (hash mismatch)")
+		if f.State == Altered {
+			f.Alteration = &Alteration{ExpectedHash: a.Hash, ActualHash: actual}
+		}
+		return f
 	case KindFile:
 		content, err := os.ReadFile(abs)
 		if err != nil {
-			return Finding{a.Path, Missing, "file does not exist — run `esc sync`"}
+			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Detail: "file does not exist — run `esc sync`"}
 		}
+		f := Finding{Path: a.Path, Kind: a.Kind, Local: LocalNone}
 		actual := esc.HashBytes(content)
 		if actual == a.Hash {
-			return Finding{a.Path, InSync, ""}
+			f.State = InSync
+			return f
 		}
-		return staleOrAltered(actual, "file was hand-edited (hash mismatch)")
+		f.State, f.Detail = staleOrAltered(actual, "file was hand-edited (hash mismatch)")
+		if f.State == Altered {
+			f.Alteration = &Alteration{ExpectedHash: a.Hash, ActualHash: actual}
+		}
+		return f
 	case KindDir:
 		if info, err := os.Stat(abs); err != nil || !info.IsDir() {
-			return Finding{a.Path, Missing, "skill directory missing — run `esc sync`"}
+			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Detail: "skill directory missing — run `esc sync`"}
 		}
+		// Local is deliberately LocalNone here: Task 6 adds directory
+		// amendment detection once Task 5's per-file manifest exists to
+		// distinguish escapement's files from ones a team added.
+		f := Finding{Path: a.Path, Kind: a.Kind, Local: LocalNone}
 		actual, err := pack.DirHash(abs)
 		if err != nil {
-			return Finding{a.Path, Altered, err.Error()}
+			f.State, f.Detail = Altered, err.Error()
+			return f
 		}
 		if actual == a.Hash {
-			return Finding{a.Path, InSync, ""}
+			f.State = InSync
+			return f
 		}
-		return staleOrAltered(actual, "skill directory was modified")
+		f.State, f.Detail = staleOrAltered(actual, "skill directory was modified")
+		if f.State == Altered {
+			f.Alteration = &Alteration{ExpectedHash: a.Hash, ActualHash: actual}
+		}
+		return f
 	case KindJSONKeys:
 		content, err := os.ReadFile(abs)
 		if err != nil {
-			return Finding{a.Path, Missing, "file does not exist — run `esc sync`"}
+			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Detail: "file does not exist — run `esc sync`"}
+		}
+		f := Finding{Path: a.Path, Kind: a.Kind, Local: LocalNone}
+		if names, nerr := render.UnownedMCPServers(content, a.Keys); nerr == nil {
+			if am := newAmendment("", names); am != nil {
+				f.Local, f.Amendment = LocalAmended, am
+			}
 		}
 		actual, err := render.OwnedMCPHash(content, a.Keys)
 		if err != nil {
-			return Finding{a.Path, Altered, err.Error()}
+			f.State, f.Detail = Altered, err.Error()
+			return f
 		}
 		if actual == a.Hash {
-			return Finding{a.Path, InSync, ""}
+			f.State = InSync
+			return f
 		}
-		return staleOrAltered(actual, "managed mcp server entries were modified")
+		f.State, f.Detail = staleOrAltered(actual, "managed mcp server entries were modified")
+		if f.State == Altered {
+			f.Alteration = &Alteration{ExpectedHash: a.Hash, ActualHash: actual}
+		}
+		return f
 	}
-	return Finding{a.Path, Altered, "unknown artifact kind " + a.Kind}
+	return Finding{Path: a.Path, Kind: a.Kind, State: Altered, Detail: "unknown artifact kind " + a.Kind}
 }
