@@ -120,7 +120,7 @@ The `catalog` renders twice: concise directives for agents, and a readable table
 |---|---|
 | `esc init` | Scaffold config in a repo |
 | `esc sync` | Fetch pinned packs, verify, render, write, lock |
-| `esc status --check` | Classify drift (modified / missing / stale / constraint-violated); non-zero exit for CI |
+| `esc status --check` | Classify drift (altered / missing / stale / constraint-violated); non-zero exit for CI |
 | `esc diff` | Unified diff of expected vs actual |
 | `esc diff --against v2.0.0` | Review policy changes before updating a pin |
 | `esc update --ref v2.0.0` | Bump the pin (then `esc diff`, PR, `esc sync`) |
@@ -130,6 +130,79 @@ Plain `esc status` (no `--check`) exits 1 when a fail-closed constraint violatio
 exists, for example an unacknowledged custom target file. Ordinary drift and
 orphaned managed blocks still exit 0 without `--check` and 1 with it; orphans are
 self-healing, since the next sync removes the stale block.
+
+### Local amendments
+
+Content escapement does not own (text you add outside a managed block, extra
+`.mcp.json` server entries, files you add to a skill directory) is never
+touched by sync, and is reported on a second, independent axis: `local: none`
+or `local: amended`. An amendment alone is never drift and never changes an
+exit code. `esc status` calls a file with an in-sync managed block plus your
+own additions **augmented**; that's expected use, not a problem to fix.
+
+`esc sync` leaves an artifact alone when its managed region was hand-edited,
+instead of overwriting it: it warns on stderr, records the skip, and still
+exits 0. **Exit 0 from `esc sync` no longer asserts the repo matches
+policy**: it asserts that everything escapement was willing to apply was
+applied. Gate compliance on `esc status --check`, which exits 1 on any
+artifact that is not in sync. Run `esc sync --force` to overwrite a
+hand-edited managed region and converge; `--force` only touches content
+escapement owns and never overwrites a local amendment.
+
+If a pack manifest declares `reporting: { amendments: metrics }` (or
+`content`), a repo reports local amendments upstream at that level; a repo's
+own `.escapement/config.yaml` can lower that via `report_amendments: metrics`
+or `off`, but never raise it above what the pack declared. With no
+`reporting` block at all, nothing is ever reported upstream. This governs
+only what a publisher forwards: your own `esc status` always shows your
+amendments in full, including content, on your own machine, regardless of
+the resolved level; see JSON output below.
+
+### JSON output (`--json`)
+
+`esc status --json` and `esc sync --json` print one JSON document (schema 1)
+to stdout instead of human-readable output: the contract a separate
+consumer (a portal, a dashboard, a script) can parse without reading Go
+structs:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `schema` | int | Document schema version |
+| `command` | string | `"status"` or `"sync"` |
+| `packs[]` | array | One entry per pinned pack: `source`, `ref`, `pinned` (resolved content hash), `latest` (omitted if unknown), `signed` |
+| `findings[]` | array | Every classified artifact, pack pin, or subsystem signal (see below) |
+| `collection` | object | `amendments` (`off` / `metrics` / `content`) and `source` (`default` / `pack` / `repo-override`): the resolved reporting level and where it came from |
+| `skipped[]` | array | `sync` only, always present (possibly `[]`); omitted entirely for `status`. What sync declined to write: `path`, `kind`, `reason`, `expected_hash`, `actual_hash` |
+
+Each `findings[]` entry carries `subject` (an artifact path, a pack source
+URL, or the literal `"update-check"`), `kind` (`block` / `file` / `dir` /
+`json-keys` for artifacts, or `pack` / `update-check` / `constraint`),
+`managed` (the drift state), `local` (`none` / `amended`), `detail`, and
+optional `amendment` / `alteration` objects.
+
+Two things worth knowing before you parse this:
+
+- **`subject` is not unique within `findings[]`.** A constraint-violation
+  finding reuses an artifact's path, so key on `(subject, kind)`, not
+  `subject` alone.
+- **`--json` skips the interactive update check** on both commands, which
+  for `status` also skips the update-log append: a consumer polling only
+  `esc status --json` will never see a pack's `latest` field advance.
+  `esc sync --json` still records a check entry every time, since sync
+  always calls the recorder regardless of `--json`.
+
+`amendment.content` and `alteration.diff` are both omitted for `.mcp.json`
+(kind `json-keys`) and for skill directories (kind `dir`): a whole-file
+`.mcp.json` diff would ship a user's own *unowned* MCP server entries into a
+document a publisher forwards upstream, and a directory's alteration hashes
+are a whole-tree pair with no single-file diff to show. Local surfaces
+(`esc status`, `esc status --json`, `esc sync --json`) always report
+complete local truth, amendment content included, no matter what the
+resolved reporting level is. The level governs only what a publisher sends
+onward, never what your own machine shows you.
+
+See `docs/superpowers/specs/2026-08-05-local-amendment-model-design.md` §5
+for the full field-level rationale.
 
 There's also a GitHub Action:
 
@@ -198,7 +271,7 @@ allow_custom_target_files:
 This tool writes instructions that agents execute — its distribution channel is a high-value target, and it is designed fail-closed:
 
 - **Signed packs.** Sources are signature-verified (`git verify-tag` against an SSH `allowed_signers` trust root) before a byte is used. Unsigned sources require an explicit, greppable `trust: unsigned` in config.
-- **Hash-pinned lockfile.** `.escapement/escapement.lock` records resolved commit SHAs and content hashes. A moved tag or tampered fetch fails loudly (exit 3) before any write.
+- **Hash-pinned lockfile.** `.escapement/escapement.lock` records resolved commit SHAs and content hashes. A moved tag or tampered fetch fails loudly (exit 3) before any write. It also carries what sync last wrote, which is how `esc sync` recognizes a hand-edited managed region and declines to overwrite it: deleting the lockfile erases that history, so the next sync treats every artifact as never-synced and overwrites every hand-edit. Don't delete it to "reset" a repo.
 - **Explicit updates only.** Sync never auto-jumps versions. Policy changes arrive as reviewable diffs in normal PRs — your existing review, changelog, and notification machinery.
 - **No standing write path.** No daemon, no server pushing into repos. Only `esc`, run by someone with write access, changes policy files.
 - **Merge constraints.** Packs can bound the final merged file (max size, forbidden patterns like "ignore the governance section"), validated before writing.

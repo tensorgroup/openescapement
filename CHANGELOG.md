@@ -8,6 +8,11 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- Local amendments: content escapement does not own is preserved everywhere, reported on a new `local` axis, and surfaced in `esc status`. Files added to skill directories are no longer deleted by sync.
+- `esc sync` skips artifacts whose managed region was hand-edited instead of overwriting them, warns, and exits 0. `esc sync --force` converges.
+- New managed blocks are inserted at the top of a file rather than appended.
+- `esc status --json` and `esc sync --json` emit a machine-readable report.
+- `reporting.amendments` in a pack manifest and `report_amendments` in repo config resolve the level at which a repo reports local amendments upstream.
 - Vendor starter sets: each full-depth vendor page grows a starter-set panel
   that adopts any selection of model starters plus the model-routing overview
   as one composed fragment (`rules/models-<vendor>.md`). Single-model adoption

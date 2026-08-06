@@ -8,7 +8,7 @@ cd examples/governed-service
 go run ../../cmd/esc sync     # renders CLAUDE.md, AGENTS.md, GEMINI.md, GOVERNANCE.md, skills, .mcp.json
 go run ../../cmd/esc status   # everything in sync
 sed -i '' 's/Use Vault/Use whatever/' CLAUDE.md
-go run ../../cmd/esc status --check   # exit 1: managed block modified
+go run ../../cmd/esc status --check   # exit 1: managed block altered
 go run ../../cmd/esc diff     # see exactly what drifted
 go run ../../cmd/esc sync     # repair
 ```

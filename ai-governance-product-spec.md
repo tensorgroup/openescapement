@@ -133,6 +133,39 @@ No cron, no daemon, no server push. Clients pull on their own cadence, and the c
 - **Governance teeth via status.** Two new finding kinds: `pack-stale` (updates known available, not applied) and `check-overdue` (no successful check within cadence and the status-time attempt also failed). Both count as findings, so `esc status --check` exits 1 in CI while interactive use stays a polite prompt.
 - **Server side (control plane, v0.2+).** The admin portal edits packs, so setting the cadence there publishes a new pack version — one policy channel, versioned and audited like any other rule change; clients pick it up on their next check. Every check request against a control-plane endpoint is logged (org, repo, outcome, versions, timestamp): a passive fleet heartbeat that powers the freshness dashboards, per-repo last-seen, and the staleness view of the shadow-IT map with no separate heartbeat infrastructure. When connected, check results also flow as `update_check` telemetry events under the decided consent model (connected = opt-out, unconnected = silent).
 
+### Local amendment reporting (DECIDED)
+
+Teams routinely append their own rules alongside a synced pack, and
+occasionally edit inside the managed block by accident. v1's stance for
+both is enablement, not enforcement: `esc` observes and reports rather than
+blocking a rollout; this decides open question 2 below.
+
+- **Two axes, never collapsed.** Every artifact carries a `managed` state
+  (in-sync, altered, stale, missing, orphan: content escapement owns) and
+  a `local` state (none, amended: content sharing the artifact that it
+  does not own). A local amendment alone is never drift and never blocks a
+  sync or a CI gate; a hand-edited managed region is skipped and reported
+  instead of silently overwritten, and `esc sync` still exits 0 for every
+  other artifact it converged.
+- **Pack declares, repo may only decline.** A pack manifest may set
+  `reporting: { amendments: metrics | content }` to ask that local
+  amendments be reported upstream: counts and hashes at `metrics`, full
+  content at `content`. Absent, nothing is ever sent, the same consent
+  posture as the update-check model above: the unconnected open-source path
+  stays silent by construction. A repo's own config may clamp the level
+  down (`report_amendments: metrics | off`) but never raise it above what
+  the pack asked for, so a repo can't opt itself into sending content its
+  org never requested. With multiple packs, the strictest (highest) level
+  wins, the same precedence rule the update-check cadence uses.
+- **Local truth is always complete, regardless of the resolved level.**
+  `esc status` on the user's own machine always shows full amendment
+  content; the resolved reporting level governs only what a publisher
+  forwards onward. This is the feature's privacy design, not an
+  implementation detail worth trading away for a simpler contract.
+
+Full data model, JSON contract, and sync semantics:
+`docs/superpowers/specs/2026-08-05-local-amendment-model-design.md`.
+
 ## 7. MVP Cut (strawman — challenge this in Claude Code)
 
 **v0.1 (weeks, not months):**
@@ -184,7 +217,15 @@ No cron, no daemon, no server push. Clients pull on their own cadence, and the c
 *(All prior questions remain open; new thoughts noted inline.)*
 
 1. **Name.** ("Paved road" / "charter" / mechanical "governor" directions — a governor is literally a deterministic control device for a powerful engine.)
-2. **Enforcement vs. observation in v1** — drift *detection* vs. drift *blocking* via CI check?
+2. **Enforcement vs. observation in v1 (DECIDED: observation).** `esc sync`
+   never blocks on a hand-edited managed region or an appended local
+   amendment: it skips the hand-edited artifact, warns, converges
+   everything else, and still exits 0. Compliance gating is a separate,
+   opt-in step (`esc status --check` in CI), not sync's own exit code. A
+   repo that declines part of a policy rollout must not fail its rollout;
+   that's the enablement-over-enforcement stance this product commits to
+   for v1, consistent with the compliance-suite posture it explicitly
+   avoids (§4). Mechanism: `docs/superpowers/specs/2026-08-05-local-amendment-model-design.md`.
 3. **Rule-pack format** — current lean: simplest thing that works; YAML-or-markdown canonical source rendered per-tool (CLAUDE.md, GEMINI.md, CURSOR.md, AGENTS.md, skills, agents dirs). Possibly no schema at all in v0.1, just composed markdown fragments. Decide by building.
 4. **MCP server as core product surface** — promoted to a strong architectural lean (§6); remaining questions: authn model for agent connections, offline behavior, how much policy lives server-side vs. artifact-side.
 5. **Turn-limit enforcement mechanics** — artifact instruction only, CLI wrapping agent invocation, MCP-server-side session accounting, or gateway integration?
