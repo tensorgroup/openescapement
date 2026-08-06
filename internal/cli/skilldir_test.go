@@ -146,3 +146,132 @@ func TestSkillDirUpgradePreservesUnknownFiles(t *testing.T) {
 		t.Errorf("pre-manifest lock upgrade must not delete unknown files: %v", err)
 	}
 }
+
+// TestSkillDirLockTraversalFailsClosed is the fix-round regression test for
+// finding 1 (CRITICAL): escapement.lock is a committed, PR-reachable
+// artifact, so its "files" entries for a dir artifact are not trusted input.
+// Before the fix, mergeDir's removal loop joined a prevFiles entry straight
+// onto dst with filepath.Join, which cleans ".." segments instead of
+// rejecting them, so a lockfile entry like "../../../../outside.txt" could
+// make `esc sync` delete a file outside the repo entirely. Every removal
+// path now goes through containedPath first, mirroring the existing
+// prevLock.Path check in Apply (apply.go:132), so this must fail the whole
+// sync rather than reach the filesystem outside the repo.
+func TestSkillDirLockTraversalFailsClosed(t *testing.T) {
+	repo := setupGovernedRepoWithSkills(t)
+	runEsc(t, repo, "sync")
+
+	// One level above the repo root: .claude/skills/esc-acme-org-esc-security
+	// is 3 path segments under repo, so 4 ".." collapses to exactly 1 level
+	// above repo (path.Clean keeps the excess "..").
+	outside := filepath.Join(filepath.Dir(repo), "outside-"+filepath.Base(repo)+".txt")
+	if err := os.WriteFile(outside, []byte("do not touch\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(outside)
+
+	lockPath := filepath.Join(repo, ".escapement", "escapement.lock")
+	raw, err := os.ReadFile(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lock map[string]any
+	if err := json.Unmarshal(raw, &lock); err != nil {
+		t.Fatal(err)
+	}
+	arts, _ := lock["artifacts"].([]any)
+	found := false
+	for _, a := range arts {
+		art, _ := a.(map[string]any)
+		if art["kind"] == "dir" {
+			files, _ := art["files"].([]any)
+			files = append(files, "../../../../outside-"+filepath.Base(repo)+".txt")
+			art["files"] = files
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("precondition: expected a dir artifact in the lock")
+	}
+	out, err := json.MarshalIndent(lock, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(lockPath, append(out, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, code := runEscOut(t, repo, "sync"); code == 0 {
+		t.Fatal("sync with a traversal entry in the lockfile should fail closed, not exit 0")
+	}
+
+	if _, err := os.Stat(outside); err != nil {
+		t.Fatalf("a lockfile traversal entry deleted a file outside the repo: %v", err)
+	}
+}
+
+// TestSkillDirNestedSymlinkFailsClosed is the fix-round regression test for
+// finding 2 (Important): refuseSymlinks(root, a.Path) in Apply only checks
+// path components down to the skill directory itself, not the files
+// mergeDir discovers underneath it. The old stageDir destroyed any nested
+// symlink wholesale via os.RemoveAll, so it never mattered; mergeDir's
+// per-file atomicWrite instead calls os.MkdirAll/os.CreateTemp on the
+// file's parent directory, which the OS resolves through a symlinked
+// intermediate component — so a symlinked subdirectory committed inside an
+// escapement-owned skill dir became a write primitive into wherever it
+// points. Every file mergeDir touches is now re-checked with refuseSymlinks
+// immediately before the filesystem call, so this must fail closed and
+// never touch the symlink's target.
+func TestSkillDirNestedSymlinkFailsClosed(t *testing.T) {
+	packRepo := newPackRepo(t, "1.0.0")
+	files := map[string]string{
+		"org/skills/esc-security/SKILL.md":    "---\nname: esc-security\ndescription: demo\n---\n\nRules.\n",
+		"org/skills/esc-security/sub/note.md": "Nested pack content.\n",
+	}
+	files["org/pack.yaml"] = withExtraSkill(t, packRepo, "skills/esc-security")
+	writeFiles(t, packRepo, files)
+	gitIn(t, packRepo, "add", ".")
+	gitIn(t, packRepo, "commit", "-m", "add nested skill file")
+	gitIn(t, packRepo, "tag", "-f", "v1.0.0")
+	repo := newGoverned(t, packRepo, "v1.0.0")
+
+	runEsc(t, repo, "sync")
+	dir := filepath.Join(repo, ".claude", "skills", "esc-acme-org-esc-security")
+	if _, err := os.Stat(filepath.Join(dir, "sub", "note.md")); err != nil {
+		t.Fatalf("precondition: %v", err)
+	}
+
+	// A team member (or a hostile PR) replaces the synced "sub" directory
+	// with a symlink pointing outside the repo entirely.
+	outside := t.TempDir()
+	marker := filepath.Join(outside, "marker.txt")
+	if err := os.WriteFile(marker, []byte("do not touch\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Join(dir, "sub")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "sub")); err != nil {
+		t.Fatal(err)
+	}
+
+	// Same pack, same version: mergeDir re-copies and re-writes every synced
+	// file on every sync, so no version bump is needed to exercise the
+	// write loop's per-file symlink check.
+	if _, code := runEscOut(t, repo, "sync"); code == 0 {
+		t.Fatal("sync through a symlinked subdirectory should fail closed, not exit 0")
+	}
+
+	got, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatalf("marker file outside the repo was removed: %v", err)
+	}
+	if string(got) != "do not touch\n" {
+		t.Errorf("marker file outside the repo was modified: %q", got)
+	}
+	if entries, err := os.ReadDir(outside); err != nil {
+		t.Fatal(err)
+	} else if len(entries) != 1 {
+		t.Errorf("sync wrote through the symlink into the outside directory: %v", entries)
+	}
+}

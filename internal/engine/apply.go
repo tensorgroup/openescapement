@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -96,7 +97,7 @@ func Apply(root string, p *PlanResult) error {
 			if prev := prevLock.Artifact(a.Path); prev != nil {
 				prevFiles = prev.Files
 			}
-			files, err := mergeDir(a.SrcDir, abs, prevFiles)
+			files, err := mergeDir(root, a.Path, a.SrcDir, abs, prevFiles)
 			if err != nil {
 				return err
 			}
@@ -217,7 +218,8 @@ func atomicWrite(path string, content []byte) error {
 	return os.Rename(tmp.Name(), path)
 }
 
-// mergeDir reconciles dst against the pack tree at src. Files the pack
+// mergeDir reconciles dst (the repo-root-relative artifact path artPath,
+// resolved under root) against the pack tree at src. Files the pack
 // provides are written; files the previous manifest recorded but the pack no
 // longer provides are removed; anything else on disk is left alone as a local
 // amendment. Returns the pack-relative paths written, for the manifest.
@@ -235,7 +237,23 @@ func atomicWrite(path string, content []byte) error {
 // via atomicWrite (temp file + rename within dst). The result is "each file
 // swaps atomically, and dst is never touched until the source is
 // known-good" rather than "the whole tree swaps at once."
-func mergeDir(src, dst string, prevFiles []string) ([]string, error) {
+//
+// Security: prevFiles comes from the lockfile, a committed, PR-reachable
+// artifact — it is not trusted input. Every removal path is run through
+// containedPath before use, exactly like the sibling prevLock.Path lookup in
+// Apply, so a lockfile entry such as "../../../../.zshrc" cannot escape dst
+// and delete something outside it. An escaping entry aborts the whole sync
+// (containedPath's error propagates) rather than being silently skipped:
+// the caller needs to know its lockfile is carrying a hostile entry, the
+// same fail-closed posture Apply already takes for prev.Path at
+// apply.go:132 and for a moved tag (ErrLockMismatch). Every path under dst
+// — both files staged for removal and files staged for writing — is also
+// re-checked with refuseSymlinks immediately before the filesystem call: a
+// symlink committed inside an escapement-owned dir (e.g. a nested
+// "sub -> /etc") is not something the initial refuseSymlinks(root, a.Path)
+// call in Apply can see, because that call only walks down to dst itself,
+// not the files mergeDir discovers underneath it.
+func mergeDir(root, artPath, src, dst string, prevFiles []string) ([]string, error) {
 	parent := filepath.Dir(dst)
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return nil, err
@@ -280,11 +298,23 @@ func mergeDir(src, dst string, prevFiles []string) ([]string, error) {
 		if nowProvided[prev] {
 			continue
 		}
-		if err := os.Remove(filepath.Join(dst, filepath.FromSlash(prev))); err != nil && !os.IsNotExist(err) {
+		rel := path.Join(artPath, prev)
+		target, err := containedPath(root, rel)
+		if err != nil {
+			return nil, err
+		}
+		if err := refuseSymlinks(root, rel); err != nil {
+			return nil, err
+		}
+		if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
 			return nil, err
 		}
 	}
 	for _, f := range written {
+		rel := path.Join(artPath, f)
+		if err := refuseSymlinks(root, rel); err != nil {
+			return nil, err
+		}
 		from := filepath.Join(tree, filepath.FromSlash(f))
 		to := filepath.Join(dst, filepath.FromSlash(f))
 		content, err := os.ReadFile(from)
