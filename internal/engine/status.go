@@ -51,6 +51,12 @@ type Finding struct {
 type StatusResult struct {
 	Findings []Finding
 	Plan     *PlanResult
+	// LatestBySource carries the newest successful update-check's per-pack
+	// latest-version string, keyed by pack source. Populated only when some
+	// pack declares update_check (the same gate that produces PackStale
+	// findings below); nil otherwise. NewReport reads this to fill
+	// ReportPack.Latest without a second disk read or any network probe.
+	LatestBySource map[string]string
 }
 
 // Clean reports whether every artifact is in sync and no constraint is
@@ -129,7 +135,9 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 		entries, _ := updatecheck.LoadLog(root)
 		ls := updatecheck.LastSuccess(entries)
 		if ls != nil {
+			res.LatestBySource = make(map[string]string, len(ls.Packs))
 			for _, ps := range ls.Packs {
+				res.LatestBySource[ps.Source] = ps.Latest
 				if ps.Updates {
 					res.Findings = append(res.Findings, Finding{
 						Path:  ps.Source,

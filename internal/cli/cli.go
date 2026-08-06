@@ -3,6 +3,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -247,10 +248,63 @@ func cmdSync(ctx context.Context, root string, args []string, stdout, stderr io.
 	fs := flag.NewFlagSet("sync", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	force := fs.Bool("force", false, "overwrite hand-edited managed regions instead of skipping them")
+	asJSON := fs.Bool("json", false, "print a machine-readable JSON report instead of human-readable output")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
+	if *asJSON {
+		return exitCode(syncJSON(ctx, root, *force, stdout), stderr)
+	}
 	return exitCode(syncOnce(ctx, root, *force, stdout, stderr), stderr)
+}
+
+// syncJSON runs the same fetch/verify/write pipeline as syncOnce but skips
+// every human-readable progress line: --json's contract is a single JSON
+// document on stdout, nothing on stderr. Findings are re-derived via
+// engine.Status after Apply rather than hand-rolled from SyncResult, so the
+// report reflects the actual post-write state on disk (including any
+// artifact Apply declined to touch) instead of an assumption about what
+// Apply did.
+func syncJSON(ctx context.Context, root string, force bool, stdout io.Writer) error {
+	plan, err := engine.Plan(ctx, root)
+	if err != nil {
+		return err
+	}
+	res, err := engine.Apply(root, plan, force)
+	if err != nil {
+		return err
+	}
+	updatecheck.RecordSync(ctx, root, plan.PackObjs)
+	st, err := engine.Status(ctx, root)
+	if err != nil {
+		return err
+	}
+	return writeJSONReport(ctx, root, stdout, st, res)
+}
+
+// writeJSONReport resolves the reporting Collection, assembles the Report
+// document, fills in Alteration.Diff for the kinds where it's meaningful
+// (see engine.PopulateDiffs), and writes it to stdout as indented JSON for
+// stable, diffable output. Shared by cmdStatus and cmdSync's --json paths;
+// sync is nil for a status report.
+func writeJSONReport(ctx context.Context, root string, stdout io.Writer, st *engine.StatusResult, sync *engine.SyncResult) error {
+	coll, err := engine.ResolveReporting(st.Plan.PackObjs, st.Plan.Config)
+	if err != nil {
+		return err
+	}
+	rep := engine.NewReport(st, coll, sync)
+	if err := engine.PopulateDiffs(ctx, root, st.Plan, rep); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(rep, "", "  ")
+	if err != nil {
+		return err
+	}
+	if _, err := stdout.Write(data); err != nil {
+		return err
+	}
+	_, err = stdout.Write([]byte("\n"))
+	return err
 }
 
 // syncOnce runs one sync (fetch, verify, render, write) and reports the
@@ -300,6 +354,7 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	check := fs.Bool("check", false, "exit non-zero when any artifact is not in sync")
+	asJSON := fs.Bool("json", false, "print a machine-readable JSON report instead of human-readable output")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -310,20 +365,31 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 	}
 	hasViolation := false
 	for _, f := range st.Findings {
-		if f.State == engine.InSync {
-			fmt.Fprintf(stdout, "  ✓ %-20s in sync\n", f.Path)
-		} else {
-			fmt.Fprintf(stdout, "  ✗ %-20s %s: %s\n", f.Path, f.State, f.Detail)
-		}
 		if f.State == engine.ConstraintViolated {
 			hasViolation = true
 		}
 	}
+	if *asJSON {
+		if err := writeJSONReport(ctx, root, stdout, st, nil); err != nil {
+			return exitCode(err, stderr)
+		}
+	} else {
+		for _, f := range st.Findings {
+			if f.State == engine.InSync {
+				fmt.Fprintf(stdout, "  ✓ %-20s in sync\n", f.Path)
+			} else {
+				fmt.Fprintf(stdout, "  ✗ %-20s %s: %s\n", f.Path, f.State, f.Detail)
+			}
+		}
+		if st.Clean() {
+			fmt.Fprintln(stdout, "All policy artifacts in sync.")
+		} else {
+			fmt.Fprintln(stdout, "Drift detected. Run `esc diff` to inspect, `esc sync` to reconcile.")
+		}
+	}
 	if st.Clean() {
-		fmt.Fprintln(stdout, "All policy artifacts in sync.")
 		return 0
 	}
-	fmt.Fprintln(stdout, "Drift detected. Run `esc diff` to inspect, `esc sync` to reconcile.")
 	// Constraint violations (e.g. an unacknowledged custom target, §2.3) are
 	// fail-closed: they block Apply outright, so status must surface them as a
 	// non-zero exit even without --check, not just as ordinary drift. Orphaned

@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "packs": [
+    {
+      "source": "file://<packrepo>",
+      "ref": "v1.0.0",
+      "pinned": "<hash>",
+      "signed": false
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "CLAUDE.md",
+      "kind": "block",
+      "managed": "in-sync",
+      "local": "amended",
+      "amendment": {
+        "bytes": 36,
+        "lines": 4,
+        "hash": "<hash>",
+        "content": "# Team notes\n\n\nOur build uses pnpm.\n"
+      }
+    },
+    {
+      "path": "AGENTS.md",
+      "kind": "block",
+      "managed": "in-sync",
+      "local": "none"
+    },
+    {
+      "path": "GEMINI.md",
+      "kind": "block",
+      "managed": "in-sync",
+      "local": "none"
+    },
+    {
+      "path": "GOVERNANCE.md",
+      "kind": "file",
+      "managed": "in-sync",
+      "local": "none"
+    },
+    {
+      "path": ".claude/skills/esc-acme-org-vault-usage",
+      "kind": "dir",
+      "managed": "in-sync",
+      "local": "none"
+    },
+    {
+      "path": ".mcp.json",
+      "kind": "json-keys",
+      "managed": "in-sync",
+      "local": "none"
+    }
+  ],
+  "collection": {
+    "amendments": "off",
+    "source": "default"
+  }
+}
