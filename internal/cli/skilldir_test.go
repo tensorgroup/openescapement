@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/tensorgroup/openescapement/internal/engine"
 )
 
 // TestSkillDirPreservesAddedFiles is the regression test for the data-loss
@@ -338,5 +341,53 @@ func TestSkillDirNestedSymlinkFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	} else if len(entries) != 1 {
 		t.Errorf("sync wrote through the symlink into the outside directory: %v", entries)
+	}
+}
+
+// TestSkillDirAmendmentReported is Task 6: a file a team adds under an
+// escapement-owned skill directory must report as a local amendment on
+// status, not be silently ignored (Task 5 already made sync preserve it) and
+// not flip the directory's managed axis to altered (the managed hash covers
+// only pack-provided files, per DirHashOf). See TestFixtureSkillsRepoSyncs
+// for why the synced path is esc-acme-org-esc-security, not esc-security.
+func TestSkillDirAmendmentReported(t *testing.T) {
+	repo := setupGovernedRepoWithSkills(t)
+	runEsc(t, repo, "sync")
+	dir := filepath.Join(repo, ".claude", "skills", "esc-acme-org-esc-security")
+	if err := os.WriteFile(filepath.Join(dir, "team-notes.md"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := engine.Status(context.Background(), repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// setupGovernedRepoWithSkills's fixture pack declares two skills
+	// (vault-usage from packRepoFiles, plus esc-security added here), so
+	// Findings carries two KindDir entries. Only esc-security got the added
+	// file, so the check must be scoped to its path — checking every KindDir
+	// finding indiscriminately fails on vault-usage's unrelated finding.
+	const skillPath = ".claude/skills/esc-acme-org-esc-security"
+	var found bool
+	for _, f := range st.Findings {
+		if f.Kind != engine.KindDir || f.Path != skillPath {
+			continue
+		}
+		found = true
+		if f.State != engine.InSync {
+			t.Errorf("managed axis = %q, want in-sync", f.State)
+		}
+		if f.Local != engine.LocalAmended {
+			t.Errorf("local axis = %q, want amended", f.Local)
+		}
+		if f.Amendment == nil || len(f.Amendment.Items) != 1 || f.Amendment.Items[0] != "team-notes.md" {
+			t.Errorf("amendment = %+v", f.Amendment)
+		}
+	}
+	if !found {
+		t.Fatal("no finding for " + skillPath)
+	}
+	if !st.Clean() {
+		t.Error("an amendment alone must not make status unclean")
 	}
 }

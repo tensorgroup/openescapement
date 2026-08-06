@@ -37,8 +37,12 @@ type Artifact struct {
 	Body string
 	// SrcDir is the pack directory to copy from (kind=dir).
 	SrcDir string
-	// Files is the pack-relative paths written for a dir artifact, filled in
-	// by Apply after mergeDir runs (kind=dir).
+	// Files is the pack-relative paths for a dir artifact (kind=dir), sorted
+	// and slash-separated relative to the artifact directory. Plan fills it
+	// in from a walk of SrcDir, so Status has the expected file list without
+	// reading the lockfile; Apply overwrites it with what mergeDir actually
+	// wrote (the two agree on identical inputs, since mergeDir stages an
+	// unmodified copy of SrcDir before writing it).
 	Files []string
 	// Servers are the owned MCP entries (kind=json-keys).
 	Servers map[string]map[string]any
@@ -226,10 +230,26 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 					if err != nil {
 						return nil, err
 					}
+					var files []string
+					walkErr := filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
+						if err != nil || d.IsDir() {
+							return err
+						}
+						frel, err := filepath.Rel(src, path)
+						if err != nil {
+							return err
+						}
+						files = append(files, filepath.ToSlash(frel))
+						return nil
+					})
+					if walkErr != nil {
+						return nil, walkErr
+					}
+					sort.Strings(files)
 					name := "esc-" + p.Manifest.Name + "-" + filepath.Base(rel)
 					res.Artifacts = append(res.Artifacts, Artifact{
 						Path: filepath.ToSlash(filepath.Join(".claude", "skills", name)),
-						Kind: KindDir, Hash: h, SrcDir: src,
+						Kind: KindDir, Hash: h, SrcDir: src, Files: files,
 					})
 				}
 			}

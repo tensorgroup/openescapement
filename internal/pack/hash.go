@@ -54,3 +54,28 @@ func DirHash(dir string) (string, error) {
 	}
 	return "sha256:" + hex.EncodeToString(h.Sum(nil)), nil
 }
+
+// DirHashOf computes the same canonical hash as DirHash, but only over the
+// given slash-separated paths relative to dir, rather than every file in the
+// tree. This is what lets a dir artifact's managed hash cover exactly the
+// pack-provided files: a team adding an extra file under dir must not flip
+// the whole directory to altered, so the managed hash can only ever be a
+// function of the files escapement itself wrote. rel is sorted into a local
+// copy before hashing so DirHashOf(dir, allFiles) agrees byte-for-byte with
+// DirHash(dir) regardless of the caller's ordering.
+func DirHashOf(dir string, rel []string) (string, error) {
+	files := append([]string(nil), rel...)
+	sort.Strings(files)
+	h := sha256.New()
+	for _, r := range files {
+		io.WriteString(h, r)
+		h.Write([]byte{0})
+		content, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(r)))
+		if err != nil {
+			return "", err
+		}
+		h.Write(content)
+		h.Write([]byte{0})
+	}
+	return "sha256:" + hex.EncodeToString(h.Sum(nil)), nil
+}

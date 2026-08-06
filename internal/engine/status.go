@@ -3,8 +3,10 @@ package engine
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/tensorgroup/openescapement/internal/esc"
@@ -158,9 +160,9 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 // lockfile to distinguish "pack moved on, file matches old sync" (stale)
 // from "human edited the managed content" (altered). It also reports the
 // orthogonal local axis for kinds where escapement shares the artifact with
-// content it does not own (KindBlock, KindJSONKeys); KindFile and KindDir
-// never carry a local amendment here (KindDir is Task 6's job, once the
-// per-file manifest lands).
+// content it does not own (KindBlock, KindJSONKeys, KindDir); KindFile never
+// carries a local amendment here since it has no notion of a shared
+// container.
 func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 	abs := filepath.Join(root, filepath.FromSlash(a.Path))
 	locked := lock.Artifact(a.Path)
@@ -220,11 +222,19 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 		if info, err := os.Stat(abs); err != nil || !info.IsDir() {
 			return Finding{Path: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "skill directory missing — run `esc sync`"}
 		}
-		// Local is deliberately LocalNone here: Task 6 adds directory
-		// amendment detection once Task 5's per-file manifest exists to
-		// distinguish escapement's files from ones a team added.
 		f := Finding{Path: a.Path, Kind: a.Kind, Local: LocalNone}
-		actual, err := pack.DirHash(abs)
+		unmanaged, err := unmanagedDirFiles(abs, a.Files)
+		if err != nil {
+			return Finding{Path: a.Path, Kind: a.Kind, State: Altered, Local: LocalNone, Detail: err.Error()}
+		}
+		if am := newAmendment("", unmanaged); am != nil {
+			f.Local, f.Amendment = LocalAmended, am
+		}
+		// The managed hash covers only a.Files (the pack-provided paths), not
+		// the whole tree: a file the team added under this directory must
+		// report as an amendment above, not flip the entire directory to
+		// altered.
+		actual, err := pack.DirHashOf(abs, a.Files)
 		if err != nil {
 			f.State, f.Detail = Altered, err.Error()
 			return f
@@ -287,4 +297,38 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 		return f
 	}
 	return Finding{Path: a.Path, Kind: a.Kind, State: Altered, Local: LocalNone, Detail: "unknown artifact kind " + a.Kind}
+}
+
+// unmanagedDirFiles walks dir and returns the sorted, slash-separated paths
+// relative to dir that are not in provided (the pack-provided file list for
+// this artifact). These are files a team added under an escapement-owned
+// skill directory: sync preserves them (Task 5's mergeDir), and this is what
+// lets status report them as a local amendment instead of silently ignoring
+// them or, worse, folding them into the managed hash and reporting the whole
+// directory as altered.
+func unmanagedDirFiles(dir string, provided []string) ([]string, error) {
+	owned := make(map[string]bool, len(provided))
+	for _, p := range provided {
+		owned[p] = true
+	}
+	var unmanaged []string
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if !owned[rel] {
+			unmanaged = append(unmanaged, rel)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(unmanaged)
+	return unmanaged, nil
 }

@@ -300,3 +300,44 @@ func TestDirHashDeterministic(t *testing.T) {
 		t.Errorf("hash format: %s", h1)
 	}
 }
+
+// TestDirHashOfAgreesWithDirHash is the load-bearing property for Task 6:
+// DirHashOf(dir, rel) must be the same canonical hash as DirHash(dir) when
+// rel is the full file list of dir, in any order, so a dir artifact's
+// managed hash (computed at plan time by DirHash over the pack's own tree)
+// agrees with the status-time hash (computed by DirHashOf over the same
+// files read back off disk). A divergence here would make every dir
+// artifact report altered on every sync.
+func TestDirHashOfAgreesWithDirHash(t *testing.T) {
+	files := validFiles()
+	dir := writePack(t, files)
+
+	full, err := DirHash(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rel := []string{
+		"skills/vault-usage/SKILL.md",
+		"rules/hosting.md",
+		"rules/secrets.md",
+		"pack.yaml",
+	}
+	of, err := DirHashOf(dir, rel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if of != full {
+		t.Errorf("DirHashOf(dir, allFiles) = %s, want DirHash(dir) = %s", of, full)
+	}
+
+	// A subset must hash differently from the full tree (this is the whole
+	// point: an added file must not be silently absorbed into the hash).
+	subset, err := DirHashOf(dir, []string{"pack.yaml"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subset == full {
+		t.Error("hashing a subset of files produced the same hash as the whole tree")
+	}
+}
