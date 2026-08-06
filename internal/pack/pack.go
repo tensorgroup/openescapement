@@ -30,8 +30,16 @@ type Manifest struct {
 	Catalog     []CatalogEntry `yaml:"catalog"`
 	Constraints Constraints    `yaml:"constraints"`
 	UpdateCheck *UpdateCheck   `yaml:"update_check,omitempty"`
+	Reporting   *Reporting     `yaml:"reporting,omitempty"`
 
 	CustomTargets []CustomTarget `yaml:"custom_targets,omitempty"`
+}
+
+// Reporting declares what a repo consuming this pack may send upstream.
+// Absent means nothing is sent, ever: the unconnected path stays silent by
+// construction, the same stance UpdateCheck takes.
+type Reporting struct {
+	Amendments string `yaml:"amendments"` // "metrics" | "content"
 }
 
 // MCPSpec declares MCP server entries a pack injects into .mcp.json.

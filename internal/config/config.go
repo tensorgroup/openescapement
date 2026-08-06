@@ -26,6 +26,7 @@ type Config struct {
 	AllowedSignersFile     string    `yaml:"allowed_signers_file,omitempty"`
 	Targets                []string  `yaml:"targets,omitempty"`                   // empty = all targets
 	AllowCustomTargetFiles []string  `yaml:"allow_custom_target_files,omitempty"` // acknowledged custom-target files (§2.3)
+	ReportAmendments       string    `yaml:"report_amendments,omitempty"`         // "metrics" | "off"; may only clamp down
 }
 
 func Path(root string) string { return filepath.Join(root, Dir, fileName) }

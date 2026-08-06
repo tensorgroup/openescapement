@@ -13,6 +13,7 @@ var (
 	ErrSignature    = errors.New("signature verification failed")
 	ErrLockMismatch = errors.New("lockfile integrity mismatch")
 	ErrConstraint   = errors.New("constraint violation")
+	ErrConfig       = errors.New("invalid repo config")
 )
 
 // HashBytes returns the canonical hash string for b: "sha256:<hex>".
