@@ -183,8 +183,20 @@ func explainDetection(w io.Writer, detected []Detected) {
 		}
 	}
 	fmt.Fprintf(w, "Found %s.\n\n", joinList(labels))
-	fmt.Fprintf(w, "`esc sync` will %s. Your current content is preserved byte for byte and reported as a local amendment.\n",
-		joinList(clauses))
+	// One clause reads best as prose. Several do not: a repo with all six
+	// targets produced a single ~60 word sentence that said "insert a
+	// managed block at the top of" four times in a row, which is the exact
+	// case a first-contact explanation most needs to stay readable in.
+	const preserved = "Your current content is preserved byte for byte and reported as a local amendment."
+	if len(clauses) == 1 {
+		fmt.Fprintf(w, "`esc sync` will %s. %s\n", clauses[0], preserved)
+	} else {
+		fmt.Fprintln(w, "`esc sync` will:")
+		for _, c := range clauses {
+			fmt.Fprintf(w, "  - %s\n", c)
+		}
+		fmt.Fprintf(w, "\n%s\n", preserved)
+	}
 	if needsPlacementHint {
 		fmt.Fprintf(w, "\nTo place the block somewhere else, put %s where you want it before syncing.\n", render.Placeholder)
 	}

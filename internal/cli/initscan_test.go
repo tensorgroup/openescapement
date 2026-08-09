@@ -178,7 +178,10 @@ func TestInitExplainsDetection(t *testing.T) {
 		want := fmt.Sprintf(
 			"Initialized %s\n\n"+
 				"Found CLAUDE.md (3 lines) and .mcp.json.\n\n"+
-				"`esc sync` will insert a managed block at the top of CLAUDE.md and add pack MCP servers alongside your existing ones. Your current content is preserved byte for byte and reported as a local amendment.\n\n"+
+				"`esc sync` will:\n"+
+				"  - insert a managed block at the top of CLAUDE.md\n"+
+				"  - add pack MCP servers alongside your existing ones\n\n"+
+				"Your current content is preserved byte for byte and reported as a local amendment.\n\n"+
 				"To place the block somewhere else, put %s where you want it before syncing.\n",
 			config.Path(root), render.Placeholder)
 		if got := out.String(); got != want {
@@ -208,12 +211,72 @@ func TestInitExplainsDetection(t *testing.T) {
 		want := fmt.Sprintf(
 			"Initialized %s\n\n"+
 				"Found AGENTS.md (3 lines) and GEMINI.md (%d lines).\n\n"+
-				"`esc sync` will insert a managed block at the placeholder already in AGENTS.md and update the managed block already in GEMINI.md. Your current content is preserved byte for byte and reported as a local amendment.\n",
+				"`esc sync` will:\n"+
+				"  - insert a managed block at the placeholder already in AGENTS.md\n"+
+				"  - update the managed block already in GEMINI.md\n\n"+
+				"Your current content is preserved byte for byte and reported as a local amendment.\n",
 			config.Path(root), geminiLines)
 		if got := out.String(); got != want {
 			t.Errorf("output =\n%q\nwant\n%q", got, want)
 		}
 	})
+}
+
+// One detected item still reads as prose; the list form is only for two or
+// more. This is the boundary the bulleted form introduced, so pin both sides
+// of it (the two-item side is pinned by the cases above).
+func TestInitExplainsSingleDetectionAsProse(t *testing.T) {
+	root := t.TempDir()
+	writeFiles(t, root, map[string]string{"CLAUDE.md": "line1\nline2\nline3\n"})
+	var out bytes.Buffer
+	if code := Run(root, []string{"init"}, &out, &out); code != 0 {
+		t.Fatalf("init: %d\n%s", code, out.String())
+	}
+	want := fmt.Sprintf(
+		"Initialized %s\n\n"+
+			"Found CLAUDE.md (3 lines).\n\n"+
+			"`esc sync` will insert a managed block at the top of CLAUDE.md. Your current content is preserved byte for byte and reported as a local amendment.\n\n"+
+			"To place the block somewhere else, put %s where you want it before syncing.\n",
+		config.Path(root), render.Placeholder)
+	if got := out.String(); got != want {
+		t.Errorf("output =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// The full-detection case, which no test previously reached: before the list
+// form, all six targets produced one ~60 word sentence that said "insert a
+// managed block at the top of" four consecutive times. Full-string equality,
+// so the shape of the worst case stays pinned.
+func TestInitExplainsAllSixDetectedTargets(t *testing.T) {
+	root := t.TempDir()
+	writeFiles(t, root, map[string]string{
+		"CLAUDE.md":                      "line1\nline2\nline3\n",
+		"AGENTS.md":                      "line1\nline2\nline3\n",
+		"GEMINI.md":                      "line1\nline2\nline3\n",
+		"GOVERNANCE.md":                  "line1\nline2\nline3\n",
+		".mcp.json":                      `{"mcpServers":{}}`,
+		".claude/skills/team-x/SKILL.md": "---\nname: team-x\n---\n",
+	})
+	var out bytes.Buffer
+	if code := Run(root, []string{"init"}, &out, &out); code != 0 {
+		t.Fatalf("init: %d\n%s", code, out.String())
+	}
+	want := fmt.Sprintf(
+		"Initialized %s\n\n"+
+			"Found CLAUDE.md (3 lines), AGENTS.md (3 lines), GEMINI.md (3 lines), GOVERNANCE.md (3 lines), .mcp.json and .claude/skills.\n\n"+
+			"`esc sync` will:\n"+
+			"  - insert a managed block at the top of CLAUDE.md\n"+
+			"  - insert a managed block at the top of AGENTS.md\n"+
+			"  - insert a managed block at the top of GEMINI.md\n"+
+			"  - insert a managed block at the top of GOVERNANCE.md\n"+
+			"  - add pack MCP servers alongside your existing ones\n"+
+			"  - add pack skills alongside yours in .claude/skills\n\n"+
+			"Your current content is preserved byte for byte and reported as a local amendment.\n\n"+
+			"To place the block somewhere else, put %s where you want it before syncing.\n",
+		config.Path(root), render.Placeholder)
+	if got := out.String(); got != want {
+		t.Errorf("output =\n%q\nwant\n%q", got, want)
+	}
 }
 
 func TestConfigTemplateTargets(t *testing.T) {
