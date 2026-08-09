@@ -191,15 +191,30 @@ func marshalEnvelope(t *testing.T, rep *engine.Report) map[string]any {
 	return decoded
 }
 
-func TestRedact_MetricsLevelHidesContentAndDiff(t *testing.T) {
+// assertStripsSensitiveFields is the shared body for every "below content"
+// level: engine.ReportMetrics itself, and the fail-closed cases
+// (engine.ReportOff and an unrecognized level) that must redact exactly
+// like metrics does. Running the identical assertions for all three pins
+// the `level == engine.ReportContent` gate direction in Redact — a future
+// refactor to something like `level != engine.ReportMetrics -> whole`
+// would silently ship Content/Diff/Detail/Reason at ReportOff or a typoed
+// level, and this helper is what catches it.
+func assertStripsSensitiveFields(t *testing.T, level string) {
+	t.Helper()
 	rep := fixtureReport()
-	redacted := Redact(rep, engine.ReportMetrics)
+	redacted := Redact(rep, level)
 
 	decoded := marshalEnvelope(t, redacted)
 
-	found := collectByKey(decoded, "content", "diff")
+	found := collectByKey(decoded, "content", "diff", "detail", "reason")
 	if len(found["content"]) > 0 || len(found["diff"]) > 0 {
-		t.Fatalf("metrics level leaked amendment/alteration content: %+v", found)
+		t.Fatalf("level %q leaked amendment/alteration content: %+v", level, found)
+	}
+	if len(found["detail"]) > 0 {
+		t.Fatalf("level %q leaked Finding.Detail: %+v", level, found["detail"])
+	}
+	if len(found["reason"]) > 0 {
+		t.Fatalf("level %q leaked Skipped.Reason: %+v", level, found["reason"])
 	}
 
 	report, ok := decoded["report"].(map[string]any)
@@ -213,10 +228,10 @@ func TestRedact_MetricsLevelHidesContentAndDiff(t *testing.T) {
 	}
 	pack0 := packs[0].(map[string]any)
 	if pack0["pinned"] != "pack-pinned-hash" {
-		t.Errorf("pack pin did not survive at metrics: got %v", pack0["pinned"])
+		t.Errorf("level %q: pack pin did not survive: got %v", level, pack0["pinned"])
 	}
 	if pack0["signed"] != true {
-		t.Errorf("pack signed did not survive at metrics: got %v", pack0["signed"])
+		t.Errorf("level %q: pack signed did not survive: got %v", level, pack0["signed"])
 	}
 
 	findings, ok := report["findings"].([]any)
@@ -225,36 +240,42 @@ func TestRedact_MetricsLevelHidesContentAndDiff(t *testing.T) {
 	}
 
 	f0 := findings[0].(map[string]any)
+	if f0["subject"] != "CLAUDE.md" {
+		t.Errorf("level %q: finding subject did not survive: got %v", level, f0["subject"])
+	}
 	if f0["managed"] != string(engine.Altered) {
-		t.Errorf("finding state did not survive at metrics: got %v", f0["managed"])
+		t.Errorf("level %q: finding state did not survive: got %v", level, f0["managed"])
 	}
 	if f0["local"] != string(engine.LocalAmended) {
-		t.Errorf("finding local state did not survive at metrics: got %v", f0["local"])
+		t.Errorf("level %q: finding local state did not survive: got %v", level, f0["local"])
+	}
+	if _, exists := f0["detail"]; exists {
+		t.Errorf("level %q: finding.detail key present: %v", level, f0["detail"])
 	}
 
 	amendment0 := f0["amendment"].(map[string]any)
 	if amendment0["hash"] != "block-amendment-hash" {
-		t.Errorf("amendment hash did not survive at metrics: got %v", amendment0["hash"])
+		t.Errorf("level %q: amendment hash did not survive: got %v", level, amendment0["hash"])
 	}
 	if amendment0["bytes"] != float64(42) {
-		t.Errorf("amendment bytes did not survive at metrics: got %v", amendment0["bytes"])
+		t.Errorf("level %q: amendment bytes did not survive: got %v", level, amendment0["bytes"])
 	}
 	if amendment0["lines"] != float64(3) {
-		t.Errorf("amendment lines did not survive at metrics: got %v", amendment0["lines"])
+		t.Errorf("level %q: amendment lines did not survive: got %v", level, amendment0["lines"])
 	}
 	if _, exists := amendment0["content"]; exists {
-		t.Errorf("amendment.content key present at metrics level: %v", amendment0["content"])
+		t.Errorf("level %q: amendment.content key present: %v", level, amendment0["content"])
 	}
 
 	alteration0 := f0["alteration"].(map[string]any)
 	if alteration0["expected_hash"] != "block-expected-hash" {
-		t.Errorf("alteration expected_hash did not survive at metrics: got %v", alteration0["expected_hash"])
+		t.Errorf("level %q: alteration expected_hash did not survive: got %v", level, alteration0["expected_hash"])
 	}
 	if alteration0["actual_hash"] != "block-actual-hash" {
-		t.Errorf("alteration actual_hash did not survive at metrics: got %v", alteration0["actual_hash"])
+		t.Errorf("level %q: alteration actual_hash did not survive: got %v", level, alteration0["actual_hash"])
 	}
 	if _, exists := alteration0["diff"]; exists {
-		t.Errorf("alteration.diff key present at metrics level: %v", alteration0["diff"])
+		t.Errorf("level %q: alteration.diff key present: %v", level, alteration0["diff"])
 	}
 
 	// dir finding: Items (counts, not content) survive.
@@ -262,12 +283,12 @@ func TestRedact_MetricsLevelHidesContentAndDiff(t *testing.T) {
 	amendment1 := f1["amendment"].(map[string]any)
 	items1, ok := amendment1["items"].([]any)
 	if !ok || len(items1) != 1 || items1[0] != "team-skill.md" {
-		t.Errorf("dir amendment items did not survive at metrics: got %v", amendment1["items"])
+		t.Errorf("level %q: dir amendment items did not survive: got %v", level, amendment1["items"])
 	}
 
 	collection, ok := report["collection"].(map[string]any)
 	if !ok || collection["amendments"] != string(engine.ReportContent) {
-		t.Errorf("collection did not survive at metrics: got %+v", report["collection"])
+		t.Errorf("level %q: collection did not survive: got %+v", level, report["collection"])
 	}
 
 	skippedArr, ok := report["skipped"].([]any)
@@ -276,7 +297,29 @@ func TestRedact_MetricsLevelHidesContentAndDiff(t *testing.T) {
 	}
 	skip0 := skippedArr[0].(map[string]any)
 	if skip0["cause"] != string(engine.SkipHandEdited) {
-		t.Errorf("skipped cause did not survive at metrics: got %v", skip0["cause"])
+		t.Errorf("level %q: skipped cause did not survive: got %v", level, skip0["cause"])
+	}
+	if skip0["subject"] != "OTHER.md" {
+		t.Errorf("level %q: skipped subject did not survive: got %v", level, skip0["subject"])
+	}
+}
+
+func TestRedact_BelowContentStripsSensitiveFields(t *testing.T) {
+	// Skipped.Reason has no `omitempty` (engine/apply.go), so an emptied
+	// Reason still ships as "reason":"" rather than dropping the key
+	// entirely — unlike Content/Diff/Detail, which all carry omitempty and
+	// vanish from the wire once emptied. assertStripsSensitiveFields's
+	// non-empty-value rule tolerates that; it is cosmetic wire noise, not
+	// a leak, and is called out in the task report rather than fixed here.
+	levels := map[string]string{
+		"metrics":             engine.ReportMetrics,
+		"off (fail-closed)":   engine.ReportOff,
+		"bogus (fail-closed)": "bogus-level-that-does-not-exist",
+	}
+	for name, level := range levels {
+		t.Run(name, func(t *testing.T) {
+			assertStripsSensitiveFields(t, level)
+		})
 	}
 }
 
@@ -285,7 +328,7 @@ func TestRedact_ContentLevelPreservesVerbatim(t *testing.T) {
 	redacted := Redact(rep, engine.ReportContent)
 
 	decoded := marshalEnvelope(t, redacted)
-	found := collectByKey(decoded, "content", "diff")
+	found := collectByKey(decoded, "content", "diff", "detail", "reason")
 
 	wantContent := []string{
 		"team added this paragraph to the managed block\n",
@@ -297,6 +340,14 @@ func TestRedact_ContentLevelPreservesVerbatim(t *testing.T) {
 		"dir diff placeholder for redaction coverage\n",
 		"json-keys diff placeholder for redaction coverage\n",
 	}
+	wantDetail := []string{
+		"hand-edited managed block",
+		"team added a skill file",
+		"team added an MCP server",
+	}
+	wantReason := []string{
+		"managed region hand-edited",
+	}
 
 	for _, want := range wantContent {
 		if !containsString(found["content"], want) {
@@ -306,6 +357,16 @@ func TestRedact_ContentLevelPreservesVerbatim(t *testing.T) {
 	for _, want := range wantDiff {
 		if !containsString(found["diff"], want) {
 			t.Errorf("content level dropped alteration diff %q; found %v", want, found["diff"])
+		}
+	}
+	for _, want := range wantDetail {
+		if !containsString(found["detail"], want) {
+			t.Errorf("content level dropped finding detail %q; found %v", want, found["detail"])
+		}
+	}
+	for _, want := range wantReason {
+		if !containsString(found["reason"], want) {
+			t.Errorf("content level dropped skipped reason %q; found %v", want, found["reason"])
 		}
 	}
 }
