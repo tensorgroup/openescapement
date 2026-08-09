@@ -147,8 +147,18 @@ const signersTemplate = `# SSH allowed signers for pack verification (see ssh-ke
 func cmdInit(ctx context.Context, root string, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	yes := fs.Bool("yes", false, "accept the recommended answer for every prompt instead of asking\n(the recommended placement writes nothing extra, so --yes never modifies a detected file)")
+	yes := fs.Bool("yes", false, "take the recommended answer instead of asking\n(the recommended answer declines the placement marker, so --yes never modifies a detected file)")
 	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	// init takes no positional arguments, and silently ignoring one is not a
+	// harmless nicety: `esc init /some/other/repo` looks like it targeted
+	// that path and instead scaffolds .escapement/ into the current
+	// directory. That exact mistake happened while this command was being
+	// built. Refuse it as a usage error rather than write somewhere the
+	// caller plainly did not mean.
+	if fs.NArg() > 0 {
+		fmt.Fprintf(stderr, "esc init takes no arguments (got %q); run it from the repository root, or use `cd`\n", fs.Arg(0))
 		return 2
 	}
 	cfgPath := config.Path(root)
