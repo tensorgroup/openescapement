@@ -61,7 +61,7 @@ func Run(root string, args []string, stdout, stderr io.Writer) int {
 	var err error
 	switch args[0] {
 	case "init":
-		err = cmdInit(ctx, root, args[1:], stdout)
+		return cmdInit(ctx, root, args[1:], stdout, stderr)
 	case "sync":
 		return cmdSync(ctx, root, args[1:], stdout, stderr)
 	case "status":
@@ -140,51 +140,58 @@ const signersTemplate = `# SSH allowed signers for pack verification (see ssh-ke
 # policy-team@acme.example ssh-ed25519 AAAA...
 `
 
-func cmdInit(ctx context.Context, root string, args []string, stdout io.Writer) error {
+// cmdInit parses init's own flags and returns the process exit code
+// directly, matching cmdSync/cmdStatus/cmdDiff: a flag-parse failure (e.g.
+// `esc init -h`) is a usage error (exit 2), not routed through exitCode's
+// generic default (exit 4).
+func cmdInit(ctx context.Context, root string, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
-	fs.SetOutput(stdout)
+	fs.SetOutput(stderr)
 	yes := fs.Bool("yes", false, "accept the recommended answer for every prompt instead of asking\n(the recommended placement writes nothing extra, so --yes never modifies a detected file)")
 	if err := fs.Parse(args); err != nil {
-		return err
+		return 2
 	}
 	cfgPath := config.Path(root)
 	if _, err := os.Stat(cfgPath); err == nil {
-		return fmt.Errorf("%s already exists", cfgPath)
+		return exitCode(fmt.Errorf("%s already exists", cfgPath), stderr)
 	}
 	// Detection is read-only and runs before anything is written: a
 	// detection error must abort before the repo is touched.
 	detected, err := detectExisting(root)
 	if err != nil {
-		return err
+		return exitCode(err, stderr)
 	}
 	if err := os.MkdirAll(filepath.Join(root, config.Dir), 0o755); err != nil {
-		return err
+		return exitCode(err, stderr)
 	}
 	if err := os.WriteFile(cfgPath, []byte(configTemplate(detectedTargets(detected))), 0o644); err != nil {
-		return err
+		return exitCode(err, stderr)
 	}
 	signers := filepath.Join(root, config.Dir, "allowed_signers")
 	if _, err := os.Stat(signers); os.IsNotExist(err) {
 		if err := os.WriteFile(signers, []byte(signersTemplate), 0o644); err != nil {
-			return err
+			return exitCode(err, stderr)
 		}
 	}
 	gitignore := filepath.Join(root, config.Dir, ".gitignore")
 	if _, err := os.Stat(gitignore); os.IsNotExist(err) {
 		if err := os.WriteFile(gitignore, []byte("update-log.jsonl\n"), 0o644); err != nil {
-			return err
+			return exitCode(err, stderr)
 		}
 	}
 	if len(detected) == 0 {
 		fmt.Fprintf(stdout, "Initialized %s\nAdd pack sources to the config, then run `esc sync`.\n", cfgPath)
-		return nil
+		return 0
 	}
 	fmt.Fprintf(stdout, "Initialized %s\n\n", cfgPath)
 	explainDetection(stdout, detected)
 	// Offer comes last: everything above it is config scaffolding that a
-	// user who declines every offer still ends up with, working.
-	offerPlacement(ctx, root, stdout, detected, *yes)
-	return nil
+	// user who declines every offer still ends up with, working. A failure
+	// here (as opposed to a routine dirty-file skip, which offerPlacement
+	// only prints) still leaves that scaffolding in place, but must not
+	// exit 0: a script relying on the exit code needs to be able to tell a
+	// placement write actually failed.
+	return exitCode(offerPlacement(ctx, root, stdout, detected, *yes), stderr)
 }
 
 // maybeUpdates is the update-check seam: production wires the real TTY-backed
@@ -232,7 +239,15 @@ func checkForUpdates(ctx context.Context, root string, stderr io.Writer) {
 
 // restoreFile atomically writes content back to path (temp file + rename in
 // the destination directory, matching the repo's atomic-write invariant).
+// The destination's existing permission bits are preserved rather than
+// forced to 0o644: a caller's CLAUDE.md at 0o600, say, must not be silently
+// widened to world-readable just because escapement rewrote it. A
+// destination that doesn't exist yet falls back to 0o644.
 func restoreFile(path string, content []byte) error {
+	mode := os.FileMode(0o644)
+	if fi, err := os.Stat(path); err == nil {
+		mode = fi.Mode().Perm()
+	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".esc-restore-*")
 	if err != nil {
 		return err
@@ -245,7 +260,7 @@ func restoreFile(path string, content []byte) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+	if err := os.Chmod(tmp.Name(), mode); err != nil {
 		return err
 	}
 	return os.Rename(tmp.Name(), path)

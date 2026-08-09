@@ -63,8 +63,6 @@ func TestApplyPlacementDefaultMatchesSyncBehavior(t *testing.T) {
 	// placeDefault writing nothing is only correct if sync then puts the
 	// block where the offer promised. Prove the promise rather than assuming
 	// it: a file left untouched must still get its block after the title.
-	root := t.TempDir()
-	writeFiles(t, root, map[string]string{"CLAUDE.md": "# P\n\nrules\n"})
 	out, err := render.Splice([]byte("# P\n\nrules\n"), "body\n", render.BlockMeta{Packs: []string{"p@1"}})
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +70,74 @@ func TestApplyPlacementDefaultMatchesSyncBehavior(t *testing.T) {
 	if !strings.HasPrefix(string(out), "# P\n\n<!-- escapement:begin ") {
 		t.Errorf("offer copy promises the block lands after the title, got:\n%s", out)
 	}
-	_ = root
+}
+
+// placeEnd corrupted any file with no trailing newline before this was
+// fixed: "rules" (no newline) + Placeholder + "\n" produced
+// "rules<!-- escapement:block -->", and when render.Splice later
+// substitutes the block at that byte index, the begin marker lands
+// mid-line, glued onto "rules" with no separator. render.Splice's own
+// append-at-end path already guards exactly this (see block.go's Splice,
+// the len(s)==at case); applyPlacement must mirror it.
+func TestApplyPlacementEndPreservesNewlineSeparation(t *testing.T) {
+	cases := []struct {
+		name, existing, want string
+	}{
+		{"no trailing newline", "rules", "rules\n" + render.Placeholder + "\n"},
+		{"empty file", "", render.Placeholder + "\n"},
+		{"whitespace only, no newline", "   ", "   \n" + render.Placeholder + "\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeFiles(t, root, map[string]string{"CLAUDE.md": tc.existing})
+			d := Detected{Target: render.TargetClaude, Path: "CLAUDE.md"}
+			if err := applyPlacement(root, d, placeEnd); err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(filepath.Join(root, "CLAUDE.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+			// The corrupt pre-fix output also "preserved every original
+			// byte" (that assertion alone was insufficient): additionally
+			// prove render.Splice can still find and replace a single,
+			// well-formed placeholder afterward.
+			spliced, err := render.Splice(got, "body\n", render.BlockMeta{Packs: []string{"p@1"}})
+			if err != nil {
+				t.Fatalf("render.Splice rejected applyPlacement's output: %v", err)
+			}
+			if strings.Contains(string(spliced), "escapement:begin") && strings.Contains(string(spliced), "rules<!--") {
+				t.Errorf("begin marker glued onto original content with no separator:\n%s", spliced)
+			}
+		})
+	}
+}
+
+// restoreFile must preserve the destination's existing permission bits
+// rather than forcing 0o644, so a user's CLAUDE.md at, say, 0o600 is not
+// silently made world-readable just because escapement wrote to it.
+func TestApplyPlacementPreservesFileMode(t *testing.T) {
+	root := t.TempDir()
+	writeFiles(t, root, map[string]string{"CLAUDE.md": "rules\n"})
+	path := filepath.Join(root, "CLAUDE.md")
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d := Detected{Target: render.TargetClaude, Path: "CLAUDE.md"}
+	if err := applyPlacement(root, d, placeAbove); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		t.Errorf("mode changed from 0o600 to %o", fi.Mode().Perm())
+	}
 }
 
 // --- initOffer: the prompt-parsing seam itself, called directly with a
@@ -127,30 +192,10 @@ func TestInitInteractiveYesForcesFalse(t *testing.T) {
 	}
 }
 
-// go test always substitutes /dev/null for the test binary's stdin — even
-// when the outer shell has a real terminal — and /dev/null is itself a
-// character device. Without excluding it explicitly, isInteractive(os.Stdin)
-// is a false positive under `go test` (and under any real invocation with
-// stdin redirected from /dev/null, a common CI pattern), which would make
-// every init test in this package print the interactive prompt. This pins
-// the exclusion directly rather than relying on it only being exercised
-// incidentally by every other test in the package.
-func TestIsInteractiveExcludesDevNull(t *testing.T) {
-	f, err := os.Open(os.DevNull)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	if isInteractive(f) {
-		t.Error("os.DevNull must not be treated as an interactive terminal")
-	}
-}
-
-func TestIsInteractiveNilIsFalse(t *testing.T) {
-	if isInteractive(nil) {
-		t.Error("a nil file must not be treated as interactive")
-	}
-}
+// tty.IsInteractive itself (including the /dev/null exclusion this package
+// depends on) is tested directly in internal/tty; internal/cli no longer
+// has its own copy to test (see item 3 of the review that added the shared
+// package).
 
 // --- fileIsClean ---
 
@@ -206,6 +251,134 @@ func TestFileIsCleanDirty(t *testing.T) {
 	}
 	if clean {
 		t.Error("a locally-edited file must be reported dirty")
+	}
+}
+
+// fileIsClean is pathspec-scoped (`-- <path>`), not a bare `git status`: a
+// bare status in root would also report the .escapement/ config esc init
+// itself is about to write as untracked, making CLAUDE.md look dirty on
+// the very first run of a fresh repo. This is also exercised implicitly by
+// every CLI-integration test below that runs `esc init` inside a
+// committed repo (cmdInit's own config scaffolding lands as untracked
+// files before offerPlacement's fileIsClean call ever runs), but is worth
+// pinning directly.
+func TestFileIsCleanIgnoresUnrelatedUntrackedFiles(t *testing.T) {
+	root := t.TempDir()
+	writeFiles(t, root, map[string]string{"CLAUDE.md": "rules\n"})
+	initGitRepo(t, root)
+	commitAll(t, root, "init")
+	writeFiles(t, root, map[string]string{".escapement/config.yaml": "schema: 1\npacks: []\n"})
+	clean, err := fileIsClean(context.Background(), root, "CLAUDE.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !clean {
+		t.Error("an unrelated untracked file must not make CLAUDE.md look dirty")
+	}
+}
+
+// git's "not a git repository" message is locale-dependent; fileIsClean
+// forces LC_ALL=C on the git invocation so the not-a-repo-yet detection
+// doesn't silently break for a user with a non-English git locale. That
+// specific locale-dependent wording isn't practically reproducible in this
+// test environment (it would need a second gettext catalog installed for
+// git), so this test instead pins the adjacent, directly testable case:
+// git missing from PATH entirely must produce a clear, distinguishable
+// error rather than being misread as "not a git repository" (which would
+// wrongly report clean).
+func TestFileIsCleanGitNotFound(t *testing.T) {
+	root := t.TempDir()
+	writeFiles(t, root, map[string]string{"CLAUDE.md": "rules\n"})
+	t.Setenv("PATH", t.TempDir()) // a directory with no git binary in it
+	_, err := fileIsClean(context.Background(), root, "CLAUDE.md")
+	if err == nil {
+		t.Fatal("expected an error when git is not in PATH")
+	}
+	if !strings.Contains(err.Error(), "git not found") {
+		t.Errorf("expected a clear 'git not found' error, got: %v", err)
+	}
+}
+
+// --- offerPlacement: error surfacing (item 7) ---
+
+// A genuine failure (as opposed to a routine dirty-file skip) must be
+// returned, not just printed, so a caller that isn't reading prose output
+// can still detect it.
+func TestOfferPlacementSurfacesWriteFailure(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root bypasses the permission check this test relies on")
+	}
+	root := t.TempDir()
+	writeFiles(t, root, map[string]string{"CLAUDE.md": "rules\n"})
+	initGitRepo(t, root)
+	commitAll(t, root, "init")
+	d := Detected{Target: render.TargetClaude, Path: "CLAUDE.md"}
+
+	old := initOffer
+	initOffer = func(w io.Writer, in io.Reader, interactive bool, det Detected) placement { return placeAbove }
+	t.Cleanup(func() { initOffer = old })
+
+	// applyPlacement's atomic write needs to create a temp file in root;
+	// removing write permission on root makes that fail, without touching
+	// CLAUDE.md's own readability.
+	if err := os.Chmod(root, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(root, 0o700) })
+
+	var stdout bytes.Buffer
+	err := offerPlacement(context.Background(), root, &stdout, []Detected{d}, false)
+	if err == nil {
+		t.Fatal("expected offerPlacement to return an error when the write fails")
+	}
+	if !strings.Contains(err.Error(), "CLAUDE.md") {
+		t.Errorf("the error should name the file: %v", err)
+	}
+}
+
+// End-to-end proof that a placement write failure is both visible (named
+// in the combined output) and detectable by exit code (non-zero), not
+// silently swallowed with an exit 0 a script would read as success.
+func TestInitOfferWriteFailureIsVisibleAndNonZero(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root bypasses the permission check this test relies on")
+	}
+	root := t.TempDir()
+	writeFiles(t, root, map[string]string{"CLAUDE.md": "rules\n"})
+	initGitRepo(t, root)
+	commitAll(t, root, "init")
+	// Pre-create .escapement so cmdInit's config scaffolding (mkdir is a
+	// no-op on an existing dir, and the dir itself stays writable) succeeds
+	// even after root is made read-only below; only creating CLAUDE.md's
+	// temp file needs write access to root, since CLAUDE.md lives directly
+	// there.
+	if err := os.MkdirAll(filepath.Join(root, ".escapement"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	old := initOffer
+	initOffer = func(w io.Writer, in io.Reader, interactive bool, d Detected) placement { return placeAbove }
+	t.Cleanup(func() { initOffer = old })
+
+	if err := os.Chmod(root, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(root, 0o700) })
+
+	code, out := run(t, root, "init")
+	if code == 0 {
+		t.Fatalf("a placement write failure must not exit 0, got 0:\n%s", out)
+	}
+	if !strings.Contains(out, "CLAUDE.md") {
+		t.Errorf("the failure must name the file, got:\n%s", out)
+	}
+}
+
+func TestInitHelpFlagExitsUsage(t *testing.T) {
+	root := t.TempDir()
+	code, _ := run(t, root, "init", "-h")
+	if code != 2 {
+		t.Errorf("esc init -h should exit 2 (usage), got %d", code)
 	}
 }
 

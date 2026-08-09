@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/tensorgroup/openescapement/internal/render"
+	"github.com/tensorgroup/openescapement/internal/tty"
 )
 
 // placement is where `esc init` offers to put the managed-block placeholder
@@ -42,6 +44,15 @@ const (
 	placeEnd placement = "e"
 )
 
+// maxOfferAnswerBytes bounds how much of one prompt answer initOffer reads
+// before giving up and treating the input as unrecognized. tty.IsInteractive
+// cannot distinguish a real terminal from something like /dev/zero, which
+// stats as a character device and never produces a newline; without a
+// bound, reading byte-by-byte looking for '\n' would run forever against
+// such a stream (`esc init < /dev/zero`). The real answer is always a
+// single character, so this cap is generous but finite.
+const maxOfferAnswerBytes = 64
+
 // initOffer is the placement-prompt seam: production reads a real TTY, tests
 // inject a deterministic reader — or replace this var outright, the same
 // pattern maybeUpdates uses — so no test can ever block on real stdin.
@@ -65,17 +76,32 @@ var initOffer = func(w io.Writer, in io.Reader, interactive bool, d Detected) pl
 	if !ok {
 		br = bufio.NewReader(in)
 	}
-	line, _ := br.ReadString('\n')
-	switch strings.TrimSpace(line) {
+	switch strings.TrimSpace(readBoundedLine(br, maxOfferAnswerBytes)) {
 	case string(placeAbove):
 		return placeAbove
 	case string(placeEnd):
 		return placeEnd
 	default:
 		// Empty or unrecognized input returns placeDefault, same as a
-		// read error (EOF/Ctrl-D): never guess, never block.
+		// read error (EOF/Ctrl-D) or hitting the byte bound: never guess,
+		// never block, never grow without limit.
 		return placeDefault
 	}
+}
+
+// readBoundedLine reads up to max bytes from br looking for '\n' and returns
+// whatever it collected either way (a short read on error, or a truncated
+// answer at the bound, both just fail to match a recognized answer below).
+func readBoundedLine(br *bufio.Reader, max int) string {
+	buf := make([]byte, 0, max)
+	for len(buf) < max {
+		b, err := br.ReadByte()
+		if err != nil || b == '\n' {
+			break
+		}
+		buf = append(buf, b)
+	}
+	return string(buf)
 }
 
 // applyPlacement writes render.Placeholder into the detected file at the
@@ -99,15 +125,29 @@ func applyPlacement(root string, d Detected, p placement) error {
 		// Byte 0, above everything — no frontmatter/title parsing needed.
 		out = append([]byte(render.Placeholder+"\n"), existing...)
 	case placeEnd:
-		out = make([]byte, 0, len(existing)+len(render.Placeholder)+1)
+		// Mirrors render.Splice's own append-at-end guard (block.go's
+		// Splice, the len(s)==at case): only insert a separating newline
+		// when the file doesn't already end in one. Without this, a file
+		// with no trailing newline (or an empty file) would get the
+		// placeholder glued onto its last byte — e.g. "rules" would become
+		// "rules<!-- escapement:block -->", and when sync later substitutes
+		// the block at that exact index, the managed block's begin marker
+		// lands mid-line, immediately after "rules" with no separator.
+		sep := ""
+		if len(existing) > 0 && existing[len(existing)-1] != '\n' {
+			sep = "\n"
+		}
+		out = make([]byte, 0, len(existing)+len(sep)+len(render.Placeholder)+1)
 		out = append(out, existing...)
+		out = append(out, sep...)
 		out = append(out, []byte(render.Placeholder+"\n")...)
 	default:
 		return fmt.Errorf("applyPlacement: unknown placement %q", p)
 	}
 	// Same atomic-write discipline as restoreFile: temp file + rename in the
-	// destination directory, so a crash mid-write never leaves a half-written
-	// instruction file behind.
+	// destination directory (preserving the original file's mode), so a
+	// crash mid-write never leaves a half-written instruction file behind
+	// and a write never widens the file's permissions.
 	return restoreFile(path, out)
 }
 
@@ -116,6 +156,13 @@ func applyPlacement(root string, d Detected, p placement) error {
 // --porcelain -- <path>`. Any output — modified, staged, or untracked — means
 // dirty.
 //
+// The status is scoped to path via a pathspec (`-- <path>`) rather than run
+// bare: a bare `git status --porcelain` in root would also report the
+// .escapement/ directory and config files esc init itself just wrote as
+// untracked changes, which would make every detected file look dirty on the
+// very first run in an existing git repo. Pathspec-scoping keeps the check
+// about the one file being offered.
+//
 // A root that is not a git repository at all is treated as CLEAN rather than
 // erroring: `esc init` must work in a repo before its first commit, and with
 // no git history yet, there is nothing for git to consider dirty against
@@ -123,49 +170,26 @@ func applyPlacement(root string, d Detected, p placement) error {
 // feeds does not apply yet — it doesn't mean init should refuse to run).
 func fileIsClean(ctx context.Context, root, path string) (bool, error) {
 	cmd := exec.CommandContext(ctx, "git", "-C", root, "status", "--porcelain", "--", path)
+	// git's "not a git repository" message is locale-dependent (gettext);
+	// matching it in the user's own language would silently miss and turn
+	// a should-be-clean pre-first-commit repo into a hard error instead
+	// (fail-safe, since the offer just gets skipped everywhere, but dead).
+	// Force the C locale for this one invocation so the match is stable
+	// regardless of the user's environment.
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	var out, errOut bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errOut
 	if err := cmd.Run(); err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return false, fmt.Errorf("git not found in PATH, cannot check %s for uncommitted changes: %w", path, err)
+		}
 		if strings.Contains(errOut.String(), "not a git repository") {
 			return true, nil
 		}
 		return false, fmt.Errorf("git status %s: %w: %s", path, err, strings.TrimSpace(errOut.String()))
 	}
 	return out.Len() == 0, nil
-}
-
-// isInteractive reports whether f is a real terminal. Starts from the same
-// char-device stat check updatecheck.isInteractive uses (no golang.org/x/term
-// dependency), but additionally excludes os.DevNull.
-//
-// /dev/null is itself a character device, so the stat check alone would
-// call it interactive. That false positive is latent but rare for
-// updatecheck's throttle, which only reaches its own interactive branch
-// when an update check is genuinely overdue. The placement offer has no
-// such gate — it is reachable on nearly every first `esc init` in a repo
-// with existing instruction files — and `go test` always substitutes
-// /dev/null for the test binary's stdin (verified: redirecting a test
-// binary's stdin from a terminal still stats as /dev/null), so without this
-// exclusion every such test, and every real invocation with stdin
-// redirected from /dev/null (a common CI pattern), would print the prompt
-// it should never see. Reading from /dev/null returns EOF immediately, so
-// it was never a hang risk — only a spurious prompt.
-func isInteractive(f *os.File) bool {
-	if f == nil {
-		return false
-	}
-	fi, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	if fi.Mode()&os.ModeCharDevice == 0 {
-		return false
-	}
-	if null, err := os.Stat(os.DevNull); err == nil && os.SameFile(fi, null) {
-		return false
-	}
-	return true
 }
 
 // initInteractive decides whether `esc init` should prompt at all. --yes
@@ -175,7 +199,7 @@ func isInteractive(f *os.File) bool {
 // short-circuit && guarantees this regardless of the actual terminal, which
 // is what makes it safe to pin with a unit test that doesn't control stdin.
 func initInteractive(yes bool) bool {
-	return !yes && isInteractive(os.Stdin)
+	return !yes && tty.IsInteractive(os.Stdin)
 }
 
 // offerPlacement asks, for each detected file that could still take the
@@ -189,22 +213,31 @@ func initInteractive(yes bool) bool {
 // offered — detectExisting already found the right sync clause for it, and
 // writing a second placeholder or a stray marker into a file that already
 // has one would just corrupt it. A file with uncommitted changes is
-// reported and skipped even when interactive, because git is the undo
-// mechanism for anything init writes, and init must not write somewhere git
-// cannot undo it; the other detected files are still processed.
-func offerPlacement(ctx context.Context, root string, stdout io.Writer, detected []Detected, yes bool) {
+// reported (on stdout: expected, not a failure) and skipped even when
+// interactive, because git is the undo mechanism for anything init writes,
+// and init must not write somewhere git cannot undo it; the other detected
+// files are still processed.
+//
+// A genuine failure — the git check itself erroring, or a placement write
+// failing — is different from a routine skip: it is collected and returned
+// rather than only ever printed to stdout, so cmdInit can turn it into a
+// non-zero exit and a caller that isn't reading prose can still tell
+// something went wrong. Each detected file is still attempted regardless of
+// an earlier one's failure.
+func offerPlacement(ctx context.Context, root string, stdout io.Writer, detected []Detected, yes bool) error {
 	interactive := initInteractive(yes)
 	var br *bufio.Reader
 	if interactive {
 		br = bufio.NewReader(os.Stdin)
 	}
+	var errs []error
 	for _, d := range orderDetected(detected) {
 		if !isFileTarget(d.Target) || d.HasBlock || d.HasPlaceholder {
 			continue
 		}
 		clean, err := fileIsClean(ctx, root, d.Path)
 		if err != nil {
-			fmt.Fprintf(stdout, "  %s: could not check git status, skipping the placement offer: %v\n", d.Path, err)
+			errs = append(errs, fmt.Errorf("%s: could not check git status, skipped the placement offer: %w", d.Path, err))
 			continue
 		}
 		if !clean {
@@ -217,7 +250,8 @@ func offerPlacement(ctx context.Context, root string, stdout io.Writer, detected
 		}
 		p := initOffer(stdout, in, interactive, d)
 		if err := applyPlacement(root, d, p); err != nil {
-			fmt.Fprintf(stdout, "  %s: could not write the placement marker: %v\n", d.Path, err)
+			errs = append(errs, fmt.Errorf("%s: could not write the placement marker: %w", d.Path, err))
 		}
 	}
+	return errors.Join(errs...)
 }

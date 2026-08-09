@@ -13,6 +13,7 @@ import (
 	"github.com/tensorgroup/openescapement/internal/config"
 	"github.com/tensorgroup/openescapement/internal/lockfile"
 	"github.com/tensorgroup/openescapement/internal/pack"
+	"github.com/tensorgroup/openescapement/internal/tty"
 )
 
 // Decision is the throttle's result when a prompt happened.
@@ -26,7 +27,7 @@ type Decision struct {
 // never blocks or fails the invoking command: all errors log an `error`
 // outcome plus one short stderr line and return nil.
 func Maybe(ctx context.Context, root string, stdin *os.File, stderr io.Writer) *Decision {
-	return MaybeIO(ctx, root, isInteractive(stdin), stdin, stderr)
+	return MaybeIO(ctx, root, tty.IsInteractive(stdin), stdin, stderr)
 }
 
 // MaybeIO is Maybe with the interactivity decision and prompt reader made
@@ -148,27 +149,31 @@ func printNotice(w io.Writer, statuses []PackStatus) {
 	}
 }
 
-// isInteractive reports whether f is a character device (a real terminal).
-// Uses only os.Stat — no golang.org/x/term dependency.
-func isInteractive(f *os.File) bool {
-	if f == nil {
-		return false
-	}
-	fi, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	return fi.Mode()&os.ModeCharDevice != 0
-}
+// maxPromptAnswerBytes bounds how much of one prompt answer readPromptDecision
+// reads before giving up. tty.IsInteractive's char-device check cannot tell a
+// real terminal apart from something like /dev/zero, which never produces a
+// newline; without a bound, ReadString('\n') would grow its buffer forever
+// against such a stream. This answer is only ever "empty line" vs. anything
+// else, so a generous but finite cap is all that's needed.
+const maxPromptAnswerBytes = 64
 
 // readPromptDecision prints the prompt and reads one line: an empty line typed
 // by the user = accept; anything else — a non-empty line, an ESC escape
-// sequence, EOF (Ctrl-D), or a read error — = decline.
+// sequence, EOF (Ctrl-D), a read error, or hitting maxPromptAnswerBytes
+// without a newline — = decline.
 func readPromptDecision(r io.Reader, w io.Writer) bool {
 	fmt.Fprint(w, "Update now? [Enter=yes, n=no]: ")
-	line, err := bufio.NewReader(r).ReadString('\n')
-	if err != nil {
-		return false // EOF or read error: bail out, never auto-accept
+	br := bufio.NewReader(r)
+	buf := make([]byte, 0, maxPromptAnswerBytes)
+	for len(buf) < maxPromptAnswerBytes {
+		b, err := br.ReadByte()
+		if err != nil {
+			return false // EOF or read error: bail out, never auto-accept
+		}
+		if b == '\n' {
+			break
+		}
+		buf = append(buf, b)
 	}
-	return strings.TrimRight(line, "\r\n") == ""
+	return strings.TrimRight(string(buf), "\r") == ""
 }
