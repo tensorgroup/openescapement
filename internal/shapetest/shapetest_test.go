@@ -85,3 +85,24 @@ func TestLinesPreservedBlockExemptionIsBounded(t *testing.T) {
 		t.Error("a user line dropped after a block replacement must be reported")
 	}
 }
+
+func TestMarkerOwnLineCatchesGluedMarkerPair(t *testing.T) {
+	glued := []byte("<!-- escapement:end --><!-- escapement:begin packs=x hash=y -->\n")
+	if err := MarkerOwnLine(glued); err == nil {
+		t.Error("two markers glued on one line must be reported")
+	}
+}
+
+func TestLinesPreservedRefusesUnterminatedBlockExemption(t *testing.T) {
+	// A begin marker that never closes exempts nothing: the lines after it
+	// are treated as user content, so dropping one must alarm.
+	before := []byte("<!-- escapement:begin packs=x hash=y -->\nmine\n")
+	if err := LinesPreserved(before, []byte("replaced\n")); err == nil {
+		t.Error("content after an unterminated begin marker must stay guarded")
+	}
+	// The same content kept intact must still pass: strictness may not
+	// turn a faithful write into an alarm.
+	if err := LinesPreserved(before, append([]byte{}, before...)); err != nil {
+		t.Errorf("an untouched file must pass regardless of marker health: %v", err)
+	}
+}

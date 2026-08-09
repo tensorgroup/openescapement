@@ -84,6 +84,9 @@ func MarkerOwnLine(out []byte) error {
 		if !strings.HasPrefix(t, "<!-- escapement:") || !strings.HasSuffix(t, "-->") {
 			return fmt.Errorf("line %d: escapement marker shares its line with other content: %q", i+1, ln)
 		}
+		if strings.Count(t, "<!--") != 1 {
+			return fmt.Errorf("line %d: more than one marker on a single line: %q", i+1, ln)
+		}
 	}
 	return nil
 }
@@ -166,13 +169,22 @@ func setextHazard(b []byte) bool {
 func LinesPreserved(before, after []byte) error {
 	af := Lines(after)
 	j := 0
+	// An unterminated begin marker earns no exemption at all: exempting
+	// everything after a begin that never closes would silently pass a
+	// write that destroyed the rest of the file. Refusing the exemption
+	// fails toward a false alarm, the safe direction for a guard oracle.
+	exempt := blockTerminated(Lines(before))
 	inBlock := false
+	// The forward-only j cursor below is exact, not merely greedy: for
+	// subsequence testing, matching each wanted line at its earliest
+	// remaining occurrence can never starve a later line that some other
+	// alignment would have satisfied.
 	for _, want := range Lines(before) {
 		t := strings.TrimSuffix(want, "\r")
 		if strings.Contains(want, "<!-- escapement:block -->") {
 			continue
 		}
-		if strings.HasPrefix(t, "<!-- escapement:begin") {
+		if exempt && strings.HasPrefix(t, "<!-- escapement:begin") {
 			inBlock = true
 			continue
 		}
@@ -196,4 +208,20 @@ func LinesPreserved(before, after []byte) error {
 		}
 	}
 	return nil
+}
+
+// blockTerminated reports whether every begin marker in lines is closed by
+// a later end marker, so LinesPreserved knows the block exemption is safe
+// to apply.
+func blockTerminated(lines []string) bool {
+	in := false
+	for _, ln := range lines {
+		t := strings.TrimSuffix(ln, "\r")
+		if strings.HasPrefix(t, "<!-- escapement:begin") {
+			in = true
+		} else if t == "<!-- escapement:end -->" {
+			in = false
+		}
+	}
+	return !in
 }
