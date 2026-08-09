@@ -24,17 +24,17 @@
     {
       "path": "AGENTS.md",
       "kind": "block",
-      "hash": "sha256:e5abb502c886ee2c2f46029101848bbdfbf8383d58afc229d91049a1c1020c97"
+      "hash": "sha256:17add78aa6d78ac68c61bcad5c12b89626f69c10b2c452c9ef9f9b0559897825"
     },
     {
       "path": "CLAUDE.md",
       "kind": "block",
-      "hash": "sha256:e5abb502c886ee2c2f46029101848bbdfbf8383d58afc229d91049a1c1020c97"
+      "hash": "sha256:17add78aa6d78ac68c61bcad5c12b89626f69c10b2c452c9ef9f9b0559897825"
     },
     {
       "path": "GEMINI.md",
       "kind": "block",
-      "hash": "sha256:e5abb502c886ee2c2f46029101848bbdfbf8383d58afc229d91049a1c1020c97"
+      "hash": "sha256:17add78aa6d78ac68c61bcad5c12b89626f69c10b2c452c9ef9f9b0559897825"
     },
     {
       "path": "GOVERNANCE.md",
