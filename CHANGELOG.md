@@ -39,6 +39,21 @@ tagged releases begin.
   Exit 1 is the drift-and-constraint class a CI gate reads as routine and
   self-healing; a containment refusal is neither, and the other containment
   refusals already exit 4.
+- Guidance seeding now refreshes unedited files to the latest embedded content
+  instead of create-if-missing only, tracked by a
+  `<data-dir>/guidance/.seeded.json` hash manifest; hand-edited and
+  portal-edited files are still never overwritten, and pre-manifest dirs are
+  migrated by recording only files that still match the shipped content.
+- `esc serve --demo` now resets its demo-owned data (org store, pack repos,
+  demo repo, guidance) to pristine on every startup and prints
+  `esc: demo data reset`. Non-demo servers are unaffected.
+- The managed-block notice line reads "Managed by escapement. Do not edit."
+  (previously an em-dash). Cosmetic for humans; a hash change for tooling:
+  the next `esc sync` rewrites the block, and until then `esc status`
+  reports `stale`, which is routine drift.
+- `esc init` confirms each marker write ("CLAUDE.md: wrote <!-- escapement:block -->")
+  and says so when a position answer is not recognized, instead of writing
+  or declining silently.
 
 ### Added
 - `esc init` detects instruction files a repo already has, pre-fills `targets` from them, explains what the first sync will do, and offers once, on a TTY, to place the managed-block marker. The offer defaults to no; one answer covers every detected file. It never writes rendered policy, never writes over a file with uncommitted changes, and outside a git repository says there is no undo before asking. `esc init` now rejects positional arguments instead of silently scaffolding the current directory.
@@ -132,16 +147,6 @@ tagged releases begin.
   runs under the strict CSP with eval, history, and injected indicator styles
   disabled, and hx-disable wrapping all pack-authored markdown.
 
-### Changed
-- Guidance seeding now refreshes unedited files to the latest embedded content
-  instead of create-if-missing only, tracked by a
-  `<data-dir>/guidance/.seeded.json` hash manifest; hand-edited and
-  portal-edited files are still never overwritten, and pre-manifest dirs are
-  migrated by recording only files that still match the shipped content.
-- `esc serve --demo` now resets its demo-owned data (org store, pack repos,
-  demo repo, guidance) to pristine on every startup and prints
-  `esc: demo data reset`. Non-demo servers are unaffected.
-
 ### Fixed
 - CRLF instruction files: leading YAML frontmatter with CRLF line endings is
   now recognized, so sync's top placement and the `esc init` marker offer
@@ -157,16 +162,9 @@ tagged releases begin.
   containment rules the skill-directory pass already enforced.
 - `esc status` no longer advises `esc sync --force` for a lockfile directory
   entry that `esc sync` refuses to touch as not escapement-owned; it now
-  reports what sync will actually do.
-
-### Changed
-- The managed-block notice line reads "Managed by escapement. Do not edit."
-  (previously an em-dash). Cosmetic for humans; a hash change for tooling:
-  the next `esc sync` rewrites the block, and until then `esc status`
-  reports `stale`, which is routine drift.
-- `esc init` confirms each marker write ("CLAUDE.md: wrote <!-- escapement:block -->")
-  and says so when a position answer is not recognized, instead of writing
-  or declining silently.
+  reports what sync will actually do. The entry is reported even when the
+  directory itself is already gone, because sync refuses on ownership before
+  it ever looks at the disk.
 
 Planned — see `docs/roadmap/`:
 - v0.2: MCP server surface (live policy queries, connection telemetry, agent-initiated registration)
