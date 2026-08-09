@@ -207,3 +207,37 @@ func TestBlockSurround(t *testing.T) {
 		t.Errorf("no block: got %q, err %v; want empty", got, err)
 	}
 }
+
+// FrontmatterEnd is exported for esc init's "above the title" placement,
+// which must land above everything a human wrote but still below
+// frontmatter, since frontmatter is only frontmatter at byte 0. insertAt is
+// built on the same function, so the two can never disagree about where
+// frontmatter ends.
+func TestFrontmatterEnd(t *testing.T) {
+	cases := []struct {
+		name, in string
+		want     int
+	}{
+		{"none", "# Rules\n\nteam\n", 0},
+		{"frontmatter", "---\ntitle: x\n---\nteam\n", len("---\ntitle: x\n---\n")},
+		{"frontmatter then blank line", "---\ntitle: x\n---\n\n# R\n", len("---\ntitle: x\n---\n")},
+		{"no trailing newline after fence", "---\ntitle: x\n---", len("---\ntitle: x\n---")},
+		{"unterminated fence", "---\ntitle: x\n# R\n", 0},
+		{"fence not at byte 0", "intro\n---\ntitle: x\n---\n", 0},
+		{"close fence with trailing text", "---\ntitle: x\n---x\nteam\n", 0},
+		{"empty", "", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := FrontmatterEnd([]byte(tc.in)); got != tc.want {
+				t.Errorf("FrontmatterEnd(%q) = %d, want %d", tc.in, got, tc.want)
+			}
+			// Whatever the offset, it must be a valid line boundary or the
+			// end of input: never mid-line inside the frontmatter itself.
+			at := FrontmatterEnd([]byte(tc.in))
+			if at > 0 && at < len(tc.in) && tc.in[at-1] != '\n' {
+				t.Errorf("offset %d is mid-line in %q", at, tc.in)
+			}
+		})
+	}
+}

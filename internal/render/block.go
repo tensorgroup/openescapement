@@ -30,24 +30,44 @@ type Block struct {
 // BodyHash returns the canonical hash of a block body.
 func BodyHash(body string) string { return esc.HashBytes([]byte(body)) }
 
+// FrontmatterEnd returns the offset just past leading YAML frontmatter, or 0
+// when there is none (including an unterminated `---` fence, which is not
+// frontmatter and must not be treated as one).
+//
+// It is exported for one reason: `esc init`'s "above the title" placement
+// needs to insert above everything a human wrote yet still below frontmatter,
+// because frontmatter is only frontmatter at byte 0. Inserting at byte 0
+// instead demotes it to a setext heading plus a horizontal rule, preserving
+// every byte while destroying the meaning. Rather than grow a second parser
+// for the same construct, that caller reuses this one, which insertAt itself
+// is built on, so the two can never disagree about where frontmatter ends.
+func FrontmatterEnd(b []byte) int { return frontmatterEnd(string(b)) }
+
+func frontmatterEnd(s string) int {
+	if !strings.HasPrefix(s, "---\n") {
+		return 0
+	}
+	end := strings.Index(s[4:], "\n---")
+	if end < 0 {
+		return 0
+	}
+	after := 4 + end + len("\n---")
+	rest := s[after:]
+	if rest != "" && !strings.HasPrefix(rest, "\n") {
+		return 0
+	}
+	if strings.HasPrefix(rest, "\n") {
+		after++
+	}
+	return after
+}
+
 // insertAt returns the offset where a new block belongs: the top of the file,
 // after leading YAML frontmatter and a leading H1 if either is present. Only
 // those two constructs are skipped; the rule set is closed deliberately so
 // output stays predictable.
 func insertAt(s string) int {
-	i := 0
-	if strings.HasPrefix(s, "---\n") {
-		if end := strings.Index(s[4:], "\n---"); end >= 0 {
-			after := 4 + end + len("\n---")
-			rest := s[after:]
-			if rest == "" || strings.HasPrefix(rest, "\n") {
-				i = after
-				if strings.HasPrefix(s[i:], "\n") {
-					i++
-				}
-			}
-		}
-	}
+	i := frontmatterEnd(s)
 	if strings.HasPrefix(s[i:], "# ") {
 		if nl := strings.IndexByte(s[i:], '\n'); nl >= 0 {
 			i += nl + 1
