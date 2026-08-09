@@ -124,7 +124,7 @@ func composeCatalog(packs []*pack.Pack) string {
 			}
 			b.WriteString(fmt.Sprintf("- **%s:** %s (%s)", statusLabel[status], e.Name, e.Category))
 			if e.Notes != "" {
-				b.WriteString(" — " + e.Notes)
+				b.WriteString(" - " + e.Notes)
 			}
 			b.WriteString("\n")
 		}

@@ -9,7 +9,7 @@ This file is owned by the team. Everything above the managed block is ours;
 - Test: `pnpm test`
 - This service is a demo — it has no real code, it exists to show escapement managing a repo.
 
-<!-- escapement:begin packs=acme-org@0.1.0 hash=sha256:8f8112f52510b935098cdd37b2cb906c9a26472c2b8457b759fca831523b13b7 -->
+<!-- escapement:begin packs=acme-org@0.1.0 hash=sha256:17add78aa6d78ac68c61bcad5c12b89626f69c10b2c452c9ef9f9b0559897825 -->
 > Managed by escapement. Do not edit. Run `esc diff` to see source. Team content goes outside this block.
 
 ## Secrets & keys
@@ -60,14 +60,14 @@ Before building infrastructure, check these. They exist, they're maintained, and
 If none of these fit, ask in #platform-team before rolling your own.
 
 ## Tool & service policy
-- **Preferred:** Tailscale (hosting-exposure) — Join the org tailnet — https://tailscale.acme.example
-- **Preferred:** Acme Kubernetes (paved road) (app-hosting) — https://platform.acme.example/docs
-- **Preferred:** Anthropic Claude (API) (model) — Via the org gateway — key issuance at https://keys.acme.example
-- **Allowed:** Headscale (hosting-exposure) — Self-hosted tailnet for lab clusters
-- **Allowed:** Vercel (app-hosting) — Static and preview deployments
-- **Allowed:** Lovable (app-hosting) — POCs only — production must move to an approved platform
-- **Review required:** Cloudflare Tunnel (hosting-exposure) — Request review in #platform-team
-- **Review required:** Model-vendor hosting (Claude artifacts, OpenAI apps) (app-hosting) — Fine for demos; data-handling review before real user data
-- **Review required:** Self-hosted open-weights models (model) — Talk to #ml-platform about GPU pool and eval requirements
-- **Banned:** Raw port forwarding (hosting-exposure) — No direct exposure of local services to the internet
+- **Preferred:** Tailscale (hosting-exposure) - Join the org tailnet — https://tailscale.acme.example
+- **Preferred:** Acme Kubernetes (paved road) (app-hosting) - https://platform.acme.example/docs
+- **Preferred:** Anthropic Claude (API) (model) - Via the org gateway — key issuance at https://keys.acme.example
+- **Allowed:** Headscale (hosting-exposure) - Self-hosted tailnet for lab clusters
+- **Allowed:** Vercel (app-hosting) - Static and preview deployments
+- **Allowed:** Lovable (app-hosting) - POCs only — production must move to an approved platform
+- **Review required:** Cloudflare Tunnel (hosting-exposure) - Request review in #platform-team
+- **Review required:** Model-vendor hosting (Claude artifacts, OpenAI apps) (app-hosting) - Fine for demos; data-handling review before real user data
+- **Review required:** Self-hosted open-weights models (model) - Talk to #ml-platform about GPU pool and eval requirements
+- **Banned:** Raw port forwarding (hosting-exposure) - No direct exposure of local services to the internet
 <!-- escapement:end -->

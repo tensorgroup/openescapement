@@ -10,7 +10,7 @@ Be careful.
 All repos use Actions.
 
 ## Tool & service policy
-- **Preferred:** Tailscale (hosting-exposure) — Org tailnet
-- **Allowed:** Lovable (app-hosting) — POCs only
-- **Review required:** Cloudflare Tunnel (hosting-exposure) — Ask #platform
+- **Preferred:** Tailscale (hosting-exposure) - Org tailnet
+- **Allowed:** Lovable (app-hosting) - POCs only
+- **Review required:** Cloudflare Tunnel (hosting-exposure) - Ask #platform
 - **Banned:** Raw port forwarding (hosting-exposure)

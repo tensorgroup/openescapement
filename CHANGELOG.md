@@ -48,9 +48,12 @@ tagged releases begin.
   demo repo, guidance) to pristine on every startup and prints
   `esc: demo data reset`. Non-demo servers are unaffected.
 - The managed-block notice line reads "Managed by escapement. Do not edit."
-  (previously an em-dash). Cosmetic for humans; a hash change for tooling:
-  the next `esc sync` rewrites the block, and until then `esc status`
-  reports `stale`, which is routine drift.
+  (previously an em-dash), and the catalog notes separator is now a spaced
+  hyphen, `name (category) - notes` (previously an em-dash there too, and
+  the awesome-list convention this catalog line follows machine-enforces
+  the hyphen form). Cosmetic for humans; a hash change for tooling: the
+  next `esc sync` rewrites the block, and until then `esc status` reports
+  `stale`, which is routine drift.
 - `esc init` confirms each marker write ("CLAUDE.md: wrote <!-- escapement:block -->")
   and says so when a position answer is not recognized, instead of writing
   or declining silently.

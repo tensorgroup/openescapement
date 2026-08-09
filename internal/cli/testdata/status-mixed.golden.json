@@ -25,7 +25,7 @@
       "alteration": {
         "expected_hash": "<hash>",
         "actual_hash": "<hash>",
-        "diff": "diff --git actual/CLAUDE.md expected/CLAUDE.md\nindex e96fb2f..508181f 100644\n--- actual/CLAUDE.md\n+++ expected/CLAUDE.md\n@@ -4,7 +4,7 @@\n \u003e Managed by escapement. Do not edit. Run `esc diff` to see source. Team content goes outside this block.\n \n ## Secrets\n-Use whatever. Version 1.0.0\n+Use Vault. Version 1.0.0\n \n ## Hosting\n Tailscale preferred.\n"
+        "diff": "diff --git actual/CLAUDE.md expected/CLAUDE.md\nindex 501f9f1..6783e2a 100644\n--- actual/CLAUDE.md\n+++ expected/CLAUDE.md\n@@ -4,7 +4,7 @@\n \u003e Managed by escapement. Do not edit. Run `esc diff` to see source. Team content goes outside this block.\n \n ## Secrets\n-Use whatever. Version 1.0.0\n+Use Vault. Version 1.0.0\n \n ## Hosting\n Tailscale preferred.\n"
       }
     },
     {
