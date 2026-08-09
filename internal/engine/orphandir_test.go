@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/tensorgroup/openescapement/internal/lockfile"
+	"github.com/tensorgroup/openescapement/internal/pack"
 )
 
 // The tests here drive Apply's orphaned-skill-dir pass directly, with a
@@ -31,8 +32,13 @@ func writeUnder(t *testing.T, dir, rel, content string) {
 // orphanDirRepo lays out a repo at root holding one dir artifact at artPath,
 // and writes a lockfile recording packFiles as the pack-provided manifest for
 // it. extraFiles are written into the same directory but left out of the
-// manifest, i.e. they are local amendments. Hash is irrelevant to this pass
-// and is left as a placeholder.
+// manifest, i.e. they are local amendments.
+//
+// The recorded Hash is the real DirHashOf over the manifest, exactly what a
+// prior sync would have written. It used to be a placeholder, on the reasoning
+// that the hash was irrelevant to this pass; the pass now compares against it
+// to detect a hand-edited pack-provided file, so a placeholder would make
+// every test here take the skip branch.
 func orphanDirRepo(t *testing.T, root, artPath string, packFiles, extraFiles map[string]string) {
 	t.Helper()
 	dir := filepath.Join(root, filepath.FromSlash(artPath))
@@ -44,8 +50,12 @@ func orphanDirRepo(t *testing.T, root, artPath string, packFiles, extraFiles map
 	for rel, content := range extraFiles {
 		writeUnder(t, dir, rel, content)
 	}
+	hash, err := pack.DirHashOf(dir, names)
+	if err != nil {
+		t.Fatal(err)
+	}
 	lock := &lockfile.Lock{Schema: 1, Artifacts: []lockfile.LockArtifact{
-		{Path: artPath, Kind: KindDir, Hash: "placeholder", Files: names},
+		{Path: artPath, Kind: KindDir, Hash: hash, Files: names},
 	}}
 	if err := lock.Save(root); err != nil {
 		t.Fatal(err)
@@ -180,5 +190,206 @@ func TestApplyOrphanDirRefusesSymlinkedParent(t *testing.T) {
 	}
 	if string(got) != "do not touch\n" {
 		t.Errorf("file outside the repo was modified: %q", got)
+	}
+}
+
+// TestApplyOrphanDirPreservesEditedPackFile is the last hole in "we never
+// destroy your work". The pass above learned to keep team-ADDED files when a
+// pack retires a skill directory, but a pack-provided file the team EDITED
+// was still removed with no warning, at exit 0, and status says nothing
+// about a retired directory beforehand. The lockfile's dir hash covers
+// exactly Files, so a mismatch against it is proof that a pack-provided file
+// changed since escapement wrote it, and the whole retirement is declined.
+func TestApplyOrphanDirPreservesEditedPackFile(t *testing.T) {
+	root := t.TempDir()
+	const artPath = ".claude/skills/esc-acme-org-esc-security"
+	orphanDirRepo(t, root, artPath,
+		map[string]string{"SKILL.md": "pack content\n", "EXTRA.md": "more pack content\n"}, nil)
+	// The team edits a pack-provided file after that sync.
+	writeUnder(t, filepath.Join(root, filepath.FromSlash(artPath)), "SKILL.md", "pack content\nour own addition\n")
+
+	res, err := Apply(root, &PlanResult{}, false)
+	if err != nil {
+		t.Fatalf("a declined retirement must not fail the rollout: %v", err)
+	}
+
+	dir := filepath.Join(root, filepath.FromSlash(artPath))
+	got, err := os.ReadFile(filepath.Join(dir, "SKILL.md"))
+	if err != nil {
+		t.Fatalf("retiring a skill dir destroyed a hand-edited pack file: %v", err)
+	}
+	if string(got) != "pack content\nour own addition\n" {
+		t.Errorf("hand-edited pack file mutated: %q", got)
+	}
+	// Nothing is removed, not just the edited file: the removal loop is
+	// declined wholesale, so the files the edit sits beside survive too.
+	if _, err := os.Stat(filepath.Join(dir, "EXTRA.md")); err != nil {
+		t.Errorf("declining the retirement must leave the whole directory alone: %v", err)
+	}
+
+	if len(res.Skipped) != 1 || res.Skipped[0].Subject != artPath {
+		t.Fatalf("want one Skipped entry for %s, got %+v", artPath, res.Skipped)
+	}
+	if r := res.Skipped[0].Reason; !strings.Contains(r, "edited or removed") {
+		t.Errorf("skip reason must say a pack-provided file was edited, got %q", r)
+	}
+	if res.Skipped[0].ExpectedHash == "" || res.Skipped[0].ActualHash == "" ||
+		res.Skipped[0].ExpectedHash == res.Skipped[0].ActualHash {
+		t.Errorf("skip must carry both hashes and they must differ: %+v", res.Skipped[0])
+	}
+
+	// The lock entry is carried forward unchanged. Dropping it would lose the
+	// manifest a later --force needs and stop the condition from being
+	// reported ever again, leaving an undeleted owned directory nothing
+	// mentions.
+	lock, err := lockfile.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prev := lock.Artifact(artPath)
+	if prev == nil {
+		t.Fatal("lock entry for a declined retirement must be carried forward")
+	}
+	if len(prev.Files) != 2 {
+		t.Errorf("carried-forward manifest must be unchanged, got %v", prev.Files)
+	}
+
+	// Convergence, direction 1: the condition keeps reporting rather than
+	// silently vanishing, and the second run is identical to the first.
+	res2, err := Apply(root, &PlanResult{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res2.Skipped) != 1 || res2.Skipped[0] != res.Skipped[0] {
+		t.Errorf("a declined retirement must re-report identically on the next sync, got %+v", res2.Skipped)
+	}
+}
+
+// TestApplyOrphanDirForceRemovesEditedPackFile is the convergence exit. A
+// declined retirement is reported on every sync, so there must be a way out
+// of it that is not "edit files until esc agrees": --force is consent to
+// overwrite escapement's own content, and an edited pack-provided file is
+// escapement's content. Team-added files are still not force's to delete.
+func TestApplyOrphanDirForceRemovesEditedPackFile(t *testing.T) {
+	root := t.TempDir()
+	const artPath = ".claude/skills/esc-acme-org-esc-security"
+	orphanDirRepo(t, root, artPath,
+		map[string]string{"SKILL.md": "pack content\n"},
+		map[string]string{"team-notes.md": "our own notes\n"})
+	writeUnder(t, filepath.Join(root, filepath.FromSlash(artPath)), "SKILL.md", "pack content\nedited\n")
+
+	res, err := Apply(root, &PlanResult{}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, filepath.FromSlash(artPath))
+	if _, err := os.Stat(filepath.Join(dir, "SKILL.md")); !os.IsNotExist(err) {
+		t.Errorf("--force must remove an edited pack-provided file, stat err = %v", err)
+	}
+	if got, err := os.ReadFile(filepath.Join(dir, "team-notes.md")); err != nil {
+		t.Errorf("--force is about our content, not theirs: %v", err)
+	} else if string(got) != "our own notes\n" {
+		t.Errorf("team file mutated by --force: %q", got)
+	}
+	if len(res.Skipped) != 1 || !strings.Contains(res.Skipped[0].Reason, "unmanaged file") {
+		t.Errorf("want the ordinary unmanaged-file skip after --force, got %+v", res.Skipped)
+	}
+}
+
+// TestApplyOrphanDirRevertConverges is the second convergence exit: put the
+// pack-provided file back the way escapement wrote it and the retirement
+// proceeds on the next ordinary sync, with no --force and no skip.
+func TestApplyOrphanDirRevertConverges(t *testing.T) {
+	root := t.TempDir()
+	const artPath = ".claude/skills/esc-acme-org-esc-security"
+	orphanDirRepo(t, root, artPath, map[string]string{"SKILL.md": "pack content\n"}, nil)
+	dir := filepath.Join(root, filepath.FromSlash(artPath))
+	writeUnder(t, dir, "SKILL.md", "pack content\nedited\n")
+
+	if res, err := Apply(root, &PlanResult{}, false); err != nil {
+		t.Fatal(err)
+	} else if len(res.Skipped) != 1 {
+		t.Fatalf("precondition: want the edit declined, got %+v", res.Skipped)
+	}
+
+	writeUnder(t, dir, "SKILL.md", "pack content\n")
+	res, err := Apply(root, &PlanResult{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Skipped) != 0 {
+		t.Errorf("reverting the edit must converge with no skip, got %+v", res.Skipped)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("the retired directory must be gone once nothing local is in the way, stat err = %v", err)
+	}
+	lock, err := lockfile.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lock.Artifact(artPath) != nil {
+		t.Error("the lock entry must drop once the directory is actually removed")
+	}
+}
+
+// TestApplyOrphanDirMissingPackFileFailsClosed covers the read-error branch
+// of the same gate. A pack-provided file the team deleted makes the hash
+// uncomputable, which means the files beside it cannot be shown to be
+// unedited either. Deleting a file is not itself work worth preserving, but
+// guessing in the destructive direction on an unverifiable directory is
+// exactly what this whole pass exists to stop, so it declines and points at
+// --force like every other skip.
+func TestApplyOrphanDirMissingPackFileFailsClosed(t *testing.T) {
+	root := t.TempDir()
+	const artPath = ".claude/skills/esc-acme-org-esc-security"
+	orphanDirRepo(t, root, artPath,
+		map[string]string{"SKILL.md": "pack content\n", "EXTRA.md": "more pack content\n"}, nil)
+	dir := filepath.Join(root, filepath.FromSlash(artPath))
+	if err := os.Remove(filepath.Join(dir, "EXTRA.md")); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := Apply(root, &PlanResult{}, false)
+	if err != nil {
+		t.Fatalf("an unverifiable retirement must be declined, not an error: %v", err)
+	}
+	if len(res.Skipped) != 1 {
+		t.Fatalf("want one Skipped entry, got %+v", res.Skipped)
+	}
+	if res.Skipped[0].ActualHash != "" {
+		t.Errorf("no hash can be computed, so none should be reported: %q", res.Skipped[0].ActualHash)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "SKILL.md")); err != nil {
+		t.Errorf("nothing may be removed from an unverifiable directory: %v", err)
+	}
+}
+
+// TestApplyOrphanDirPreManifestLockUnaffected pins the len(prev.Files) guard.
+// A lockfile written before the manifest change records a hash covering a
+// file list it never stored, so comparing against it would be meaningless and
+// would take every pre-manifest retirement down the edited-file branch with
+// the wrong reason attached. That path already removes nothing and reports
+// every on-disk file as unmanaged, which is the conservative answer it was
+// designed to give.
+func TestApplyOrphanDirPreManifestLockUnaffected(t *testing.T) {
+	root := t.TempDir()
+	const artPath = ".claude/skills/esc-acme-org-esc-security"
+	writeUnder(t, filepath.Join(root, filepath.FromSlash(artPath)), "SKILL.md", "pack content\n")
+	lock := &lockfile.Lock{Schema: 1, Artifacts: []lockfile.LockArtifact{
+		{Path: artPath, Kind: KindDir, Hash: "sha256:whatever-the-old-scheme-recorded"},
+	}}
+	if err := lock.Save(root); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := Apply(root, &PlanResult{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Skipped) != 1 || !strings.Contains(res.Skipped[0].Reason, "unmanaged file") {
+		t.Fatalf("want the unmanaged-file skip on a pre-manifest lockfile, got %+v", res.Skipped)
+	}
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(artPath), "SKILL.md")); err != nil {
+		t.Errorf("a pre-manifest retirement must remove nothing: %v", err)
 	}
 }

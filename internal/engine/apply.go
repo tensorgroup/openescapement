@@ -11,6 +11,7 @@ import (
 
 	"github.com/tensorgroup/openescapement/internal/esc"
 	"github.com/tensorgroup/openescapement/internal/lockfile"
+	"github.com/tensorgroup/openescapement/internal/pack"
 	"github.com/tensorgroup/openescapement/internal/render"
 )
 
@@ -280,6 +281,59 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 					continue // directory already gone
 				}
 				return nil, err
+			}
+			// The last hole in "we never destroy your work". The loop below
+			// removes every pack-provided file, and one of them may have been
+			// hand-edited: that edit would go at exit 0 with nothing having
+			// warned first, which is the same defect the unmanaged-file case
+			// below already fixed for team-added files. The lockfile's dir
+			// hash covers exactly prev.Files, so a mismatch against it means
+			// at least one pack-provided file changed since escapement wrote
+			// it. Decline the whole retirement in that case: nothing is
+			// removed, so the edit survives along with everything beside it.
+			//
+			// Gated on force for the same reason every other skip is: force
+			// is consent to overwrite escapement's own content, and an edited
+			// pack-provided file is escapement's content.
+			//
+			// Gated on len(prev.Files) too. A pre-manifest lockfile records no
+			// manifest, so its hash covers a file list we don't have and a
+			// comparison here would be meaningless; that path already removes
+			// nothing and reports every on-disk file as unmanaged below, which
+			// is the conservative answer it was designed to give.
+			//
+			// A read error fails closed the same way rather than removing
+			// anyway. Only os.IsNotExist is folded in (a pack-provided file
+			// the team deleted), and it is folded in because a missing file
+			// makes the remaining ones unverifiable, not because deleting is
+			// itself work to preserve. Anything else is a real failure and
+			// propagates.
+			if !force && len(prev.Files) > 0 {
+				actual, herr := pack.DirHashOf(abs, prev.Files)
+				if herr != nil && !os.IsNotExist(herr) {
+					return nil, herr
+				}
+				if herr != nil || actual != prev.Hash {
+					res.Skipped = append(res.Skipped, Skipped{
+						Subject: prev.Path, Kind: prev.Kind,
+						Reason:       "pack no longer provides this skill directory, but a pack-provided file in it was edited or removed since the last sync; left in place instead of being deleted",
+						ExpectedHash: prev.Hash, ActualHash: actual,
+					})
+					// Carry the entry forward, unlike the unmanaged-file skip
+					// below. There, the pack-provided files really were
+					// removed and only the team's own remain, so the entry has
+					// nothing left to describe. Here nothing was removed: the
+					// files are still on disk and still escapement's, and
+					// dropping the entry would lose both the manifest a later
+					// --force needs and the condition itself, leaving an
+					// undeleted owned directory that no run ever mentions
+					// again. Carrying it forward re-reports every sync until
+					// someone resolves it, and three things resolve it:
+					// `esc sync --force`, reverting the edit, or deleting the
+					// directory.
+					arts = append(arts, prev)
+					continue
+				}
 			}
 			for _, f := range prev.Files {
 				target, err := containedPath(abs, f)

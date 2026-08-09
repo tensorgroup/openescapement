@@ -12,7 +12,8 @@ tagged releases begin.
   asserts that the repo matches policy. It now asserts only that everything
   escapement was willing to apply was applied: an artifact whose managed
   region was hand-edited, and a retired skill directory still holding files
-  the team added, are both reported and skipped, and sync still exits 0. Any
+  the team added or a pack-provided file the team edited, are all reported
+  and skipped, and sync still exits 0. Any
   pipeline that treated `esc sync` exit 0 as a compliance check must move that
   gate to `esc status --check`, which exits 1 on any artifact not in sync.
   Skipped artifacts are listed on stderr and in the `skipped` array of
