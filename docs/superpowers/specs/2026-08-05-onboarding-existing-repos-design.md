@@ -49,6 +49,8 @@ want it before syncing.
 
 **The offer.** After explaining, on a TTY, init offers to place the block marker for each detected file:
 
+> **Amended as shipped (final review of this cycle).** Two things below did not survive implementation, both recorded here rather than silently rewritten. (1) The per-file, four-option prompt became one gate, `Place the marker now? [y/N]`, asked once, plus one position question (`above the title` or `end of file`) whose answer applies to every eligible file. Six code paths already converged on writing nothing, so a repo with four instruction files got four consecutive prompts that each recommended doing nothing; and the "top (recommended)" and "after the heading" options were the same position as §1 top placement, so they would have written a placeholder that changed nothing. (2) The undo guard rail below is stated too broadly: it holds inside a git repo, where a dirty file is skipped, but in a plain directory there is no undo at all and init would still write. As shipped, the gate says so and the write still requires an explicit yes. `--yes` no longer accepts a placement; it declines the gate, so no non-interactive run modifies a detected file.
+
 ```
 Place the managed block in CLAUDE.md?
   [t] top (recommended)   [h] after the heading   [e] end   [s] skip

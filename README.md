@@ -78,23 +78,25 @@ Most first contact isn't a blank repo, it's one with a hand-written `CLAUDE.md` 
   will do to each detected file: your content is preserved byte for byte and
   reported as a local amendment. A file that already carries a managed block or the
   placeholder marker is told that instead of promised an insert it won't get.
-- **Offers** to place the managed-block marker (`<!-- escapement:block -->`) in each
-  detected file, on a TTY: keep the default (writes nothing, the block lands at the
-  top of the file, after any frontmatter and title, at first sync), the very top of
-  the file (byte 0, above everything), or the end of the file. Declining, an empty
-  answer, and the default all leave the file untouched; the placeholder is the only
-  way to override where the block lands.
+- **Offers**, once, to place the managed-block marker (`<!-- escapement:block -->`),
+  on a TTY. One question, defaulting to no: say no and nothing is written, and the
+  block lands at the top of each file, below any frontmatter and title, at first
+  sync. Say yes and you pick a position once, above the title (but still below any
+  frontmatter) or at the end of the file, and it applies to every eligible file.
+  Declining, an empty answer, Ctrl-D, and anything unrecognized all leave every file
+  untouched; the placeholder is the only way to override where the block lands.
 
 `esc init` never writes rendered policy, only the marker, and only when you ask it
 to. A getting-started command shouldn't put rules into your instruction files before
 you've seen them; `esc sync` is what writes policy, later, once you've reviewed the
 pack.
 
-Guard rails: init never touches a file with uncommitted changes (git is the undo
-mechanism for anything it writes, so it doesn't write where git can't undo it; that
-file is reported and skipped instead, and the rest still get processed), and
-`--yes` selects the default placement for every detected file, so a scripted
-`esc init --yes` writes nothing beyond the config scaffold.
+Guard rails: init never writes over a file with uncommitted changes, because git is
+what would restore it; that file is reported and left out of the offer, and the rest
+are still offered. In a directory that is not a git repository there is no undo at
+all, so the prompt says so and still requires an explicit yes rather than treating
+"no version control" as the safest case. A non-interactive run, including
+`esc init --yes`, never asks and never writes anything beyond the config scaffold.
 
 Once a pack is synced, run its `esc-reconcile` skill, if it ships one (the seeded
 demo pack does), to compare your existing rules against the pack's for duplicates or
