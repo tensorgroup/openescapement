@@ -34,6 +34,7 @@ func cmdServe(root string, args []string, stdout, stderr io.Writer) int {
 	addr := fs.String("addr", "127.0.0.1:8484", "listen address")
 	dataDir := fs.String("data-dir", "", "server data directory (default: ~/.escapement/server)")
 	demo := fs.Bool("demo", false, "seed demo data; disable auth (localhost only)")
+	tokenFlag := fs.String("token", "", "auth token (default: random, printed on start); ignored with --demo")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -65,7 +66,6 @@ func cmdServe(root string, args []string, stdout, stderr io.Writer) int {
 		return 4
 	}
 
-	token := ""
 	demoRepo := ""
 	if *demo {
 		// resetDemo above already wiped every demo-owned path, so this
@@ -81,13 +81,11 @@ func cmdServe(root string, args []string, stdout, stderr io.Writer) int {
 			return 4
 		}
 		demoRepo = repo
-	} else {
-		buf := make([]byte, 16)
-		if _, err := rand.Read(buf); err != nil {
-			fmt.Fprintf(stderr, "esc: %v\n", err)
-			return 4
-		}
-		token = hex.EncodeToString(buf)
+	}
+	token, err := resolveToken(*demo, *tokenFlag)
+	if err != nil {
+		fmt.Fprintf(stderr, "esc: %v\n", err)
+		return 4
 	}
 
 	st, err := store.Open(dir)
@@ -149,6 +147,25 @@ func resetDemo(dir string, stdout io.Writer) error {
 	}
 	fmt.Fprintln(stdout, "esc: demo data reset")
 	return nil
+}
+
+// resolveToken picks cmdServe's auth token. Demo mode always disables auth
+// (""), regardless of tokenFlag: "Demo mode unchanged" is the deliberate
+// contract, since --demo already binds localhost only and seeds throwaway
+// data. Otherwise an explicit --token value is used verbatim; an empty flag
+// keeps today's behavior of a fresh random hex token per start.
+func resolveToken(demo bool, tokenFlag string) (string, error) {
+	if demo {
+		return "", nil
+	}
+	if tokenFlag != "" {
+		return tokenFlag, nil
+	}
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
 }
 
 // isLoopback reports whether addr's host resolves to a loopback address or

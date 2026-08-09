@@ -49,7 +49,28 @@ type Repo struct {
 	Name     string `json:"name"`
 	TeamID   string `json:"team_id"`
 	Governed bool   `json:"governed"`
+	// Remote is the repo's normalized git remote (publisher.NormalizeRemote),
+	// the join key ingest uses to resolve an incoming envelope's Remote to a
+	// registered repo. Empty for repos registered before a remote was known.
+	Remote string `json:"remote,omitempty"`
 }
+
+// RepoByRemote returns the repo whose Remote matches remote, and whether one
+// was found. remote is expected to already be normalized
+// (publisher.NormalizeRemote); an empty remote never matches, since an empty
+// Repo.Remote must not accidentally match an empty incoming remote.
+func (r Registry) RepoByRemote(remote string) (Repo, bool) {
+	if remote == "" {
+		return Repo{}, false
+	}
+	for _, repo := range r.Repos {
+		if repo.Remote != "" && repo.Remote == remote {
+			return repo, true
+		}
+	}
+	return Repo{}, false
+}
+
 type EventPack struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
@@ -61,10 +82,16 @@ type Tokens struct {
 	CostUSD float64 `json:"cost_usd"`
 }
 type Event struct {
-	TS         time.Time          `json:"ts"`
-	Kind       string             `json:"kind"` // sync|status|update_check|provider_usage|mcp_connect
-	RepoID     string             `json:"repo_id,omitempty"`
-	TeamID     string             `json:"team_id,omitempty"`
+	TS     time.Time `json:"ts"`
+	Kind   string    `json:"kind"` // sync|status|update_check|provider_usage|mcp_connect
+	RepoID string    `json:"repo_id,omitempty"`
+	TeamID string    `json:"team_id,omitempty"`
+	// Remote is the normalized git remote an envelope-sourced event arrived
+	// with (publisher.NormalizeRemote). Set whether or not it resolved to a
+	// registered repo: an unmatched remote is retained here, never dropped,
+	// so an unregistered repo's activity stays visible as shadow IT rather
+	// than vanishing at ingest.
+	Remote     string             `json:"remote,omitempty"`
 	AgentTool  string             `json:"agent_tool,omitempty"`
 	Model      string             `json:"model,omitempty"`
 	Packs      []EventPack        `json:"packs,omitempty"`

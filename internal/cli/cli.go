@@ -44,8 +44,9 @@ Usage:
   esc update [--source SRC] --ref REF
                                  Bump a pack pin in config + lock (run sync after)
   esc render --stdout            Print rendered targets without writing
-  esc serve [--demo] [--addr ADDR] [--data-dir DIR]
+  esc serve [--demo] [--addr ADDR] [--data-dir DIR] [--token TOKEN]
                                  Launch the admin portal server
+                                 --token sets the auth token (default: random)
   esc version                    Print version
 
 Exit codes: 0 ok · 1 drift/constraint findings · 2 usage · 3 integrity/signature · 4 error
