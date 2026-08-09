@@ -31,7 +31,9 @@ var (
 const usage = `esc — deterministic governance for your AI usage
 
 Usage:
-  esc init                       Scaffold .escapement/config.yaml
+  esc init [--yes]                Scaffold .escapement/config.yaml
+                                 --yes accepts the recommended (no-write)
+                                 answer to every placement prompt
   esc sync [--force]             Fetch, verify, render, and write policy artifacts
                                  --force overwrites hand-edited managed regions
   esc status [--check]           Report drift; --check exits non-zero on findings
@@ -59,7 +61,7 @@ func Run(root string, args []string, stdout, stderr io.Writer) int {
 	var err error
 	switch args[0] {
 	case "init":
-		err = cmdInit(root, stdout)
+		err = cmdInit(ctx, root, args[1:], stdout)
 	case "sync":
 		return cmdSync(ctx, root, args[1:], stdout, stderr)
 	case "status":
@@ -138,7 +140,13 @@ const signersTemplate = `# SSH allowed signers for pack verification (see ssh-ke
 # policy-team@acme.example ssh-ed25519 AAAA...
 `
 
-func cmdInit(root string, stdout io.Writer) error {
+func cmdInit(ctx context.Context, root string, args []string, stdout io.Writer) error {
+	fs := flag.NewFlagSet("init", flag.ContinueOnError)
+	fs.SetOutput(stdout)
+	yes := fs.Bool("yes", false, "accept the recommended answer for every prompt instead of asking\n(the recommended placement writes nothing extra, so --yes never modifies a detected file)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 	cfgPath := config.Path(root)
 	if _, err := os.Stat(cfgPath); err == nil {
 		return fmt.Errorf("%s already exists", cfgPath)
@@ -173,6 +181,9 @@ func cmdInit(root string, stdout io.Writer) error {
 	}
 	fmt.Fprintf(stdout, "Initialized %s\n\n", cfgPath)
 	explainDetection(stdout, detected)
+	// Offer comes last: everything above it is config scaffolding that a
+	// user who declines every offer still ends up with, working.
+	offerPlacement(ctx, root, stdout, detected, *yes)
 	return nil
 }
 
