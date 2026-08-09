@@ -558,3 +558,144 @@ func TestSkillDirRemovalThroughNestedSymlinkFailsClosed(t *testing.T) {
 		t.Errorf("file outside the repo was modified: %q", got)
 	}
 }
+
+// retiredSkillDirRepo publishes a pack at v1.0.0 declaring skills/esc-security,
+// governs a repo against it, syncs, and then publishes v1.0.1 with that skill
+// dropped from the manifest. It returns the governed repo, left pinned at
+// v1.0.0 so the caller can hand-edit the synced directory before running
+// `esc update --ref v1.0.1`.
+//
+// Built inline rather than via setupGovernedRepoWithSkills for the reason
+// TestSkillDirRemovesPackDroppedFiles gives: the caller needs the pack repo
+// path in order to publish a second version, and the drop must go out under a
+// NEW tag, since force-retagging is indistinguishable from an attacker moving
+// a tag and is rejected by the lock-integrity check.
+func retiredSkillDirRepo(t *testing.T) string {
+	t.Helper()
+	packRepo := newPackRepo(t, "1.0.0")
+	files := map[string]string{}
+	for rel, content := range skillFiles() {
+		files["org/"+rel] = content
+	}
+	files["org/pack.yaml"] = withExtraSkill(t, packRepo, "skills/esc-security")
+	writeFiles(t, packRepo, files)
+	gitIn(t, packRepo, "add", ".")
+	gitIn(t, packRepo, "commit", "-m", "add skills")
+	gitIn(t, packRepo, "tag", "-f", "v1.0.0")
+	repo := newGoverned(t, packRepo, "v1.0.0")
+	runEsc(t, repo, "sync")
+
+	manifest, err := os.ReadFile(filepath.Join(packRepo, "org", "pack.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	retired := strings.Replace(string(manifest), "  - skills/esc-security\n", "", 1)
+	if retired == string(manifest) {
+		t.Fatal("precondition: pack.yaml does not declare skills/esc-security")
+	}
+	bumped := strings.Replace(retired, "version: 1.0.0\n", "version: 1.0.1\n", 1)
+	if bumped == retired {
+		t.Fatal("precondition: expected pack.yaml to declare version: 1.0.0")
+	}
+	writeFiles(t, packRepo, map[string]string{"org/pack.yaml": bumped})
+	gitIn(t, packRepo, "add", "-A")
+	gitIn(t, packRepo, "commit", "-m", "retire esc-security")
+	gitIn(t, packRepo, "tag", "-a", "v1.0.1", "-m", "v1.0.1")
+	return repo
+}
+
+// TestOrphanSkillDirDeclinedRetirementIsVisibleToCheck is the fix-round
+// regression test for the compliance-gate hole. Orphan detection filtered
+// dir-kind lock entries out entirely, so no orphan-dir finding existed in any
+// state: sync would decline to retire a skill directory holding a hand-edited
+// pack file, park the lock entry, and re-report the decline on every run,
+// while `esc status` said nothing and `esc status --check` — where AGENTS.md
+// puts compliance gating — exited 0 forever. The orphan-block path has warned
+// on status first since it was written; the dir path now matches it.
+func TestOrphanSkillDirDeclinedRetirementIsVisibleToCheck(t *testing.T) {
+	repo := retiredSkillDirRepo(t)
+	dir := filepath.Join(repo, ".claude", "skills", "esc-acme-org-esc-security")
+	skill := filepath.Join(dir, "SKILL.md")
+	original, err := os.ReadFile(skill)
+	if err != nil {
+		t.Fatalf("precondition: %v", err)
+	}
+	edited := append(append([]byte(nil), original...), []byte("\nOur own addition.\n")...)
+	if err := os.WriteFile(skill, edited, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runEsc(t, repo, "update", "--ref", "v1.0.1")
+
+	// Status says so BEFORE sync is ever asked to delete it.
+	out, code := runEscOut(t, repo, "status")
+	if code != 0 {
+		t.Fatalf("bare status on an orphan should exit 0, got %d:\n%s", code, out)
+	}
+	if !strings.Contains(out, "esc-acme-org-esc-security") || !strings.Contains(out, "orphan") {
+		t.Errorf("status must report the retired skill directory as an orphan:\n%s", out)
+	}
+	if !strings.Contains(out, "hand-edited") {
+		t.Errorf("status must report the hand-edit sync is about to decline:\n%s", out)
+	}
+	if !strings.Contains(out, "`esc sync --force` removes it") {
+		t.Errorf("status must name the remedy, matching the orphan-block wording:\n%s", out)
+	}
+
+	if _, code := runEscOut(t, repo, "status", "--check"); code != 1 {
+		t.Errorf("`status --check` must fail on a retired skill dir sync will decline, got %d", code)
+	}
+
+	// Sync declines, exits 0, and preserves the edit.
+	syncOut, code := runEscOut(t, repo, "sync")
+	if code != 0 {
+		t.Fatalf("a declined retirement must not fail the rollout, exit=%d:\n%s", code, syncOut)
+	}
+	if got, rerr := os.ReadFile(skill); rerr != nil {
+		t.Fatalf("the hand-edited pack file was destroyed: %v", rerr)
+	} else if !strings.Contains(string(got), "Our own addition.") {
+		t.Errorf("the hand-edit was overwritten: %q", got)
+	}
+
+	// And the gate stays closed afterwards: the parked state is exactly the
+	// one that used to be invisible forever.
+	if _, code := runEscOut(t, repo, "status", "--check"); code != 1 {
+		t.Errorf("`status --check` must still fail while the retirement stays declined, got %d", code)
+	}
+
+	// Converged by --force: the directory goes, and the gate reopens.
+	runEsc(t, repo, "sync", "--force")
+	if _, serr := os.Stat(dir); !os.IsNotExist(serr) {
+		t.Errorf("--force must retire the directory, stat err = %v", serr)
+	}
+	if out, code := runEscOut(t, repo, "status", "--check"); code != 0 {
+		t.Errorf("`status --check` must pass once the retirement completes, got %d:\n%s", code, out)
+	}
+}
+
+// TestOrphanSkillDirUnmanagedFilesReportedByStatus is the other orphan-dir
+// status shape: no hand-edit, but files the team added. Sync will remove the
+// pack files and keep the directory, so status must say that rather than the
+// bare "run `esc sync` to remove it", and must report the added files on the
+// local axis like every other amendment.
+func TestOrphanSkillDirUnmanagedFilesReportedByStatus(t *testing.T) {
+	repo := retiredSkillDirRepo(t)
+	dir := filepath.Join(repo, ".claude", "skills", "esc-acme-org-esc-security")
+	if err := os.WriteFile(filepath.Join(dir, "team-notes.md"), []byte("ours\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runEsc(t, repo, "update", "--ref", "v1.0.1")
+
+	out, code := runEscOut(t, repo, "status")
+	if code != 0 {
+		t.Fatalf("bare status on an orphan should exit 0, got %d:\n%s", code, out)
+	}
+	if !strings.Contains(out, "keeps the directory for the files you added") {
+		t.Errorf("status must say the directory survives for the team's files:\n%s", out)
+	}
+	if !strings.Contains(out, "1 unmanaged file preserved") {
+		t.Errorf("status must report the added file on the local axis:\n%s", out)
+	}
+	if _, code := runEscOut(t, repo, "status", "--check"); code != 1 {
+		t.Errorf("an orphaned skill directory is not in sync, so --check must fail, got %d", code)
+	}
+}

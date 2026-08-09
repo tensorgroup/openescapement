@@ -178,6 +178,69 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 		}
 	}
 
+	// Orphan skill directories: an escapement-owned dir the lockfile records
+	// that the effective set no longer contains. Same shape and vocabulary as
+	// the orphan-block pass above, and for the same reason spelled out there:
+	// Apply's orphan-dir pass can DECLINE to retire one of these (it still
+	// holds files the team added, or a pack-provided file in it was
+	// hand-edited), and status has to say so first. Until this existed, dir
+	// entries were filtered out of orphan detection entirely, so no orphan-dir
+	// finding was produced in any state — a repo parked in a declined
+	// retirement showed nothing on `esc status` and passed `esc status
+	// --check` at exit 0 forever, which is precisely where AGENTS.md puts
+	// compliance gating.
+	desiredDirs := map[string]bool{}
+	for _, a := range plan.Artifacts {
+		if a.Kind == KindDir {
+			desiredDirs[a.Path] = true
+		}
+	}
+	if lock != nil {
+		for _, la := range lock.Artifacts {
+			if la.Kind != KindDir || desiredDirs[la.Path] {
+				continue
+			}
+			abs, cerr := containedPath(root, la.Path)
+			if cerr != nil {
+				continue
+			}
+			// Read-only surface: a lockfile path reaching out of the repo
+			// through a symlink is refused rather than followed to build a
+			// report. Apply fails closed and loudly on the same entry, which
+			// is the signal that case gets.
+			if refuseSymlinks(root, la.Path) != nil {
+				continue
+			}
+			if info, serr := os.Stat(abs); serr != nil || !info.IsDir() {
+				continue // already gone
+			}
+			f := Finding{
+				Subject: la.Path, Kind: la.Kind, State: Orphan, Local: LocalNone,
+				Detail: "an esc skill directory for a target no longer in the effective set — run `esc sync` to remove it",
+			}
+			if unmanaged, uerr := unmanagedDirFiles(abs, la.Files); uerr == nil {
+				if am := newAmendment("", unmanaged); am != nil {
+					f.Local, f.Amendment = LocalAmended, am
+					f.Detail = "an esc skill directory for a target no longer in the effective set; `esc sync` removes the pack-provided files and keeps the directory for the files you added"
+				}
+			}
+			// la.Files is lockfile data, so containment comes before the read
+			// here for the same reason it does in Apply's orphan-dir pass:
+			// DirHashOf reads every entry, and an unvalidated entry would be
+			// read through a symlink or out of the root to produce a hash this
+			// report then publishes.
+			if len(la.Files) > 0 {
+				if verr := validateDirEntries(abs, la.Path, la.Files); verr != nil {
+					f.Detail = "an esc skill directory for a target no longer in the effective set, with an unusable lockfile manifest (" + verr.Error() + "); `esc sync` fails closed on it"
+				} else if actual, herr := pack.DirHashOf(abs, la.Files); herr != nil || actual != la.Hash {
+					f.Alteration = &Alteration{ExpectedHash: la.Hash, ActualHash: actual}
+					f.Detail = "an esc skill directory for a target no longer in the effective set, holding a pack-provided file that was hand-edited or is no longer readable; `esc sync` leaves it in place, `esc sync --force` removes it"
+				}
+			}
+			res.Findings = append(res.Findings, f)
+		}
+	}
+
 	for _, v := range plan.Violations {
 		res.Findings = append(res.Findings, Finding{Subject: v.Path, Kind: KindConstraint, State: ConstraintViolated, Local: LocalNone, Detail: v.Rule})
 	}

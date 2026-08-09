@@ -29,6 +29,10 @@ tagged releases begin.
   which only ever covers a hand-edited managed region, so a declined skill
   directory or an undeleted orphaned block sent the reader to a command that
   shows nothing about it.
+- `esc status` reports a retired esc skill directory as an `orphan` finding,
+  the way it already did for an orphaned managed block. A retirement that
+  `esc sync` declines is therefore visible to `esc status --check` instead of
+  passing it at exit 0.
 - A symlink standing where escapement is about to write now exits 4, not 1.
   Exit 1 is the drift-and-constraint class a CI gate reads as routine and
   self-healing; a containment refusal is neither, and the other containment
