@@ -16,7 +16,7 @@ import (
 // the sorted owned keys.
 func MergeMCP(existing []byte, servers map[string]map[string]any, prevOwned []string) ([]byte, []string, error) {
 	doc := map[string]any{}
-	if len(existing) > 0 {
+	if len(bytes.TrimSpace(existing)) > 0 {
 		if err := json.Unmarshal(existing, &doc); err != nil {
 			return nil, nil, fmt.Errorf("parsing existing .mcp.json: %w", err)
 		}
