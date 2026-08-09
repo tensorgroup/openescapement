@@ -15,6 +15,14 @@ import (
 const (
 	logFileName = "update-log.jsonl"
 	maxEntries  = 50
+
+	// outboxFileName names the telemetry outbox (internal/publisher). Kept
+	// as its own unexported copy here rather than importing the publisher
+	// package for one constant; ensureGitignore lists it so whichever of
+	// the update-log or the outbox writes first converges .gitignore on
+	// both, without publisher reaching into this package's unexported
+	// internals.
+	outboxFileName = "outbox.jsonl"
 )
 
 // Entry is one line of .escapement/update-log.jsonl.
@@ -123,16 +131,31 @@ func atomicWrite(path string, content []byte) error {
 	return os.Rename(tmp.Name(), path)
 }
 
-// ensureGitignore makes .escapement/.gitignore ignore the update log. It is
-// best-effort: a failure here must never fail the invoking command.
+// gitignoreEntries lists every per-clone file ensureGitignore keeps out of
+// git. The update log and the telemetry outbox are both named here so
+// whichever one's writer runs first leaves .gitignore complete, in one
+// place, rather than each writer maintaining its own partial list.
+var gitignoreEntries = []string{logFileName, outboxFileName}
+
+// ensureGitignore makes .escapement/.gitignore ignore the update log and
+// the telemetry outbox. It is best-effort: a failure here must never fail
+// the invoking command.
 func ensureGitignore(root string) {
 	p := filepath.Join(root, config.Dir, ".gitignore")
 	data, err := os.ReadFile(p)
 	if err == nil {
+		present := map[string]bool{}
 		for _, line := range strings.Split(string(data), "\n") {
-			if strings.TrimSpace(line) == logFileName {
-				return
+			present[strings.TrimSpace(line)] = true
+		}
+		var missing []string
+		for _, name := range gitignoreEntries {
+			if !present[name] {
+				missing = append(missing, name)
 			}
+		}
+		if len(missing) == 0 {
+			return
 		}
 		f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0o644)
 		if err != nil {
@@ -142,13 +165,15 @@ func ensureGitignore(root string) {
 		if len(data) > 0 && !strings.HasSuffix(string(data), "\n") {
 			f.WriteString("\n")
 		}
-		f.WriteString(logFileName + "\n")
+		for _, name := range missing {
+			f.WriteString(name + "\n")
+		}
 		return
 	}
 	if !os.IsNotExist(err) {
 		return // real read error: don't clobber an existing .gitignore
 	}
 	if os.MkdirAll(filepath.Join(root, config.Dir), 0o755) == nil {
-		os.WriteFile(p, []byte(logFileName+"\n"), 0o644)
+		os.WriteFile(p, []byte(strings.Join(gitignoreEntries, "\n")+"\n"), 0o644)
 	}
 }

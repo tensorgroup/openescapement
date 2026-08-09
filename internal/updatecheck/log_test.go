@@ -87,4 +87,32 @@ func TestEnsureGitignoreIdempotent(t *testing.T) {
 	if n := strings.Count(string(gi), logFileName); n != 1 {
 		t.Errorf("gitignore contains %d occurrences of %q, want exactly 1: %q", n, logFileName, gi)
 	}
+	if n := strings.Count(string(gi), outboxFileName); n != 1 {
+		t.Errorf("gitignore contains %d occurrences of %q, want exactly 1: %q", n, outboxFileName, gi)
+	}
+}
+
+func TestEnsureGitignoreAddsMissingEntryToExistingFile(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".escapement")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate a .gitignore that only ever saw the update log (e.g. written
+	// before the outbox existed): ensureGitignore must add the missing
+	// entry without disturbing the one already present.
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(logFileName+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ensureGitignore(root)
+	gi, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(gi), logFileName); n != 1 {
+		t.Errorf("gitignore contains %d occurrences of %q, want exactly 1: %q", n, logFileName, gi)
+	}
+	if n := strings.Count(string(gi), outboxFileName); n != 1 {
+		t.Errorf("gitignore contains %d occurrences of %q, want exactly 1: %q", n, outboxFileName, gi)
+	}
 }
