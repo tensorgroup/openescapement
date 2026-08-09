@@ -1,6 +1,7 @@
 package render
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 )
@@ -118,6 +119,34 @@ func TestExtractRoundTrip(t *testing.T) {
 	none, err := Extract([]byte("no block here\n"))
 	if err != nil || none != nil {
 		t.Errorf("no block: want nil,nil got %v,%v", none, err)
+	}
+}
+
+// A managed block converted wholesale to CRLF (core.autocrlf on a Windows
+// checkout) must still extract, and its body must hash equal to the LF
+// hash in its own begin marker: line endings are git's presentation, not
+// policy content, so the managed axis must not report this as drift.
+func TestExtractCRLFConvertedBlockHashesEqual(t *testing.T) {
+	lf, err := Splice(nil, "policy line\n", BlockMeta{Packs: []string{"p@1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	crlf := bytes.ReplaceAll(lf, []byte("\n"), []byte("\r\n"))
+	blk, err := Extract(crlf)
+	if err != nil || blk == nil {
+		t.Fatalf("Extract on CRLF block: blk=%v err=%v", blk, err)
+	}
+	if BodyHash(blk.Body) != blk.Hash {
+		t.Errorf("CRLF-converted body hashes %q, marker says %q; a pristine autocrlf checkout would report altered", BodyHash(blk.Body), blk.Hash)
+	}
+	// The normalization must not mask a real edit under CRLF endings.
+	edited := bytes.ReplaceAll(crlf, []byte("policy"), []byte("edited"))
+	eb, err := Extract(edited)
+	if err != nil || eb == nil {
+		t.Fatal("Extract on edited CRLF block failed")
+	}
+	if BodyHash(eb.Body) == eb.Hash {
+		t.Error("a genuine edit under CRLF endings must still mismatch")
 	}
 }
 

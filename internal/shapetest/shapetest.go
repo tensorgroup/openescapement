@@ -53,6 +53,10 @@ func Shapes() []Shape {
 		{Name: "hashtag", Content: []byte("#hashtag\n\nrules\n")},
 		{Name: "h2-only", Content: []byte("## Sub\n\nrules\n")},
 		{Name: "only-managed-block", Content: RenderedBlock("old body\n"), HasBlock: true},
+		// A managed block converted wholesale to CRLF (core.autocrlf on a
+		// Windows checkout): line endings are presentation, not policy
+		// content, so this must still splice cleanly like its LF twin.
+		{Name: "only-managed-block-crlf", Content: bytes.ReplaceAll(RenderedBlock("old body\n"), []byte("\n"), []byte("\r\n")), HasBlock: true},
 	}
 }
 

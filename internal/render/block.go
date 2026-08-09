@@ -1,6 +1,7 @@
 package render
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
@@ -27,8 +28,23 @@ type Block struct {
 	end   int // byte offset one past end marker line
 }
 
-// BodyHash returns the canonical hash of a block body.
-func BodyHash(body string) string { return esc.HashBytes([]byte(body)) }
+// BodyHash returns the canonical hash of a block body. Line endings are
+// git's presentation, not policy content: a body converted wholesale to
+// CRLF (core.autocrlf on a Windows checkout) hashes identically to its LF
+// original, so the managed axis reports drift on content, never on the
+// ending git chose to check it out with.
+func BodyHash(body string) string {
+	return esc.HashBytes([]byte(strings.ReplaceAll(body, "\r\n", "\n")))
+}
+
+// NormalizeEndings collapses CRLF to LF for comparison purposes only. A lone
+// \r (old Mac-style) is left untouched: the rule set is closed to the one
+// conversion a real git checkout performs, not every ending Unicode allows.
+// Rendering itself never emits CRLF; this exists solely on the comparison
+// path.
+func NormalizeEndings(b []byte) []byte {
+	return bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
+}
 
 // FrontmatterEnd returns the offset just past leading YAML frontmatter, or 0
 // when there is none (including an unterminated `---` fence, which is not
@@ -175,7 +191,9 @@ func Extract(file []byte) (*Block, error) {
 	}
 	header := s[begin+len(beginPrefix) : begin+headerEnd]
 	bodyStart := begin + headerEnd + len("-->")
-	if strings.HasPrefix(s[bodyStart:], "\n") {
+	if strings.HasPrefix(s[bodyStart:], "\r\n") {
+		bodyStart += 2
+	} else if strings.HasPrefix(s[bodyStart:], "\n") {
 		bodyStart++
 	}
 	endIdx := strings.Index(s[bodyStart:], endMarker)
@@ -187,7 +205,9 @@ func Extract(file []byte) (*Block, error) {
 		start: begin,
 		end:   bodyStart + endIdx + len(endMarker),
 	}
-	if strings.HasPrefix(s[b.end:], "\n") {
+	if strings.HasPrefix(s[b.end:], "\r\n") {
+		b.end += 2
+	} else if strings.HasPrefix(s[b.end:], "\n") {
 		b.end++
 	}
 	for _, field := range strings.Fields(strings.TrimSpace(header)) {
