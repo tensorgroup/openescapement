@@ -404,3 +404,103 @@ func TestFlushOutboxDroppedCoversAgedAndCorrupt(t *testing.T) {
 		t.Fatalf("sent=%d dropped=%d remaining=%d, want 1,2,0 (1 aged + 1 corrupt = 2 dropped)", sent, dropped, remaining)
 	}
 }
+
+// TestFlushOutboxDeadEndpointDoesNotStarveOthers is the fix's core case: A
+// and B are interleaved in the queue (A, B, A, B) so a naive global
+// oldest-first scan that stops at the very first failure would never reach
+// B at all, and B's entries would sit queued behind a dead A until age
+// eviction silently dropped them. FlushOutbox must instead process each
+// endpoint's backlog independently: B's two entries both go out, in order,
+// on this same call, while A's two entries are retained in their original
+// relative order.
+func TestFlushOutboxDeadEndpointDoesNotStarveOthers(t *testing.T) {
+	root := t.TempDir()
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	if _, err := AppendOutbox(root, "https://a/ep", testEnvelope("a1"), base); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AppendOutbox(root, "https://b/ep", testEnvelope("b1"), base.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AppendOutbox(root, "https://a/ep", testEnvelope("a2"), base.Add(2*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AppendOutbox(root, "https://b/ep", testEnvelope("b2"), base.Add(3*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+
+	var bOrder []string
+	send := func(endpoint string, e Envelope) error {
+		if endpoint == "https://a/ep" {
+			return errBoom
+		}
+		bOrder = append(bOrder, e.ConfigPath)
+		return nil
+	}
+
+	sent, dropped, remaining, err := FlushOutbox(root, send, base.Add(time.Hour))
+	if err == nil {
+		t.Fatal("want non-nil err: endpoint A never succeeds")
+	}
+	if sent != 2 || dropped != 0 || remaining != 2 {
+		t.Fatalf("sent=%d dropped=%d remaining=%d, want 2,0,2 (B's two entries sent, A's two retained)", sent, dropped, remaining)
+	}
+	if len(bOrder) != 2 || bOrder[0] != "b1" || bOrder[1] != "b2" {
+		t.Fatalf("B's send order = %v, want [b1 b2]", bOrder)
+	}
+
+	lines := readOutboxLines(t, root)
+	if len(lines) != 2 {
+		t.Fatalf("got %d lines remaining, want 2 (A's backlog)", len(lines))
+	}
+	var recs []struct {
+		Endpoint string   `json:"endpoint"`
+		Envelope Envelope `json:"envelope"`
+	}
+	for _, l := range lines {
+		var rec struct {
+			Endpoint string   `json:"endpoint"`
+			Envelope Envelope `json:"envelope"`
+		}
+		if err := json.Unmarshal([]byte(l), &rec); err != nil {
+			t.Fatal(err)
+		}
+		recs = append(recs, rec)
+	}
+	if recs[0].Envelope.ConfigPath != "a1" || recs[1].Envelope.ConfigPath != "a2" {
+		t.Fatalf("retained order = [%s %s], want [a1 a2] (A's original relative order preserved)",
+			recs[0].Envelope.ConfigPath, recs[1].Envelope.ConfigPath)
+	}
+	if recs[0].Endpoint != "https://a/ep" || recs[1].Endpoint != "https://a/ep" {
+		t.Fatalf("retained entries must stay bound to endpoint A: got %q, %q", recs[0].Endpoint, recs[1].Endpoint)
+	}
+}
+
+// TestFlushOutboxBothEndpointsDownRetainsEverything: with no healthy
+// endpoint at all, grouping must not lose or reorder anything relative to
+// the old single-queue behavior.
+func TestFlushOutboxBothEndpointsDownRetainsEverything(t *testing.T) {
+	root := t.TempDir()
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	if _, err := AppendOutbox(root, "https://a/ep", testEnvelope("a1"), base); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AppendOutbox(root, "https://b/ep", testEnvelope("b1"), base.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+
+	send := func(endpoint string, e Envelope) error { return errBoom }
+
+	sent, dropped, remaining, err := FlushOutbox(root, send, base.Add(time.Hour))
+	if err == nil {
+		t.Fatal("want non-nil err: both endpoints fail")
+	}
+	if sent != 0 || dropped != 0 || remaining != 2 {
+		t.Fatalf("sent=%d dropped=%d remaining=%d, want 0,0,2 (nothing sent, nothing dropped)", sent, dropped, remaining)
+	}
+	if lines := readOutboxLines(t, root); len(lines) != 2 {
+		t.Fatalf("got %d lines remaining, want 2", len(lines))
+	}
+}

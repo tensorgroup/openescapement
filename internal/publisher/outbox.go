@@ -175,9 +175,21 @@ func AppendOutbox(root, endpoint string, e Envelope, now time.Time) (dropped int
 	return dropped, nil
 }
 
-// FlushOutbox sends every queued envelope oldest-first via send, stopping
-// at the first failure and leaving the failed entry and everything after
-// it queued for the next attempt.
+// FlushOutbox sends every queued envelope via send, grouped BY ENDPOINT:
+// within each endpoint's group entries go out oldest-first, and a failure
+// stops only that endpoint's group — every other endpoint's group still
+// runs. This is deliberate: the outbox is one shared queue across every
+// configured endpoint (AppendOutbox is called once per endpoint per
+// Publish call), and a single dead endpoint must not starve every other
+// endpoint's backlog behind it. Before this fix, a global oldest-first scan
+// stopped at the very first failure regardless of which endpoint it
+// belonged to, so a healthy endpoint's entries would queue forever behind a
+// dead one — and eventually be dropped silently by the age eviction above,
+// never once reaching an endpoint that was ready to receive them the whole
+// time. Groups are visited in order of each endpoint's oldest entry, and
+// survivors (retained across a failure) are written back in their original
+// relative order, not regrouped, so the on-disk queue keeps reading as one
+// chronological log.
 //
 // Before sending, any entry older than OutboxMaxAge relative to now is
 // dropped rather than sent: the portal stamps each event's timestamp at
@@ -187,7 +199,8 @@ func AppendOutbox(root, endpoint string, e Envelope, now time.Time) (dropped int
 // cases into one count — "not sent and not kept" — since a caller reporting
 // loss on stderr does not need to distinguish why an entry never went out.
 // sent counts successful sends; remaining counts entries left queued
-// afterward. A missing or empty outbox is a no-op.
+// afterward. err is the first error encountered, in group-visit order, or
+// nil if every group fully drained. A missing or empty outbox is a no-op.
 func FlushOutbox(root string, send func(endpoint string, e Envelope) error, now time.Time) (sent, dropped, remaining int, err error) {
 	entries, corrupt, err := loadOutbox(root)
 	if err != nil {
@@ -213,17 +226,49 @@ func FlushOutbox(root string, send func(endpoint string, e Envelope) error, now 
 		return 0, dropped, 0, nil
 	}
 
+	// Partition fresh into per-endpoint index groups. fresh is already
+	// oldest-first overall, and a stable partition preserves that within
+	// each group; order records each endpoint's first (oldest) appearance,
+	// so groups are visited oldest-backlog-first too.
+	order := make([]string, 0, len(fresh))
+	groups := make(map[string][]int, len(fresh))
+	for i, e := range fresh {
+		if _, ok := groups[e.Endpoint]; !ok {
+			order = append(order, e.Endpoint)
+		}
+		groups[e.Endpoint] = append(groups[e.Endpoint], i)
+	}
+
+	retained := make([]bool, len(fresh))
 	var sendErr error
-	i := 0
-	for ; i < len(fresh); i++ {
-		if sendErr = send(fresh[i].Endpoint, fresh[i].Envelope); sendErr != nil {
-			break
+	for _, endpoint := range order {
+		stopped := false
+		for _, i := range groups[endpoint] {
+			if stopped {
+				retained[i] = true
+				continue
+			}
+			if serr := send(fresh[i].Endpoint, fresh[i].Envelope); serr != nil {
+				if sendErr == nil {
+					sendErr = serr
+				}
+				stopped = true
+				retained[i] = true
+				continue
+			}
+			sent++
 		}
 	}
-	sent = i
-	remaining = len(fresh) - sent
 
-	if werr := atomicWriteOutbox(root, fresh[sent:]); werr != nil {
+	survivors := make([]outboxEntry, 0, len(fresh)-sent)
+	for i, e := range fresh {
+		if retained[i] {
+			survivors = append(survivors, e)
+		}
+	}
+	remaining = len(survivors)
+
+	if werr := atomicWriteOutbox(root, survivors); werr != nil {
 		return sent, dropped, remaining, werr
 	}
 	return sent, dropped, remaining, sendErr

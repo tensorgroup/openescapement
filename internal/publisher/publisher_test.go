@@ -283,6 +283,52 @@ func TestPublishTwoEndpointsBothReceive(t *testing.T) {
 	}
 }
 
+// TestPublishFirstEndpointRefusedSecondStillReceives is the integration
+// case for outbox.go's FlushOutbox grouping fix: two endpoints declared on
+// the same Publish call, the first refusing connections outright. Before
+// that fix, FlushOutbox drained one shared queue oldest-first and stopped
+// at the very first failure, so the second (healthy) endpoint's entry would
+// never be attempted at all on this call — it would queue behind the dead
+// first endpoint and eventually be dropped by age eviction without ever
+// reaching a server that was ready the whole time. The second endpoint must
+// receive the payload on THIS SAME call, not a later retry.
+func TestPublishFirstEndpointRefusedSecondStillReceives(t *testing.T) {
+	refused := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	refusedURL := refused.URL
+	refused.Close() // closed before use: nothing listens at refusedURL anymore
+
+	rsB := &recordingServer{}
+	srvB := httptest.NewServer(rsB.handler(202))
+	defer srvB.Close()
+	withClient(t, &http.Client{Timeout: 5 * time.Second})
+
+	root := t.TempDir()
+	t.Setenv("ESC_PORTAL_TOKEN", "test-token")
+	rep := fixtureReport()
+	packs := []*pack.Pack{
+		packWithEndpoint("acme-a", refusedURL),
+		packWithEndpoint("acme-b", srvB.URL),
+	}
+	var stderr bytes.Buffer
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	Publish(context.Background(), root, rep, packs, metricsCollection(), &stderr, now)
+
+	if n := rsB.requests(); n != 1 {
+		t.Fatalf("healthy endpoint B received %d requests, want 1 (must not queue behind dead endpoint A)", n)
+	}
+	entries, _, err := loadOutbox(root)
+	if err != nil {
+		t.Fatalf("loadOutbox: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("outbox has %d entries, want 1 (only A's failed entry retained)", len(entries))
+	}
+	if entries[0].Endpoint != refusedURL {
+		t.Errorf("retained entry endpoint = %q, want %q", entries[0].Endpoint, refusedURL)
+	}
+}
+
 func TestPublishOffSendsNothing(t *testing.T) {
 	rs := &recordingServer{}
 	srv := httptest.NewServer(rs.handler(202))
