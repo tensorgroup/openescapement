@@ -14,3 +14,5 @@ go run ../../cmd/esc sync     # repair
 ```
 
 The rendered artifacts in `governed-service/` are committed on purpose — they show what escapement output looks like.
+
+Maintenance note: any change to escapement's rendered output (notice text, catalog formatting, block layout) changes these artifacts AND the hashes in `governed-service/.escapement/escapement.lock`. Regenerate both together by running `go run ../../cmd/esc sync` inside `governed-service/` and committing the result; `TestExamplesLockMatchesShippedFiles` fails if the pair ever drifts apart.

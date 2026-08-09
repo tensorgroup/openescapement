@@ -60,7 +60,7 @@ func TestExamplesLockMatchesShippedFiles(t *testing.T) {
 				t.Fatalf("%s: lock has a block-kind entry but the file has no managed block", a.Path)
 			}
 			if got := render.BodyHash(block.Body); got != a.Hash {
-				t.Errorf("%s: lock hash %s does not match render.BodyHash(Extract(file).Body) %s — regenerate the example lock", a.Path, a.Hash, got)
+				t.Errorf("%s: lock hash %s does not match render.BodyHash(Extract(file).Body) %s; regenerate by running `esc sync` inside examples/governed-service (see examples/README.md)", a.Path, a.Hash, got)
 			}
 		case "file":
 			// Same semantics as internal/engine/status.go's KindFile check:
@@ -68,7 +68,7 @@ func TestExamplesLockMatchesShippedFiles(t *testing.T) {
 			// bytes hash directly (NormalizeEndings is a no-op on an
 			// already-LF checkout, which the shipped example is).
 			if got := esc.HashBytes(content); got != a.Hash {
-				t.Errorf("%s: lock hash %s does not match esc.HashBytes(file bytes) %s — regenerate the example lock", a.Path, a.Hash, got)
+				t.Errorf("%s: lock hash %s does not match esc.HashBytes(file bytes) %s; regenerate by running `esc sync` inside examples/governed-service (see examples/README.md)", a.Path, a.Hash, got)
 			}
 		}
 	}
