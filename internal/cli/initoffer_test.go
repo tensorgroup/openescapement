@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tensorgroup/openescapement/internal/render"
 )
@@ -324,12 +325,19 @@ func (r infiniteReader) Read(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// Without the byte bound this hangs forever instead of failing, which is the
-// honest test: the guard's whole job is that the read terminates.
+// Without the byte bound this returns never; the select converts "never"
+// into a red assertion instead of the package timeout's panic dump, which
+// reads as infrastructure failure rather than a failed guard.
 func TestReadBoundedLineStopsAtTheBound(t *testing.T) {
-	got := readBoundedLine(bufio.NewReader(infiniteReader{'y'}), maxOfferAnswerBytes)
-	if len(got) != maxOfferAnswerBytes {
-		t.Errorf("read %d bytes, want the bound of %d", len(got), maxOfferAnswerBytes)
+	done := make(chan string, 1)
+	go func() { done <- readBoundedLine(bufio.NewReader(infiniteReader{'y'}), maxOfferAnswerBytes) }()
+	select {
+	case got := <-done:
+		if len(got) != maxOfferAnswerBytes {
+			t.Errorf("read %d bytes, want the bound of %d", len(got), maxOfferAnswerBytes)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("readBoundedLine did not return: the byte bound is not enforced")
 	}
 }
 
@@ -392,6 +400,16 @@ func commitAll(t *testing.T, root, msg string) {
 
 func TestFileIsCleanNotAGitRepo(t *testing.T) {
 	root := t.TempDir()
+	// t.TempDir may itself sit inside a git worktree (TMPDIR under a repo);
+	// a ceiling directly above root stops git's upward discovery so this
+	// test means "not a git repo" everywhere, not just on machines with a
+	// clean TMPDIR. EvalSymlinks because git compares resolved paths and
+	// macOS TMPDIR lives behind /var -> /private/var.
+	ceiling, err := filepath.EvalSymlinks(filepath.Dir(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CEILING_DIRECTORIES", ceiling)
 	writeFiles(t, root, map[string]string{"CLAUDE.md": "rules\n"})
 	clean, err := fileIsClean(context.Background(), root, "CLAUDE.md")
 	if err != nil {
@@ -683,7 +701,11 @@ func TestInitOfferFullFlowForSixTargets(t *testing.T) {
 		"Place the marker now? [y/N] " +
 		"Where should it go in all 4 files?\n" +
 		"  [a] above the title, the first thing in the file (below any frontmatter)\n" +
-		"  [e] end of the file\n> "
+		"  [e] end of the file\n> " +
+		"  CLAUDE.md: wrote " + render.Placeholder + "\n" +
+		"  AGENTS.md: wrote " + render.Placeholder + "\n" +
+		"  GEMINI.md: wrote " + render.Placeholder + "\n" +
+		"  GOVERNANCE.md: wrote " + render.Placeholder + "\n"
 	if !strings.HasSuffix(out, wantOffer) {
 		t.Errorf("offer output =\n%q\nwant suffix\n%q", out, wantOffer)
 	}
@@ -798,6 +820,16 @@ func TestInitDeclinedGateWritesNothingThroughRun(t *testing.T) {
 // legitimate) but the gate states there is no undo.
 func TestInitWarnsThereIsNoUndoOutsideAGitRepo(t *testing.T) {
 	root := t.TempDir()
+	// t.TempDir may itself sit inside a git worktree (TMPDIR under a repo);
+	// a ceiling directly above root stops git's upward discovery so this
+	// test means "not a git repo" everywhere, not just on machines with a
+	// clean TMPDIR. EvalSymlinks because git compares resolved paths and
+	// macOS TMPDIR lives behind /var -> /private/var.
+	ceiling, err := filepath.EvalSymlinks(filepath.Dir(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CEILING_DIRECTORIES", ceiling)
 	writeFiles(t, root, map[string]string{"CLAUDE.md": "# P\n\nrules\n"})
 	fakeStdin(t, "y\ne\n")
 
@@ -956,5 +988,52 @@ packs:
 	}
 	if strings.Index(s, "<!-- escapement:begin ") < strings.Index(s, "Our build uses pnpm.") {
 		t.Errorf("block should land at the end (where the placeholder was), not at the top:\n%s", s)
+	}
+}
+
+// A CRLF-terminated answer ("y\r\n", routine from Windows terminals and
+// piped scripts) must be accepted. readBoundedLine keeps the '\r'; the
+// TrimSpace at the call sites is what strips it, and this test is what
+// notices if that pairing is ever broken.
+func TestAskPlacementAcceptsCRLFAnswers(t *testing.T) {
+	var out bytes.Buffer
+	br := bufio.NewReader(strings.NewReader("y\r\ne\r\n"))
+	got := askPlacement(&out, br, []Detected{{Path: "CLAUDE.md", Target: "claude"}}, false)
+	if got != placeEnd {
+		t.Errorf("CRLF-terminated y/e answers gave %q, want placeEnd", got)
+	}
+}
+
+// A yes rewrites a user-owned file; a write with no confirmation on stdout is
+// indistinguishable from a decline in the output.
+func TestOfferConfirmsEachMarkerWrite(t *testing.T) {
+	root := t.TempDir()
+	writeFiles(t, root, map[string]string{
+		"CLAUDE.md": "# P\n\nrules\n",
+		"AGENTS.md": "# P\n\nrules\n",
+	})
+	fakeStdin(t, "y\ne\n")
+	code, out := run(t, root, "init")
+	if code != 0 {
+		t.Fatalf("init exit %d:\n%s", code, out)
+	}
+	for _, want := range []string{"CLAUDE.md: wrote", "AGENTS.md: wrote"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("a write into a user-owned file must be confirmed; missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+// An unrecognized position answer, arriving after an explicit yes, must not
+// write silently: silence there reads as success.
+func TestUnrecognizedPositionAnswerSaysSo(t *testing.T) {
+	var out bytes.Buffer
+	br := bufio.NewReader(strings.NewReader("y\nbanana\n"))
+	got := askPlacement(&out, br, []Detected{{Path: "CLAUDE.md", Target: "claude"}}, false)
+	if got != placeDefault {
+		t.Fatalf("unrecognized answer must never guess, got %q", got)
+	}
+	if !strings.Contains(out.String(), "not one of the options") {
+		t.Errorf("silence after an explicit yes is not an answer; output:\n%s", out.String())
 	}
 }

@@ -108,8 +108,9 @@ func askPlacement(w io.Writer, br *bufio.Reader, targets []Detected, noGitUndo b
 	case string(placeEnd):
 		return placeEnd
 	default:
-		// An unrecognized position is not a licence to pick one: fall back
-		// to writing nothing, the same as declining the gate.
+		// Never guess; but after an explicit yes, silence reads as success.
+		// Say what happened and what was (not) done.
+		fmt.Fprintln(w, "That was not one of the options; leaving the files unchanged.")
 		return placeDefault
 	}
 }
@@ -378,7 +379,11 @@ func offerPlacement(ctx context.Context, root string, stdout io.Writer, detected
 	for _, d := range eligible {
 		if err := applyPlacement(root, d, p); err != nil {
 			errs = append(errs, fmt.Errorf("%s: could not write the placement marker: %w", d.Path, err))
+			continue
 		}
+		// One answer just rewrote a user-owned file; a write with no
+		// confirmation is indistinguishable from a decline in the output.
+		fmt.Fprintf(stdout, "  %s: wrote %s\n", d.Path, render.Placeholder)
 	}
 	return errors.Join(errs...)
 }
