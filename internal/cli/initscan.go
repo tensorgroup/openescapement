@@ -63,10 +63,16 @@ func detectExisting(root string) ([]Detected, error) {
 }
 
 // targetOrder is the fixed presentation order for detected targets: the
-// file-based targets in render.TargetFile's declaration order, then mcp,
-// then skills. detectExisting's own result is sorted by Path for stable
-// lookups; this order is what the user actually reads and what
+// file-based targets in the order render.TargetClaude/Agents/Gemini/Governance
+// are declared (map iteration over render.TargetFile has no order of its
+// own), then mcp, then skills. detectExisting's own result is sorted by Path
+// for stable lookups; this order is what the user actually reads and what
 // configTemplate's targets list is built from.
+//
+// Must stay in sync with render.TargetFile plus render.TargetMCP/TargetSkills
+// — see TestTargetOrderCoversAllTargets — or a newly added target silently
+// drops out of both the generated targets: list and the explanation even
+// though detectExisting still finds it.
 var targetOrder = []string{
 	render.TargetClaude, render.TargetAgents, render.TargetGemini, render.TargetGovernance,
 	render.TargetMCP, render.TargetSkills,
