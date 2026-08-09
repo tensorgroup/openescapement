@@ -110,7 +110,7 @@ func askPlacement(w io.Writer, br *bufio.Reader, targets []Detected, noGitUndo b
 	default:
 		// Never guess; but after an explicit yes, silence reads as success.
 		// Say what happened and what was (not) done.
-		fmt.Fprintln(w, "That was not one of the options; leaving the files unchanged.")
+		fmt.Fprintln(w, "  That was not one of the options; leaving the files unchanged.")
 		return placeDefault
 	}
 }
