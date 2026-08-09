@@ -3,6 +3,7 @@ package engine
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -43,5 +44,63 @@ func TestMergeDirRejectsSelfTargetingLockEntries(t *testing.T) {
 				t.Errorf("skill directory was removed instead of the removal being refused: stat err=%v", statErr)
 			}
 		})
+	}
+}
+
+// TestMergeDirCopiesShapesVerbatim runs awkward file contents through
+// mergeDir twice (write, then the subsequent sync) and asserts every byte
+// lands verbatim: mergeDir owns whole files, so its structural-validity
+// obligation is to never reinterpret content, and to converge.
+func TestMergeDirCopiesShapesVerbatim(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "pack-src")
+	files := map[string]string{
+		"SKILL.md":           "---\r\nname: s\r\n---\r\n\r\nCRLF body\r\n",
+		"no-newline.md":      "last line without newline",
+		"nested/deep/ref.md": "# nested\n\ncontent\n",
+		"whitespace-only.md": "\n  \n",
+	}
+	for rel, content := range files {
+		p := filepath.Join(src, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const artPath = ".claude/skills/esc-acme-org-s"
+	dst := filepath.Join(root, filepath.FromSlash(artPath))
+
+	written, err := mergeDir(root, artPath, src, dst, nil)
+	if err != nil {
+		t.Fatalf("mergeDir: %v", err)
+	}
+	if len(written) != len(files) {
+		t.Fatalf("wrote %d files, want %d: %v", len(written), len(files), written)
+	}
+	for rel, content := range files {
+		got, err := os.ReadFile(filepath.Join(dst, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("%s: %v", rel, err)
+		}
+		if string(got) != content {
+			t.Errorf("%s not copied verbatim:\nwant %q\ngot  %q", rel, content, got)
+		}
+	}
+
+	// The subsequent sync: same pack state, prevFiles from the first pass.
+	again, err := mergeDir(root, artPath, src, dst, written)
+	if err != nil {
+		t.Fatalf("second mergeDir (sync): %v", err)
+	}
+	if !slices.Equal(again, written) {
+		t.Errorf("file list not stable across sync: %v vs %v", again, written)
+	}
+	for rel, content := range files {
+		got, _ := os.ReadFile(filepath.Join(dst, filepath.FromSlash(rel)))
+		if string(got) != content {
+			t.Errorf("%s changed on the second sync:\nwant %q\ngot  %q", rel, content, got)
+		}
 	}
 }
