@@ -175,7 +175,7 @@ structs:
 | `packs[]` | array | One entry per pinned pack: `source`, `ref`, `pinned` (resolved content hash), `latest` (omitted if unknown), `signed` |
 | `findings[]` | array | Every classified artifact, pack pin, or subsystem signal (see below) |
 | `collection` | object | `amendments` (`off` / `metrics` / `content`) and `source` (`default` / `pack` / `repo-override`): the resolved reporting level and where it came from |
-| `skipped[]` | array | `sync` only, always present (possibly `[]`); omitted entirely for `status`. What sync declined to write: `path`, `kind`, `reason`, `expected_hash`, `actual_hash` |
+| `skipped[]` | array | `sync` only, always present (possibly `[]`); omitted entirely for `status`. What sync declined to write or remove: `subject`, `kind`, `cause`, `reason`, `expected_hash`, `actual_hash`. `cause` is the machine-readable discriminator (`hand-edited`, `orphan-dir-unmanaged`, `orphan-dir-edited`, `orphan-block-edited`); `reason` is prose for a human and nothing should branch on it |
 
 Each `findings[]` entry carries `subject` (an artifact path, a pack source
 URL, or the literal `"update-check"`), `kind` (`block` / `file` / `dir` /

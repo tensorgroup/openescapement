@@ -351,11 +351,32 @@ func syncOnce(ctx context.Context, root string, force bool, stdout, stderr io.Wr
 	// gating belongs on `esc status --check`.
 	for _, s := range res.Skipped {
 		fmt.Fprintf(stderr, "  skipped %s: %s\n", s.Subject, s.Reason)
-	}
-	if len(res.Skipped) > 0 {
-		fmt.Fprintln(stderr, "  `esc diff` to inspect, `esc sync --force` to overwrite")
+		fmt.Fprintf(stderr, "    %s\n", skipHint(s))
 	}
 	return nil
+}
+
+// skipHint is the one-line remedy printed under a declined artifact.
+//
+// This used to be a single blanket line, `esc diff` to inspect · `esc sync
+// --force` to overwrite, printed once after every skip. It is only true of a
+// hand-edited artifact still in the effective set. engine.PopulateDiffs
+// populates diffs for Altered findings only, so for either orphan decline
+// `esc diff` prints nothing at all, and for the unmanaged-file decline
+// --force is not the answer either: force is consent to overwrite
+// escapement's own content, and those files are the team's. Each line names
+// what is actually on disk and what would resolve it.
+func skipHint(s engine.Skipped) string {
+	switch s.Cause {
+	case engine.SkipOrphanDirUnmanaged:
+		return "the pack files are gone and the rest is yours · delete that directory to be rid of it"
+	case engine.SkipOrphanDirEdited:
+		return "nothing was removed · revert the edit, or `esc sync --force` to retire the directory"
+	case engine.SkipOrphanBlockEdited:
+		return "the block is still in that file · `esc sync --force` to remove it"
+	default:
+		return "`esc diff` to inspect · `esc sync --force` to overwrite"
+	}
 }
 
 func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr io.Writer) int {

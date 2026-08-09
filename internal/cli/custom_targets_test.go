@@ -490,8 +490,20 @@ func TestOrphanBlockHandEditIsNotSilentlyDeleted(t *testing.T) {
 		t.Errorf("status must report the orphaned block's hand-edit, got:\n%s", out)
 	}
 
-	if code, out := run(t, root, "sync"); code != 0 {
-		t.Fatalf("a declined orphan must not fail the rollout, exit=%d:\n%s", code, out)
+	syncOut, code := runEscOut(t, root, "sync")
+	if code != 0 {
+		t.Fatalf("a declined orphan must not fail the rollout, exit=%d:\n%s", code, syncOut)
+	}
+	// The remedy line must fit this decline. `esc diff` populates diffs for
+	// Altered findings only, and this block's target has left the effective
+	// set entirely, so the old blanket "`esc diff` to inspect" line pointed
+	// the user at a command that prints nothing about it.
+	const wantHint = "    the block is still in that file · `esc sync --force` to remove it"
+	if !strings.Contains(syncOut, wantHint+"\n") {
+		t.Errorf("orphan-block decline must carry its own remedy line %q, got:\n%s", wantHint, syncOut)
+	}
+	if strings.Contains(syncOut, "esc diff` to inspect") {
+		t.Errorf("orphan-block decline must not send the user to `esc diff`:\n%s", syncOut)
 	}
 	got, err := os.ReadFile(p)
 	if err != nil {

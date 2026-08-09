@@ -21,6 +21,18 @@ tagged releases begin.
 - `esc sync --json` and `esc status --json` name an artifact with `subject` in
   both `findings[]` and `skipped[]`. `skipped[].path` was renamed to
   `skipped[].subject` for that consistency.
+- `skipped[]` entries carry a machine-readable `cause` alongside the prose
+  `reason`: `hand-edited`, `orphan-dir-unmanaged`, `orphan-dir-edited`, or
+  `orphan-block-edited`.
+- `esc sync` prints a remedy line under each declined artifact instead of one
+  blanket line covering all of them. The blanket line pointed at `esc diff`,
+  which only ever covers a hand-edited managed region, so a declined skill
+  directory or an undeleted orphaned block sent the reader to a command that
+  shows nothing about it.
+- A symlink standing where escapement is about to write now exits 4, not 1.
+  Exit 1 is the drift-and-constraint class a CI gate reads as routine and
+  self-healing; a containment refusal is neither, and the other containment
+  refusals already exit 4.
 
 ### Added
 - Local amendments: content escapement does not own is preserved everywhere, reported on a new `local` axis, and surfaced in `esc status`. Files added to skill directories are no longer deleted by sync.

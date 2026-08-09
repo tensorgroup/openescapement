@@ -71,13 +71,41 @@ func refuseSymlinks(root, rel string) error {
 // Subject names the artifact, matching Finding.Subject: the two describe the
 // same concept in one JSON document (a status report's findings[] and a sync
 // report's skipped[]), so they must not disagree on what to call it.
+//
+// Cause is the machine-readable discriminator. Reason is prose written for a
+// human reading stderr; nothing can branch on it, and Kind cannot tell the
+// declines apart either (two different block declines and two different dir
+// declines share a Kind). Surfaces need the distinction because the advice
+// differs: `esc diff` only ever covers a hand-edited managed region, since
+// PopulateDiffs populates diffs for Altered findings only, so pointing every
+// decline at it sends most of them to a dead end.
 type Skipped struct {
-	Subject      string `json:"subject"`
-	Kind         string `json:"kind"`
-	Reason       string `json:"reason"`
-	ExpectedHash string `json:"expected_hash"`
-	ActualHash   string `json:"actual_hash"`
+	Subject      string    `json:"subject"`
+	Kind         string    `json:"kind"`
+	Cause        SkipCause `json:"cause"`
+	Reason       string    `json:"reason"`
+	ExpectedHash string    `json:"expected_hash"`
+	ActualHash   string    `json:"actual_hash"`
 }
+
+// SkipCause names why Apply declined. One value per decline site.
+type SkipCause string
+
+const (
+	// SkipHandEdited: the artifact is in the effective set and its managed
+	// region was hand-edited. The only cause `esc diff` can show.
+	SkipHandEdited SkipCause = "hand-edited"
+	// SkipOrphanDirUnmanaged: the pack retired a skill directory whose
+	// pack-provided files were removed, but team-added files remain, so the
+	// directory itself stays.
+	SkipOrphanDirUnmanaged SkipCause = "orphan-dir-unmanaged"
+	// SkipOrphanDirEdited: the pack retired a skill directory in which a
+	// pack-provided file was edited or removed. Nothing was removed.
+	SkipOrphanDirEdited SkipCause = "orphan-dir-edited"
+	// SkipOrphanBlockEdited: the target left the effective set and its
+	// managed block was hand-edited, so the block was not removed.
+	SkipOrphanBlockEdited SkipCause = "orphan-block-edited"
+)
 
 // SyncResult reports what a sync wrote and what it declined to write.
 type SyncResult struct {
@@ -171,7 +199,7 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 			prev := prevLock.Artifact(a.Path)
 			if f := classify(root, a, prevLock); handEdited(f, prev) {
 				res.Skipped = append(res.Skipped, Skipped{
-					Subject: a.Path, Kind: a.Kind, Reason: f.Detail,
+					Subject: a.Path, Kind: a.Kind, Cause: SkipHandEdited, Reason: f.Detail,
 					ExpectedHash: a.Hash, ActualHash: alterationActual(f),
 				})
 				// Carry the previous lock entry forward unchanged. classify
@@ -315,7 +343,7 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 				}
 				if herr != nil || actual != prev.Hash {
 					res.Skipped = append(res.Skipped, Skipped{
-						Subject: prev.Path, Kind: prev.Kind,
+						Subject: prev.Path, Kind: prev.Kind, Cause: SkipOrphanDirEdited,
 						Reason:       "pack no longer provides this skill directory, but a pack-provided file in it was edited or removed since the last sync; left in place instead of being deleted",
 						ExpectedHash: prev.Hash, ActualHash: actual,
 					})
@@ -359,7 +387,7 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 				// report, so this needs no new surface and, like every other
 				// skip, does not fail the rollout.
 				res.Skipped = append(res.Skipped, Skipped{
-					Subject: prev.Path, Kind: prev.Kind,
+					Subject: prev.Path, Kind: prev.Kind, Cause: SkipOrphanDirUnmanaged,
 					Reason: fmt.Sprintf("pack no longer provides this skill directory; kept because it still holds %d unmanaged file(s): %s",
 						len(unmanaged), strings.Join(unmanaged, ", ")),
 				})
@@ -416,7 +444,7 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 				if block, berr := render.Extract(existing); berr == nil && block != nil {
 					if actual := render.BodyHash(block.Body); actual != prev.Hash {
 						res.Skipped = append(res.Skipped, Skipped{
-							Subject: prev.Path, Kind: prev.Kind,
+							Subject: prev.Path, Kind: prev.Kind, Cause: SkipOrphanBlockEdited,
 							Reason:       "managed block was hand-edited and its target has left the effective set; left in place instead of being removed",
 							ExpectedHash: prev.Hash, ActualHash: actual,
 						})
