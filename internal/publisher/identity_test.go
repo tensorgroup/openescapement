@@ -42,6 +42,21 @@ func TestNormalizeRemote(t *testing.T) {
 			raw:  "  not-a-remote  ",
 			want: "not-a-remote",
 		},
+		{
+			name: "https userinfo with a literal @ in the password",
+			raw:  "https://x:p@ss@host.edu/o/r.git",
+			want: "host.edu/o/r",
+		},
+		{
+			name: "scp-like shorthand with a literal @ in the password",
+			raw:  "x:p@ss@host.edu:o/r.git",
+			want: "host.edu/o/r",
+		},
+		{
+			name: "an @ in the path is not userinfo",
+			raw:  "https://host.edu/org/repo@2",
+			want: "host.edu/org/repo@2",
+		},
 	}
 
 	for _, tc := range tests {

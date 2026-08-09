@@ -47,7 +47,16 @@ func NormalizeRemote(raw string) string {
 		}
 	}
 
-	if at := strings.Index(s, "@"); at >= 0 {
+	// Userinfo can only appear in the authority segment (before the first
+	// "/"), never in the path: an "@" past that point (e.g. a literal "@"
+	// in a path segment) is not credentials and must survive. Within that
+	// segment, take the LAST "@" so a password containing its own literal
+	// "@" (user:p@ss@host) still strips as a whole.
+	authority := s
+	if firstSlash := strings.Index(s, "/"); firstSlash >= 0 {
+		authority = s[:firstSlash]
+	}
+	if at := strings.LastIndex(authority, "@"); at >= 0 {
 		rest := s[at+1:]
 		colon := strings.Index(rest, ":")
 		slash := strings.Index(rest, "/")
