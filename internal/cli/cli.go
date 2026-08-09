@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/tensorgroup/openescapement/internal/config"
@@ -103,7 +104,16 @@ func exitCode(err error, stderr io.Writer) int {
 	}
 }
 
-const configTemplate = `schema: 1
+// configTemplate renders the scaffolded config.yaml. targets, when non-empty,
+// pre-fills the targets list from what esc init detected already in the repo
+// (see detectExisting) so a first sync does not conjure a target file the
+// repo never had. An empty targets list is omitted entirely: empty means
+// "all targets" (config.Config.Targets), the correct default for a
+// greenfield repo, and writing an empty `targets:` key would instead mean
+// zero targets.
+func configTemplate(targets []string) string {
+	var b strings.Builder
+	b.WriteString(`schema: 1
 packs: []
 # Example:
 #   packs:
@@ -113,7 +123,15 @@ packs: []
 #       ref: ""
 #       trust: unsigned
 allowed_signers_file: .escapement/allowed_signers
-`
+`)
+	if len(targets) > 0 {
+		b.WriteString("# Detected in this repo at `esc init`. Remove a line to stop managing that target.\ntargets:\n")
+		for _, t := range targets {
+			b.WriteString("  - " + t + "\n")
+		}
+	}
+	return b.String()
+}
 
 const signersTemplate = `# SSH allowed signers for pack verification (see ssh-keygen -Y).
 # Format: <principal> <key-type> <public-key>
@@ -125,10 +143,16 @@ func cmdInit(root string, stdout io.Writer) error {
 	if _, err := os.Stat(cfgPath); err == nil {
 		return fmt.Errorf("%s already exists", cfgPath)
 	}
+	// Detection is read-only and runs before anything is written: a
+	// detection error must abort before the repo is touched.
+	detected, err := detectExisting(root)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Join(root, config.Dir), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(cfgPath, []byte(configTemplate), 0o644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte(configTemplate(detectedTargets(detected))), 0o644); err != nil {
 		return err
 	}
 	signers := filepath.Join(root, config.Dir, "allowed_signers")
@@ -143,7 +167,12 @@ func cmdInit(root string, stdout io.Writer) error {
 			return err
 		}
 	}
-	fmt.Fprintf(stdout, "Initialized %s\nAdd pack sources to the config, then run `esc sync`.\n", cfgPath)
+	if len(detected) == 0 {
+		fmt.Fprintf(stdout, "Initialized %s\nAdd pack sources to the config, then run `esc sync`.\n", cfgPath)
+		return nil
+	}
+	fmt.Fprintf(stdout, "Initialized %s\n\n", cfgPath)
+	explainDetection(stdout, detected)
 	return nil
 }
 
