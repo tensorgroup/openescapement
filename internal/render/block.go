@@ -44,34 +44,55 @@ func BodyHash(body string) string { return esc.HashBytes([]byte(body)) }
 func FrontmatterEnd(b []byte) int { return frontmatterEnd(string(b)) }
 
 func frontmatterEnd(s string) int {
-	if !strings.HasPrefix(s, "---\n") {
+	// The fence's line ending is taken from the opening line and required
+	// throughout: a file that mixes endings inside its fence is not treated
+	// as frontmatter, keeping the rule set closed (same philosophy as the
+	// LF-only version, extended by exactly one ending).
+	nl := "\n"
+	if strings.HasPrefix(s, "---\r\n") {
+		nl = "\r\n"
+	} else if !strings.HasPrefix(s, "---\n") {
 		return 0
 	}
-	end := strings.Index(s[4:], "\n---")
+	open := 3 + len(nl)
+	end := strings.Index(s[open:], nl+"---")
 	if end < 0 {
 		return 0
 	}
-	after := 4 + end + len("\n---")
+	after := open + end + len(nl) + 3
 	rest := s[after:]
-	if rest != "" && !strings.HasPrefix(rest, "\n") {
+	if rest != "" && !strings.HasPrefix(rest, nl) {
 		return 0
 	}
-	if strings.HasPrefix(rest, "\n") {
-		after++
+	if strings.HasPrefix(rest, nl) {
+		after += len(nl)
 	}
 	return after
 }
 
 // insertAt returns the offset where a new block belongs: the top of the file,
-// after leading YAML frontmatter and a leading H1 if either is present. Only
-// those two constructs are skipped; the rule set is closed deliberately so
+// after leading YAML frontmatter and a leading H1 if either is present. One
+// blank line between frontmatter and the H1 does not stop the H1 being the
+// leading H1 (same single-blank-line rule as the skip after the H1). Only
+// these constructs are skipped; the rule set is closed deliberately so
 // output stays predictable.
 func insertAt(s string) int {
 	i := frontmatterEnd(s)
-	if strings.HasPrefix(s[i:], "# ") {
+	h := i
+	if strings.HasPrefix(s[h:], "\r\n") {
+		h += 2
+	} else if strings.HasPrefix(s[h:], "\n") {
+		h++
+	}
+	if strings.HasPrefix(s[h:], "# ") {
+		// Commit the blank-line skip only now: with no H1 behind it, the
+		// block belongs directly after the fence, above the blank line.
+		i = h
 		if nl := strings.IndexByte(s[i:], '\n'); nl >= 0 {
 			i += nl + 1
-			if strings.HasPrefix(s[i:], "\n") {
+			if strings.HasPrefix(s[i:], "\r\n") {
+				i += 2
+			} else if strings.HasPrefix(s[i:], "\n") {
 				i++
 			}
 		} else {

@@ -153,6 +153,48 @@ func TestSpliceTopPlacement(t *testing.T) {
 	}
 }
 
+// TestSpliceTopPlacementBlankLineSeam covers CRLF frontmatter/H1 fences and
+// the blank-line seam between frontmatter and a leading H1 (AGENTS.md: new
+// blocks land at the top, after frontmatter and a leading H1). These cases
+// don't fit TestSpliceTopPlacement's shared "team"-fallback content check
+// (the block lands mid-file, splitting `existing`, and these cases use
+// "rules" rather than "team"), so they get their own assertions: the wanted
+// prefix is kept exactly, and the begin marker appears exactly once, after
+// it.
+func TestSpliceTopPlacementBlankLineSeam(t *testing.T) {
+	meta := BlockMeta{Packs: []string{"p@1"}}
+	cases := []struct {
+		name, existing, wantPrefix string
+	}{
+		{"crlf frontmatter and h1", "---\r\ntitle: x\r\n---\r\n\r\n# T\r\n\r\nrules\r\n",
+			"---\r\ntitle: x\r\n---\r\n\r\n# T\r\n\r\n"},
+		{"blank line between frontmatter and h1", "---\ntitle: x\n---\n\n# T\n\nrules\n",
+			"---\ntitle: x\n---\n\n# T\n\n"},
+		{"blank line then h1, no frontmatter", "\n# T\n\nrules\n",
+			"\n# T\n\n"},
+		{"blank line after frontmatter, no h1", "---\ntitle: x\n---\n\nrules\n",
+			"---\ntitle: x\n---\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := Splice([]byte(tc.existing), "body\n", meta)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s := string(out)
+			if !strings.HasPrefix(s, tc.wantPrefix) {
+				t.Errorf("got:\n%q\nwant prefix:\n%q", s, tc.wantPrefix)
+			}
+			if strings.Count(s, beginPrefix) != 1 {
+				t.Errorf("expected exactly one begin marker:\n%s", s)
+			}
+			if idx := strings.Index(s, beginPrefix); idx != len(tc.wantPrefix) {
+				t.Errorf("begin marker not immediately after prefix: idx=%d want=%d\n%q", idx, len(tc.wantPrefix), s)
+			}
+		})
+	}
+}
+
 func TestSpliceExistingBlockDoesNotMove(t *testing.T) {
 	meta := BlockMeta{Packs: []string{"p@1"}}
 	first, err := Splice([]byte("# P\n\nteam rules\n"), "body\n", meta)
@@ -226,6 +268,10 @@ func TestFrontmatterEnd(t *testing.T) {
 		{"fence not at byte 0", "intro\n---\ntitle: x\n---\n", 0},
 		{"close fence with trailing text", "---\ntitle: x\n---x\nteam\n", 0},
 		{"empty", "", 0},
+		{"crlf fence", "---\r\ntitle: x\r\n---\r\nrules\r\n", len("---\r\ntitle: x\r\n---\r\n")},
+		{"crlf fence at eof", "---\r\ntitle: x\r\n---", len("---\r\ntitle: x\r\n---")},
+		{"crlf unterminated", "---\r\ntitle: x\r\n", 0},
+		{"mixed endings not frontmatter", "---\r\ntitle: x\n---\n", 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
