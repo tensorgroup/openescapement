@@ -151,6 +151,41 @@ func applyPlacement(root string, d Detected, p placement) error {
 	return restoreFile(path, out)
 }
 
+// gitCommand builds one git invocation scoped to root (`-C root`), with
+// LC_ALL=C forced so that anything about git's behavior or output that does
+// depend on its own messages doesn't also depend on the caller's locale.
+// The one shared constructor both isGitRepo and fileIsClean use, so the
+// locale setting can't be forgotten on one call site and not the other.
+func gitCommand(ctx context.Context, root string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", root}, args...)...)
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	return cmd
+}
+
+// isGitRepo reports whether root is inside a git work tree that git is
+// currently willing to operate on, via `git rev-parse --is-inside-work-tree`
+// and its exit code alone — never by matching any of git's several possible
+// fatal messages, which are both locale-dependent and not worth keeping in
+// sync with git's own wording as it changes across versions.
+//
+// Every non-zero exit is treated the same: no .git present at all, and a
+// "detected dubious ownership" refusal (routine in containers and CI with
+// mounted volumes, git >= 2.35.2) both mean git cannot vouch for this path
+// right now, and get the same answer, false with no error — the caller
+// decides what tolerant behavior that implies. The one exception is the git
+// binary itself being missing, which is a Go-level check
+// (errors.Is(err, exec.ErrNotFound)), not a message match, so it's
+// distinguished as its own error instead of silently folded into "false".
+func isGitRepo(ctx context.Context, root string) (bool, error) {
+	if err := gitCommand(ctx, root, "rev-parse", "--is-inside-work-tree").Run(); err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return false, fmt.Errorf("git not found in PATH: %w", err)
+		}
+		return false, nil
+	}
+	return true, nil
+}
+
 // fileIsClean reports whether path (root-relative, forward-slash separated,
 // as stored in Detected.Path) has no uncommitted changes, via `git status
 // --porcelain -- <path>`. Any output — modified, staged, or untracked — means
@@ -163,30 +198,29 @@ func applyPlacement(root string, d Detected, p placement) error {
 // very first run in an existing git repo. Pathspec-scoping keeps the check
 // about the one file being offered.
 //
-// A root that is not a git repository at all is treated as CLEAN rather than
-// erroring: `esc init` must work in a repo before its first commit, and with
-// no git history yet, there is nothing for git to consider dirty against
-// (and nothing for it to undo either, but that just means the guard this
-// feeds does not apply yet — it doesn't mean init should refuse to run).
+// root not being (or not currently being usable as) a git work tree at all
+// — see isGitRepo — is treated as CLEAN rather than erroring: `esc init`
+// must work in a repo before its first commit, and the same tolerance
+// extends to a repo git currently refuses for any other reason (dubious
+// ownership, say), since there is no way to ask it for a real answer
+// either way. Failing closed here instead would be worse: `esc init &&
+// esc sync` or `esc init || exit 1` would break in exactly the
+// environments where init otherwise did everything correctly, over a
+// question (is this one file dirty) that was never load-bearing enough to
+// justify that.
 func fileIsClean(ctx context.Context, root, path string) (bool, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", root, "status", "--porcelain", "--", path)
-	// git's "not a git repository" message is locale-dependent (gettext);
-	// matching it in the user's own language would silently miss and turn
-	// a should-be-clean pre-first-commit repo into a hard error instead
-	// (fail-safe, since the offer just gets skipped everywhere, but dead).
-	// Force the C locale for this one invocation so the match is stable
-	// regardless of the user's environment.
-	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	inRepo, err := isGitRepo(ctx, root)
+	if err != nil {
+		return false, err
+	}
+	if !inRepo {
+		return true, nil
+	}
+	cmd := gitCommand(ctx, root, "status", "--porcelain", "--", path)
 	var out, errOut bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errOut
 	if err := cmd.Run(); err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
-			return false, fmt.Errorf("git not found in PATH, cannot check %s for uncommitted changes: %w", path, err)
-		}
-		if strings.Contains(errOut.String(), "not a git repository") {
-			return true, nil
-		}
 		return false, fmt.Errorf("git status %s: %w: %s", path, err, strings.TrimSpace(errOut.String()))
 	}
 	return out.Len() == 0, nil
@@ -218,12 +252,22 @@ func initInteractive(yes bool) bool {
 // and init must not write somewhere git cannot undo it; the other detected
 // files are still processed.
 //
-// A genuine failure — the git check itself erroring, or a placement write
-// failing — is different from a routine skip: it is collected and returned
-// rather than only ever printed to stdout, so cmdInit can turn it into a
-// non-zero exit and a caller that isn't reading prose can still tell
-// something went wrong. Each detected file is still attempted regardless of
-// an earlier one's failure.
+// A placement write actually failing (applyPlacement returning an error) is
+// different from a routine skip: it is collected and returned rather than
+// only ever printed to stdout, so cmdInit can turn it into a non-zero exit
+// and a caller that isn't reading prose can still tell something went
+// wrong. A git-check failure (fileIsClean erroring — git missing, or some
+// other unexpected git failure) is NOT treated the same way: it is printed
+// and that one file is skipped, exactly like a routine dirty-file skip,
+// and never fails the overall command. init's config scaffolding already
+// fully succeeded by the time the offer runs (see cmdInit's ordering), and
+// the placement offer is best-effort on top of it — the same reasoning
+// that makes a repo git can't currently vouch for tolerated as "clean"
+// (see fileIsClean) means a failure answering that question can't be
+// allowed to fail `esc init` outright either; `esc init && esc sync` (or
+// `esc init || exit 1`) must not break just because the git check itself
+// couldn't run. Each detected file is still attempted regardless of an
+// earlier one's outcome, failure or not.
 func offerPlacement(ctx context.Context, root string, stdout io.Writer, detected []Detected, yes bool) error {
 	interactive := initInteractive(yes)
 	var br *bufio.Reader
@@ -237,7 +281,7 @@ func offerPlacement(ctx context.Context, root string, stdout io.Writer, detected
 		}
 		clean, err := fileIsClean(ctx, root, d.Path)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: could not check git status, skipped the placement offer: %w", d.Path, err))
+			fmt.Fprintf(stdout, "  %s: could not check git status, skipping the placement offer: %v\n", d.Path, err)
 			continue
 		}
 		if !clean {

@@ -277,15 +277,15 @@ func TestFileIsCleanIgnoresUnrelatedUntrackedFiles(t *testing.T) {
 	}
 }
 
-// git's "not a git repository" message is locale-dependent; fileIsClean
-// forces LC_ALL=C on the git invocation so the not-a-repo-yet detection
-// doesn't silently break for a user with a non-English git locale. That
-// specific locale-dependent wording isn't practically reproducible in this
-// test environment (it would need a second gettext catalog installed for
-// git), so this test instead pins the adjacent, directly testable case:
-// git missing from PATH entirely must produce a clear, distinguishable
-// error rather than being misread as "not a git repository" (which would
-// wrongly report clean).
+// isGitRepo (which fileIsClean now delegates the repo-ness question to)
+// decides "is this a git repo" purely by the exit code of `git rev-parse
+// --is-inside-work-tree`, never by matching any of git's (locale-dependent)
+// fatal messages — including "not a git repository" and "detected dubious
+// ownership" alike. That structural change makes the message-matching test
+// this comment used to describe unnecessary. What's still worth pinning
+// directly: git missing from PATH entirely must produce a clear,
+// distinguishable error (the one case isGitRepo does distinguish, via
+// errors.Is(exec.ErrNotFound), a Go-level check, not a message match).
 func TestFileIsCleanGitNotFound(t *testing.T) {
 	root := t.TempDir()
 	writeFiles(t, root, map[string]string{"CLAUDE.md": "rules\n"})
@@ -296,6 +296,52 @@ func TestFileIsCleanGitNotFound(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "git not found") {
 		t.Errorf("expected a clear 'git not found' error, got: %v", err)
+	}
+}
+
+// isGitRepo returns (false, nil) — not an error — for any git-repo-check
+// failure other than the binary being missing, which is exactly what makes
+// a "detected dubious ownership" refusal (git >= 2.35.2, routine in
+// containers and CI with mounted volumes) tolerated the same way a missing
+// .git is, rather than propagating as an error. Reproducing dubious
+// ownership itself needs a file genuinely owned by a different user, not
+// practical to set up portably in this test environment, but the exit-code
+// contract it relies on doesn't: any non-zero, non-ErrNotFound exit from
+// `git rev-parse --is-inside-work-tree` must come back false/nil. Pin that
+// directly against a real git failure mode that IS easy to produce: root
+// pointed at a path with no .git and where "git status" would also fail
+// for unrelated reasons (a file, not a directory, since that's simplest to
+// construct) — isGitRepo must still say "not a repo, no error" rather than
+// surface whatever git's actual complaint was.
+func TestIsGitRepoNonZeroExitOtherThanMissingBinaryIsTolerated(t *testing.T) {
+	root := t.TempDir()
+	notADir := filepath.Join(root, "not-a-directory")
+	if err := os.WriteFile(notADir, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	inRepo, err := isGitRepo(context.Background(), notADir)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if inRepo {
+		t.Error("expected isGitRepo to report false for a path git cannot operate in")
+	}
+}
+
+// Cheap, locale-independent proxy for the LC_ALL=C fix (reproducing the
+// original locale bug needs a second gettext catalog installed for git,
+// not practical here): pin that the shared command constructor actually
+// sets it, so the fix can't be quietly dropped later.
+func TestGitCommandSetsLocale(t *testing.T) {
+	cmd := gitCommand(context.Background(), t.TempDir(), "status")
+	found := false
+	for _, e := range cmd.Env {
+		if e == "LC_ALL=C" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("gitCommand must set LC_ALL=C, got env: %v", cmd.Env)
 	}
 }
 
@@ -371,6 +417,34 @@ func TestInitOfferWriteFailureIsVisibleAndNonZero(t *testing.T) {
 	}
 	if !strings.Contains(out, "CLAUDE.md") {
 		t.Errorf("the failure must name the file, got:\n%s", out)
+	}
+}
+
+// Regression test for a bug introduced by the item-7 fix round and caught
+// on re-review: fileIsClean erroring (e.g. git missing from PATH) was
+// briefly promoted into offerPlacement's returned error, the same path as
+// an actual write failure — so a git CHECK failure made the whole `esc
+// init` exit non-zero, even though config scaffolding had already fully
+// succeeded and nothing was ever written or corrupted. `esc init && esc
+// sync` or `esc init || exit 1` would have broken on any run where the git
+// check itself couldn't run (missing git, or the more realistic "detected
+// dubious ownership" case in containers/CI). A git-check failure must
+// behave like a routine skip: printed, and non-fatal, exactly as it did
+// before that fix round.
+func TestInitExitsZeroWhenGitCheckFailsButConfigWritten(t *testing.T) {
+	root := t.TempDir()
+	writeFiles(t, root, map[string]string{"CLAUDE.md": "rules\n"})
+	t.Setenv("PATH", t.TempDir()) // no git binary anywhere on PATH
+
+	code, out := run(t, root, "init")
+	if code != 0 {
+		t.Fatalf("init must exit 0 when only the git check fails, got %d:\n%s", code, out)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".escapement", "config.yaml")); err != nil {
+		t.Errorf("config scaffolding should still have succeeded: %v", err)
+	}
+	if !strings.Contains(out, "CLAUDE.md") || !strings.Contains(out, "could not check git status") {
+		t.Errorf("the skip should still be reported, got:\n%s", out)
 	}
 }
 
