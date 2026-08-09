@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/tensorgroup/openescapement/internal/engine"
 )
 
 const (
@@ -59,15 +61,17 @@ type Tokens struct {
 	CostUSD float64 `json:"cost_usd"`
 }
 type Event struct {
-	TS        time.Time   `json:"ts"`
-	Kind      string      `json:"kind"` // sync|status|update_check|provider_usage|mcp_connect
-	RepoID    string      `json:"repo_id,omitempty"`
-	TeamID    string      `json:"team_id,omitempty"`
-	AgentTool string      `json:"agent_tool,omitempty"`
-	Model     string      `json:"model,omitempty"`
-	Packs     []EventPack `json:"packs,omitempty"`
-	Drift     string      `json:"drift,omitempty"` // in-sync|drifted|stale
-	Tokens    *Tokens     `json:"tokens,omitempty"`
+	TS         time.Time          `json:"ts"`
+	Kind       string             `json:"kind"` // sync|status|update_check|provider_usage|mcp_connect
+	RepoID     string             `json:"repo_id,omitempty"`
+	TeamID     string             `json:"team_id,omitempty"`
+	AgentTool  string             `json:"agent_tool,omitempty"`
+	Model      string             `json:"model,omitempty"`
+	Packs      []EventPack        `json:"packs,omitempty"`
+	Drift      string             `json:"drift,omitempty"` // in-sync|drifted|stale; derived, see DeriveDrift
+	Tokens     *Tokens            `json:"tokens,omitempty"`
+	Artifacts  []EventArtifact    `json:"artifacts,omitempty"`
+	Collection *engine.Collection `json:"collection,omitempty"`
 }
 
 type Store struct {
