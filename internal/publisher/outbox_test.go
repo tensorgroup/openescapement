@@ -186,12 +186,12 @@ func TestFlushOutboxOldestFirst(t *testing.T) {
 		return nil
 	}
 
-	sent, remaining, err := FlushOutbox(root, send, base.Add(time.Hour))
+	sent, dropped, remaining, err := FlushOutbox(root, send, base.Add(time.Hour))
 	if err != nil {
 		t.Fatalf("FlushOutbox: %v", err)
 	}
-	if sent != 3 || remaining != 0 {
-		t.Fatalf("sent=%d remaining=%d, want 3,0", sent, remaining)
+	if sent != 3 || dropped != 0 || remaining != 0 {
+		t.Fatalf("sent=%d dropped=%d remaining=%d, want 3,0,0", sent, dropped, remaining)
 	}
 	want := []string{"a", "b", "c"}
 	if len(order) != len(want) {
@@ -227,12 +227,12 @@ func TestFlushOutboxStopsOnFailure(t *testing.T) {
 		return nil
 	}
 
-	sent, remaining, err := FlushOutbox(root, send, base.Add(time.Hour))
+	sent, dropped, remaining, err := FlushOutbox(root, send, base.Add(time.Hour))
 	if err == nil {
 		t.Fatal("want non-nil err from failed send")
 	}
-	if sent != 1 || remaining != 2 {
-		t.Fatalf("sent=%d remaining=%d, want 1,2", sent, remaining)
+	if sent != 1 || dropped != 0 || remaining != 2 {
+		t.Fatalf("sent=%d dropped=%d remaining=%d, want 1,0,2", sent, dropped, remaining)
 	}
 	if len(attempted) != 2 {
 		t.Fatalf("attempted = %v, want exactly [a b] (c never attempted)", attempted)
@@ -300,12 +300,12 @@ func TestFlushOutboxSkipsCorruptLine(t *testing.T) {
 		return nil
 	}
 
-	sent, remaining, err := FlushOutbox(root, send, base.Add(time.Hour))
+	sent, dropped, remaining, err := FlushOutbox(root, send, base.Add(time.Hour))
 	if err != nil {
 		t.Fatalf("FlushOutbox: %v", err)
 	}
-	if sent != 2 || remaining != 0 {
-		t.Fatalf("sent=%d remaining=%d, want 2,0 (corrupt line skipped, not fatal)", sent, remaining)
+	if sent != 2 || dropped != 1 || remaining != 0 {
+		t.Fatalf("sent=%d dropped=%d remaining=%d, want 2,1,0 (corrupt line skipped, not fatal, counted as dropped)", sent, dropped, remaining)
 	}
 	want := []string{"a", "c"}
 	if len(order) != len(want) || order[0] != want[0] || order[1] != want[1] {
@@ -320,11 +320,87 @@ func TestFlushOutboxMissingFileNoOp(t *testing.T) {
 		return nil
 	}
 
-	sent, remaining, err := FlushOutbox(root, send, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	sent, dropped, remaining, err := FlushOutbox(root, send, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatalf("FlushOutbox on missing file: %v", err)
 	}
-	if sent != 0 || remaining != 0 {
-		t.Fatalf("sent=%d remaining=%d, want 0,0", sent, remaining)
+	if sent != 0 || dropped != 0 || remaining != 0 {
+		t.Fatalf("sent=%d dropped=%d remaining=%d, want 0,0,0", sent, dropped, remaining)
+	}
+}
+
+func TestFlushOutboxAgeEvictsStaleEntryWithoutSending(t *testing.T) {
+	root := t.TempDir()
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	oldTime := base
+	freshTime := base.Add(OutboxMaxAge - time.Hour) // within OutboxMaxAge of oldTime: append won't evict it
+	flushNow := freshTime.Add(2 * time.Hour)        // > OutboxMaxAge past oldTime, <= OutboxMaxAge past freshTime
+
+	if _, err := AppendOutbox(root, "ep", testEnvelope("old"), oldTime); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AppendOutbox(root, "ep", testEnvelope("fresh"), freshTime); err != nil {
+		t.Fatal(err)
+	}
+
+	var sentTags []string
+	send := func(endpoint string, e Envelope) error {
+		if e.ConfigPath == "old" {
+			t.Fatal("send must not be called for an entry older than OutboxMaxAge at flush time")
+		}
+		sentTags = append(sentTags, e.ConfigPath)
+		return nil
+	}
+
+	sent, dropped, remaining, err := FlushOutbox(root, send, flushNow)
+	if err != nil {
+		t.Fatalf("FlushOutbox: %v", err)
+	}
+	if sent != 1 || dropped != 1 || remaining != 0 {
+		t.Fatalf("sent=%d dropped=%d remaining=%d, want 1,1,0 (stale entry dropped, fresh entry sent)", sent, dropped, remaining)
+	}
+	if len(sentTags) != 1 || sentTags[0] != "fresh" {
+		t.Fatalf("sentTags = %v, want [fresh]", sentTags)
+	}
+
+	if lines := readOutboxLines(t, root); len(lines) != 0 {
+		t.Errorf("outbox should be empty after flush (stale dropped, fresh sent), got %d lines", len(lines))
+	}
+}
+
+func TestFlushOutboxDroppedCoversAgedAndCorrupt(t *testing.T) {
+	root := t.TempDir()
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	oldTime := base
+	freshTime := base.Add(OutboxMaxAge - time.Hour)
+	flushNow := freshTime.Add(2 * time.Hour)
+
+	if _, err := AppendOutbox(root, "ep", testEnvelope("old"), oldTime); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AppendOutbox(root, "ep", testEnvelope("fresh"), freshTime); err != nil {
+		t.Fatal(err)
+	}
+	// Hand-inject a corrupt line alongside the aged one.
+	p := filepath.Join(root, ".escapement", "outbox.jsonl")
+	data, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = append(data, []byte("{not valid json\n")...)
+	if err := os.WriteFile(p, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	send := func(endpoint string, e Envelope) error { return nil }
+
+	sent, dropped, remaining, err := FlushOutbox(root, send, flushNow)
+	if err != nil {
+		t.Fatalf("FlushOutbox: %v", err)
+	}
+	if sent != 1 || dropped != 2 || remaining != 0 {
+		t.Fatalf("sent=%d dropped=%d remaining=%d, want 1,2,0 (1 aged + 1 corrupt = 2 dropped)", sent, dropped, remaining)
 	}
 }

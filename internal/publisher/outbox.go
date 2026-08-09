@@ -177,31 +177,54 @@ func AppendOutbox(root, endpoint string, e Envelope, now time.Time) (dropped int
 
 // FlushOutbox sends every queued envelope oldest-first via send, stopping
 // at the first failure and leaving the failed entry and everything after
-// it queued for the next attempt. A corrupt line encountered on load is
-// skipped (never fatal) and is dropped from the file once any entries are
-// rewritten. sent counts successful sends; remaining counts entries left
-// in the outbox afterward. A missing or empty outbox is a no-op.
-func FlushOutbox(root string, send func(endpoint string, e Envelope) error, now time.Time) (sent, remaining int, err error) {
-	entries, _, err := loadOutbox(root)
+// it queued for the next attempt.
+//
+// Before sending, any entry older than OutboxMaxAge relative to now is
+// dropped rather than sent: the portal stamps each event's timestamp at
+// ingest, not from the envelope, so a stale entry that happened to flush
+// successfully weeks late would masquerade as fresh fleet data. A corrupt
+// line encountered on load is likewise never sent. dropped folds both
+// cases into one count — "not sent and not kept" — since a caller reporting
+// loss on stderr does not need to distinguish why an entry never went out.
+// sent counts successful sends; remaining counts entries left queued
+// afterward. A missing or empty outbox is a no-op.
+func FlushOutbox(root string, send func(endpoint string, e Envelope) error, now time.Time) (sent, dropped, remaining int, err error) {
+	entries, corrupt, err := loadOutbox(root)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
-	if len(entries) == 0 {
-		return 0, 0, nil
+	dropped = corrupt
+
+	var fresh []outboxEntry
+	for _, e := range entries {
+		if now.Sub(e.Time) > OutboxMaxAge {
+			dropped++
+			continue
+		}
+		fresh = append(fresh, e)
+	}
+
+	if len(fresh) == 0 {
+		if dropped > 0 {
+			if werr := atomicWriteOutbox(root, nil); werr != nil {
+				return 0, dropped, 0, werr
+			}
+		}
+		return 0, dropped, 0, nil
 	}
 
 	var sendErr error
 	i := 0
-	for ; i < len(entries); i++ {
-		if sendErr = send(entries[i].Endpoint, entries[i].Envelope); sendErr != nil {
+	for ; i < len(fresh); i++ {
+		if sendErr = send(fresh[i].Endpoint, fresh[i].Envelope); sendErr != nil {
 			break
 		}
 	}
 	sent = i
-	remaining = len(entries) - sent
+	remaining = len(fresh) - sent
 
-	if werr := atomicWriteOutbox(root, entries[sent:]); werr != nil {
-		return sent, remaining, werr
+	if werr := atomicWriteOutbox(root, fresh[sent:]); werr != nil {
+		return sent, dropped, remaining, werr
 	}
-	return sent, remaining, sendErr
+	return sent, dropped, remaining, sendErr
 }
