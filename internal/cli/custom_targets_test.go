@@ -261,9 +261,18 @@ func TestCustomTargetSymlinkRefusal(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(root, ".github")); err != nil {
 		t.Skipf("symlink unsupported: %v", err)
 	}
+	// Exit 4, not 1. A symlink refusal is a containment failure, not drift:
+	// exit 1 is the class a CI gate reads as routine and self-healing, and no
+	// amount of syncing clears a symlink planted where escapement writes. This
+	// asserted exit 1 only because refuseSymlinks wrapped esc.ErrConstraint;
+	// it now matches its containment siblings in mergeDir. See the exit-class
+	// note on refuseSymlinks (internal/engine/apply.go) for why not exit 3.
 	code, out := run(t, root, "sync")
-	if code != 1 {
-		t.Fatalf("writing through a symlinked parent should fail exit 1, got %d:\n%s", code, out)
+	if code != 4 {
+		t.Fatalf("writing through a symlinked parent should fail exit 4, got %d:\n%s", code, out)
+	}
+	if !strings.Contains(out, "refusing to write through symlink") {
+		t.Errorf("refusal must name the symlink:\n%s", out)
 	}
 	if _, err := os.Stat(filepath.Join(outside, "copilot-instructions.md")); !os.IsNotExist(err) {
 		t.Error("must not have written through the symlink")

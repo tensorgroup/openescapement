@@ -31,6 +31,18 @@ func containedPath(root, rel string) (string, error) {
 // parent or target file (§2.1). A residual race between this check and the
 // rename remains on shared checkouts and is accepted, documented as the same
 // class as any local tooling.
+//
+// The refusal is a plain error (exit 4), deliberately, and matches the
+// containment refusals in mergeDir below. Exit 1 is the drift-and-constraint
+// class, which a CI gate reads as routine and self-healing: run sync and the
+// repo converges. A symlink standing where escapement is about to write is a
+// containment failure, possibly a hostile one, and no amount of syncing
+// resolves it. Exit 3 would be worse than exit 1 here rather than better: it
+// is the pack-integrity class (a moved tag, a tampered fetch, a bad
+// signature), documented in README.md and SECURITY.md as a statement that the
+// pack you pinned cannot be trusted. A symlink is a property of the local
+// checkout, not of the fetched pack, so exit 3 would report the wrong
+// incident.
 func refuseSymlinks(root, rel string) error {
 	cur := root
 	for _, part := range strings.Split(filepath.ToSlash(rel), "/") {
@@ -43,7 +55,7 @@ func refuseSymlinks(root, rel string) error {
 			return err
 		}
 		if fi.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("%w: %s: refusing to write through symlink %s", esc.ErrConstraint, rel, cur)
+			return fmt.Errorf("%s: refusing to write through symlink %s", rel, cur)
 		}
 	}
 	return nil
