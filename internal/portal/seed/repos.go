@@ -66,12 +66,12 @@ description: Use after esc sync adds a managed block to an instruction file, to 
 
 Do this for every instruction file that has a managed block:
 
-1. Read the whole file: the block between ` + "`escapement:begin`" + ` and ` + "`escapement:end`" + `, and all the surrounding, human-authored content.
+1. Read the whole file: the managed block and all the surrounding, human-authored content. The block's markers are HTML comments, ` + "`<!-- escapement:begin packs=... hash=sha256:... -->`" + ` on its own line and ` + "`<!-- escapement:end -->`" + ` on its own line.
 2. Compare each rule in the managed block against the surrounding content.
    - Duplicate: the surrounding text already states the same rule. Report it so the team can remove the redundant copy.
    - Contradiction: the surrounding text conflicts with, loosens, or tightens the rule. Report both sides, quoted, so the team can see the disagreement.
 3. Propose edits only in the human-authored sections, outside the markers, to resolve what you found.
-4. The hard rule: never edit anything between ` + "`escapement:begin`" + ` and ` + "`escapement:end`" + `. Those bytes are what esc compares against the pack version it synced. Editing inside the markers puts the file into the ` + "`altered`" + ` state, and ` + "`esc sync`" + ` will stop updating that file until a human resolves the drift by hand. So an in-marker edit does not just break a rule, it freezes that file's policy updates.
+4. The hard rule: never edit anything between the begin and end markers. The two marker lines are part of the block, so never edit them either, including the ` + "`hash=`" + ` value on the begin line. Those bytes are what esc compares against the pack version it synced. Editing inside the markers, or the markers themselves, puts the file into the ` + "`altered`" + ` state, and ` + "`esc sync`" + ` will stop updating that file until a human resolves the drift by hand. So an in-marker edit does not just break a rule, it freezes that file's policy updates.
 
 Report findings as a list: duplicates, contradictions, and the human-authored edit you propose for each. Do not modify the managed block yourself.
 `

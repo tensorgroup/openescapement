@@ -23,6 +23,30 @@ func TestSeededPackShipsReconcileSkill(t *testing.T) {
 			t.Errorf("skill must mention %q:\n%s", want, body)
 		}
 	}
+	// This prose is signed into user repos and read by autonomous agents, so
+	// it has to name the real marker syntax rather than leave an agent that
+	// scans visually to infer that `escapement:begin` is an HTML comment,
+	// and it has to say the marker lines are themselves off limits: the
+	// begin line carries the load-bearing `hash=`, and an agent "tidying"
+	// that comment would freeze the file's policy updates, the exact
+	// outcome the skill warns against.
+	for _, want := range []string{
+		"<!-- escapement:begin packs=... hash=sha256:... -->",
+		"<!-- escapement:end -->",
+		"marker lines are part of the block",
+		"`hash=` value on the begin line",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("skill must state %q:\n%s", want, body)
+		}
+	}
+	if n := strings.Count(body, "\n") + 1; n > 40 {
+		t.Errorf("skill body is %d lines, keep it under 40", n)
+	}
+	if strings.Contains(body, "\u2014") {
+		t.Errorf("no em-dashes in shipped prose:\n%s", body)
+	}
+
 	manifest, err := os.ReadFile(filepath.Join(packDir, "pack.yaml"))
 	if err != nil {
 		t.Fatal(err)
