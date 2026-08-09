@@ -25,7 +25,10 @@ func TestSkipHintPerCause(t *testing.T) {
 	}{
 		{engine.SkipHandEdited, "`esc diff` to inspect · `esc sync --force` to overwrite"},
 		{engine.SkipOrphanDirUnmanaged, "the pack files are gone and the rest is yours · delete that directory to be rid of it"},
-		{engine.SkipOrphanDirEdited, "nothing was removed · revert the edit, or `esc sync --force` to retire the directory"},
+		// Deliberately not "revert the edit": this cause also fires when a
+		// pack-provided file was deleted or became unreadable, and there is
+		// nothing to revert then.
+		{engine.SkipOrphanDirEdited, "nothing was removed · restore the pack files as synced, or `esc sync --force` to retire the directory"},
 		{engine.SkipOrphanBlockEdited, "the block is still in that file · `esc sync --force` to remove it"},
 	}
 	seen := map[string]engine.SkipCause{}

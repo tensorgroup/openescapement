@@ -62,6 +62,48 @@ func refuseSymlinks(root, rel string) error {
 	return nil
 }
 
+// dirEntryTarget resolves one manifest entry f (a pack-relative path from a
+// lockfile dir artifact) against the skill directory dir, and refuses it if
+// it escapes dir, resolves to dir itself, or is reached through a symlink.
+// artPath only names the artifact in the error text.
+//
+// A lockfile is a committed, PR-reachable artifact, so its Files entries are
+// not trusted input. Both rejections return a plain error (exit 4), not
+// esc.ErrConstraint: see the exit-class note on refuseSymlinks. An escaping
+// or self-targeting entry aborts the whole sync rather than being silently
+// skipped, because the caller needs to know its lockfile is carrying a
+// hostile entry.
+//
+// Callers must run this over every entry BEFORE reading any of them, and
+// again immediately before each filesystem call. The second pass is not
+// redundant: a check is only as good as its distance from the operation it
+// guards, and the first pass exists because reads (hashing) happen before
+// the removal loop is reached at all.
+func dirEntryTarget(dir, artPath, f string) (string, error) {
+	target, err := containedPath(dir, f)
+	if err != nil {
+		return "", fmt.Errorf("lockfile entry %q for %s: %w", f, artPath, err)
+	}
+	if target == dir {
+		return "", fmt.Errorf("lockfile entry %q for %s resolves to the skill directory itself; refusing to remove it", f, artPath)
+	}
+	if err := refuseSymlinks(dir, f); err != nil {
+		return "", err
+	}
+	return target, nil
+}
+
+// validateDirEntries runs dirEntryTarget over every entry and discards the
+// resolved paths. This is the "before anything reads them" pass.
+func validateDirEntries(dir, artPath string, files []string) error {
+	for _, f := range files {
+		if _, err := dirEntryTarget(dir, artPath, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Skipped is one artifact Apply declined to write or remove because local
 // work stands in the way: a human hand-edited its managed region, or a
 // retiring skill directory still holds files the team added. Sync leaves it
@@ -330,21 +372,39 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 			// nothing and reports every on-disk file as unmanaged below, which
 			// is the conservative answer it was designed to give.
 			//
-			// A read error fails closed the same way rather than removing
-			// anyway. Only os.IsNotExist is folded in (a pack-provided file
-			// the team deleted), and it is folded in because a missing file
-			// makes the remaining ones unverifiable, not because deleting is
-			// itself work to preserve. Anything else is a real failure and
-			// propagates.
+			// Every read error fails closed rather than removing anyway,
+			// whatever its kind: a file the team deleted, a path that is now a
+			// directory, a permission failure. The reason is the same in all
+			// three, and it is not that deleting is itself work to preserve —
+			// it is that an unreadable manifest entry makes every OTHER entry
+			// unverifiable, so the hash cannot clear them. An unverifiable
+			// directory is exactly what this pass must not guess about, and
+			// hard-erroring instead would fail a rollout over a state --force
+			// resolves.
+			//
+			// Containment runs over the whole manifest before this, and that
+			// order is load-bearing: DirHashOf READS every entry, so
+			// validating only in the removal loop below would let a symlinked
+			// entry be read through to out-of-repo content, hashed, and
+			// reported as a routine exit-0 skip rather than the containment
+			// error refuseSymlinks owes the caller.
+			if err := validateDirEntries(abs, prev.Path, prev.Files); err != nil {
+				return nil, err
+			}
 			if !force && len(prev.Files) > 0 {
 				actual, herr := pack.DirHashOf(abs, prev.Files)
-				if herr != nil && !os.IsNotExist(herr) {
-					return nil, herr
-				}
 				if herr != nil || actual != prev.Hash {
+					reason := "pack no longer provides this skill directory, but a pack-provided file in it was edited since the last sync; left in place instead of being deleted"
+					if herr != nil {
+						// Name the offending file. The whole-manifest hash
+						// cannot say which file was edited, but a read error
+						// carries its own path, and that is the one sub-case
+						// where the user can be told exactly what to look at.
+						reason = fmt.Sprintf("pack no longer provides this skill directory, but a pack-provided file in it is unreadable, so the others cannot be verified either (%v); left in place instead of being deleted", herr)
+					}
 					res.Skipped = append(res.Skipped, Skipped{
 						Subject: prev.Path, Kind: prev.Kind, Cause: SkipOrphanDirEdited,
-						Reason:       "pack no longer provides this skill directory, but a pack-provided file in it was edited or removed since the last sync; left in place instead of being deleted",
+						Reason:       reason,
 						ExpectedHash: prev.Hash, ActualHash: actual,
 					})
 					// Carry the entry forward, unlike the unmanaged-file skip
@@ -364,14 +424,11 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 				}
 			}
 			for _, f := range prev.Files {
-				target, err := containedPath(abs, f)
+				// Re-resolved immediately before the removal, not reused from
+				// the validation pass above: the check has to sit as close to
+				// the filesystem call as it can.
+				target, err := dirEntryTarget(abs, prev.Path, f)
 				if err != nil {
-					return nil, fmt.Errorf("lockfile entry %q for %s: %w", f, prev.Path, err)
-				}
-				if target == abs {
-					return nil, fmt.Errorf("lockfile entry %q for %s resolves to the skill directory itself; refusing to remove it", f, prev.Path)
-				}
-				if err := refuseSymlinks(abs, f); err != nil {
 					return nil, err
 				}
 				if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
@@ -605,14 +662,8 @@ func mergeDir(root, artPath, src, dst string, prevFiles []string) ([]string, err
 		if nowProvided[prev] {
 			continue
 		}
-		target, err := containedPath(dst, prev)
+		target, err := dirEntryTarget(dst, artPath, prev)
 		if err != nil {
-			return nil, fmt.Errorf("lockfile entry %q for %s: %w", prev, artPath, err)
-		}
-		if target == dst {
-			return nil, fmt.Errorf("lockfile entry %q for %s resolves to the skill directory itself; refusing to remove it", prev, artPath)
-		}
-		if err := refuseSymlinks(dst, prev); err != nil {
 			return nil, err
 		}
 		if err := os.Remove(target); err != nil && !os.IsNotExist(err) {

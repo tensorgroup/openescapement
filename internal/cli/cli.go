@@ -371,7 +371,11 @@ func skipHint(s engine.Skipped) string {
 	case engine.SkipOrphanDirUnmanaged:
 		return "the pack files are gone and the rest is yours · delete that directory to be rid of it"
 	case engine.SkipOrphanDirEdited:
-		return "nothing was removed · revert the edit, or `esc sync --force` to retire the directory"
+		// Not "revert the edit": the same cause fires when a pack-provided
+		// file was deleted or became unreadable, and there is nothing to
+		// revert then. The whole-manifest hash cannot name the file either,
+		// so the remedy has to describe the end state rather than the action.
+		return "nothing was removed · restore the pack files as synced, or `esc sync --force` to retire the directory"
 	case engine.SkipOrphanBlockEdited:
 		return "the block is still in that file · `esc sync --force` to remove it"
 	default:

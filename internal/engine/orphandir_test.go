@@ -230,7 +230,7 @@ func TestApplyOrphanDirPreservesEditedPackFile(t *testing.T) {
 	if len(res.Skipped) != 1 || res.Skipped[0].Subject != artPath {
 		t.Fatalf("want one Skipped entry for %s, got %+v", artPath, res.Skipped)
 	}
-	if r := res.Skipped[0].Reason; !strings.Contains(r, "edited or removed") {
+	if r := res.Skipped[0].Reason; !strings.Contains(r, "was edited since the last sync") {
 		t.Errorf("skip reason must say a pack-provided file was edited, got %q", r)
 	}
 	if res.Skipped[0].ExpectedHash == "" || res.Skipped[0].ActualHash == "" ||
@@ -391,5 +391,134 @@ func TestApplyOrphanDirPreManifestLockUnaffected(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(artPath), "SKILL.md")); err != nil {
 		t.Errorf("a pre-manifest retirement must remove nothing: %v", err)
+	}
+}
+
+// TestApplyOrphanDirSymlinkedPackFileFailsClosed is the fix-round regression
+// test for the ordering defect in the hash gate. pack.DirHashOf READS every
+// manifest entry, and the gate ran before the removal loop's containment
+// checks, so a manifest entry replaced by a symlink was read THROUGH to
+// out-of-repo content: the hash mismatched, the gate reported a routine
+// exit-0 "orphan-dir-edited" skip, and refuseSymlinks never fired at all.
+// That downgraded a containment failure to routine drift, the exact
+// inversion this sweep's exit-code change argues against, and the skip's own
+// remedy line then sent the user to `esc sync --force`, which bypasses the
+// gate, reaches refuseSymlinks, and hard-errors. Containment now runs over
+// the whole manifest before anything reads it.
+func TestApplyOrphanDirSymlinkedPackFileFailsClosed(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	const artPath = ".claude/skills/esc-acme-org-esc-security"
+	orphanDirRepo(t, root, artPath, map[string]string{"SKILL.md": "pack content\n"}, nil)
+
+	victim := filepath.Join(outside, "victim.txt")
+	if err := os.WriteFile(victim, []byte("do not touch\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, filepath.FromSlash(artPath))
+	if err := os.Remove(filepath.Join(dir, "SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victim, filepath.Join(dir, "SKILL.md")); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+
+	res, err := Apply(root, &PlanResult{}, false)
+	if err == nil {
+		t.Fatalf("a symlinked manifest entry must fail closed, not become an exit-0 skip: %+v", res)
+	}
+	if !strings.Contains(err.Error(), "refusing to write through symlink") {
+		t.Errorf("error must come from the symlink check, got %v", err)
+	}
+	if res != nil {
+		t.Errorf("nothing may be reported after a containment failure, got %+v", res)
+	}
+	got, rerr := os.ReadFile(victim)
+	if rerr != nil {
+		t.Fatalf("the file outside the repo was removed: %v", rerr)
+	}
+	if string(got) != "do not touch\n" {
+		t.Errorf("file outside the repo was modified: %q", got)
+	}
+}
+
+// TestApplyOrphanDirTraversalEntryIsNotHashed is the other half of the same
+// ordering defect. A manifest entry like "../../../../secret.txt" was read
+// and sha256'd by the gate before containedPath ever rejected it, and because
+// the gate then `continue`d, the removal loop that carries containedPath was
+// never reached: the whole sync exited 0 having read a file outside the
+// repository and published its hash as actual_hash. Removal was never at
+// risk, but the read was real.
+func TestApplyOrphanDirTraversalEntryIsNotHashed(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "a", "b", "repo")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	secret := filepath.Join(parent, "secret.txt")
+	if err := os.WriteFile(secret, []byte("out-of-repo content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// The skill dir sits 3 segments under root, so 6 "..": 3 to reach root,
+	// 3 more to clear the repo entirely and land on parent/secret.txt.
+	const artPath = ".claude/skills/esc-acme-org-esc-security"
+	const traversal = "../../../../../../secret.txt"
+	writeUnder(t, filepath.Join(root, filepath.FromSlash(artPath)), "SKILL.md", "pack content\n")
+	lock := &lockfile.Lock{Schema: 1, Artifacts: []lockfile.LockArtifact{
+		{Path: artPath, Kind: KindDir, Hash: "sha256:stale", Files: []string{"SKILL.md", traversal}},
+	}}
+	if err := lock.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	// Precondition: the entry really does resolve onto the out-of-repo file,
+	// so a gate that hashed before containing would in fact read it.
+	if filepath.Clean(filepath.Join(root, filepath.FromSlash(artPath), traversal)) != filepath.Clean(secret) {
+		t.Fatalf("precondition: traversal entry does not land on %s", secret)
+	}
+
+	res, err := Apply(root, &PlanResult{}, false)
+	if err == nil {
+		t.Fatalf("a traversing manifest entry must fail closed, not become an exit-0 skip: %+v", res)
+	}
+	if !strings.Contains(err.Error(), "escapes the repository root") {
+		t.Errorf("error must come from the containment check, got %v", err)
+	}
+	if res != nil {
+		t.Errorf("nothing may be reported after a containment failure, got %+v", res)
+	}
+	if _, serr := os.Stat(secret); serr != nil {
+		t.Errorf("the out-of-repo file was removed: %v", serr)
+	}
+}
+
+// TestApplyOrphanDirManifestPathIsNowADirectory covers the read-error branch
+// for a path that is neither present-and-readable nor absent: os.ReadFile on
+// a directory returns EISDIR, which is not os.IsNotExist, so the gate used to
+// hard-error exit 4 on it instead of taking the fail-closed skip it intends
+// for every unverifiable directory. Every read error is now the skip.
+func TestApplyOrphanDirManifestPathIsNowADirectory(t *testing.T) {
+	root := t.TempDir()
+	const artPath = ".claude/skills/esc-acme-org-esc-security"
+	orphanDirRepo(t, root, artPath, map[string]string{"SKILL.md": "pack content\n"}, nil)
+	dir := filepath.Join(root, filepath.FromSlash(artPath))
+	if err := os.Remove(filepath.Join(dir, "SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "SKILL.md"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := Apply(root, &PlanResult{}, false)
+	if err != nil {
+		t.Fatalf("an unverifiable retirement must be declined, not fail the rollout: %v", err)
+	}
+	if len(res.Skipped) != 1 || res.Skipped[0].Cause != SkipOrphanDirEdited {
+		t.Fatalf("want one orphan-dir-edited skip, got %+v", res.Skipped)
+	}
+	if r := res.Skipped[0].Reason; !strings.Contains(r, "unreadable") || !strings.Contains(r, "SKILL.md") {
+		t.Errorf("skip reason must say what is unreadable and name it, got %q", r)
+	}
+	if _, serr := os.Stat(filepath.Join(dir, "SKILL.md")); serr != nil {
+		t.Errorf("nothing may be removed from an unverifiable directory: %v", serr)
 	}
 }
