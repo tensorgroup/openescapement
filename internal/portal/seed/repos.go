@@ -49,19 +49,54 @@ const securityRule1 = "- Never commit secrets or API keys.\n"
 const securityRule2 = "- All authentication goes through the campus SSO service.\n"
 const securityRule3 = "- Any newly opened port requires security review.\n"
 
+// reconcileSkillMD is the demo pack's esc-reconcile skill. Reconciling a
+// team's existing instructions against a pack's managed rules is judgment
+// work: a CLI heuristic would be wrong often enough to erode trust, and a
+// model call would break the single-dependency, no-network design. So it
+// ships as a skill delivered through the same versioned, signed channel as
+// every other rule, instead of code in esc itself.
+const reconcileSkillMD = `---
+name: esc-reconcile
+description: Use after esc sync adds a managed block to an instruction file, to check the block against the human-authored content already in that file for duplicate or contradictory rules.
+---
+
+# Reconciling pack rules with existing instructions
+
+'esc sync' writes a managed block into files like CLAUDE.md or AGENTS.md, but a team usually already has its own instructions in that file. The two can repeat each other or disagree. Spotting that is judgment work: a heuristic gets it wrong often enough to erode trust, and a model call inside the CLI would break esc's no-network, single-dependency design. So this check runs as a skill, in an agent, not in the CLI.
+
+Do this for every instruction file that has a managed block:
+
+1. Read the whole file: the block between ` + "`escapement:begin`" + ` and ` + "`escapement:end`" + `, and all the surrounding, human-authored content.
+2. Compare each rule in the managed block against the surrounding content.
+   - Duplicate: the surrounding text already states the same rule. Report it so the team can remove the redundant copy.
+   - Contradiction: the surrounding text conflicts with, loosens, or tightens the rule. Report both sides, quoted, so the team can see the disagreement.
+3. Propose edits only in the human-authored sections, outside the markers, to resolve what you found.
+4. The hard rule: never edit anything between ` + "`escapement:begin`" + ` and ` + "`escapement:end`" + `. Those bytes are what esc compares against the pack version it synced. Editing inside the markers puts the file into the ` + "`altered`" + ` state, and ` + "`esc sync`" + ` will stop updating that file until a human resolves the drift by hand. So an in-marker edit does not just break a rule, it freezes that file's policy updates.
+
+Report findings as a list: duplicates, contradictions, and the human-authored edit you propose for each. Do not modify the managed block yourself.
+`
+
 func packYAML(version string) string {
 	return "schema: 1\n" +
 		"name: org-baseline\n" +
 		"version: " + version + "\n" +
 		"description: Demo org baseline\n" +
 		"rules:\n" +
-		"  - rules/security.md\n"
+		"  - rules/security.md\n" +
+		"skills:\n" +
+		"  - skills/esc-reconcile\n"
 }
 
 // buildPackRepo writes the org-baseline pack fixture at dir and commits it
 // as two tagged versions: v1.1.0 (2 rules), then v1.2.0 (3 rules).
 func buildPackRepo(dir string) error {
 	if err := os.MkdirAll(filepath.Join(dir, "rules"), 0o755); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "skills", "esc-reconcile"), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, "skills", "esc-reconcile", "SKILL.md"), []byte(reconcileSkillMD), 0o644); err != nil {
 		return err
 	}
 

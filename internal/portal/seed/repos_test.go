@@ -7,6 +7,31 @@ import (
 	"testing"
 )
 
+func TestSeededPackShipsReconcileSkill(t *testing.T) {
+	dir := t.TempDir()
+	packDir, _, err := Repos(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(packDir, "skills", "esc-reconcile", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(raw)
+	for _, want := range []string{"escapement:begin", "escapement:end", "never edit"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("skill must mention %q:\n%s", want, body)
+		}
+	}
+	manifest, err := os.ReadFile(filepath.Join(packDir, "pack.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(manifest), "skills/esc-reconcile") {
+		t.Errorf("manifest must declare the skill:\n%s", manifest)
+	}
+}
+
 func TestReposIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	p1, r1, err := Repos(dir)
