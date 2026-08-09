@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -117,6 +119,78 @@ func TestApplyPlacementEndPreservesNewlineSeparation(t *testing.T) {
 	}
 }
 
+// placeAbove means "above the title", not "at byte 0". Writing at byte 0
+// preserved every byte of a file with YAML frontmatter and still destroyed
+// it: frontmatter is only frontmatter at byte 0, so a marker above it demotes
+// `---\ntitle: x\n---` into a setext heading plus a horizontal rule. Same
+// class of bug as the placeEnd newline case above: bytes preserved, semantics
+// destroyed. The offset comes from render.FrontmatterEnd, the one parser
+// render.Splice's own top placement already uses.
+func TestApplyPlacementAboveStaysBelowFrontmatter(t *testing.T) {
+	cases := []struct {
+		name, existing, want string
+	}{
+		{
+			"frontmatter",
+			"---\ntitle: X\n---\nteam rules\n",
+			"---\ntitle: X\n---\n" + render.Placeholder + "\nteam rules\n",
+		},
+		{
+			"frontmatter and h1",
+			"---\ntitle: X\n---\n# Rules\n\nteam\n",
+			"---\ntitle: X\n---\n" + render.Placeholder + "\n# Rules\n\nteam\n",
+		},
+		{
+			// An unterminated fence is not frontmatter, so there is nothing
+			// to stay below: the marker goes at byte 0, as before.
+			"unterminated frontmatter fence",
+			"---\ntitle: X\n# Rules\n",
+			render.Placeholder + "\n---\ntitle: X\n# Rules\n",
+		},
+		{
+			// The fence itself has no trailing newline: the marker must
+			// still start its own line rather than glue onto "---".
+			"frontmatter with no trailing newline",
+			"---\ntitle: X\n---",
+			"---\ntitle: X\n---\n" + render.Placeholder + "\n",
+		},
+		{
+			"no frontmatter at all",
+			"# Rules\n\nteam\n",
+			render.Placeholder + "\n# Rules\n\nteam\n",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeFiles(t, root, map[string]string{"CLAUDE.md": tc.existing})
+			d := Detected{Target: render.TargetClaude, Path: "CLAUDE.md"}
+			if err := applyPlacement(root, d, placeAbove); err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(filepath.Join(root, "CLAUDE.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != tc.want {
+				t.Errorf("got  %q\nwant %q", got, tc.want)
+			}
+			// Frontmatter that survived the marker must still be at byte 0,
+			// which is the whole point: the bytes being present is not the
+			// property under test.
+			if strings.HasPrefix(tc.existing, "---\n") && strings.Contains(tc.existing, "\n---") {
+				if !strings.HasPrefix(string(got), "---\n") {
+					t.Errorf("frontmatter no longer starts the file, so it is no longer frontmatter:\n%s", got)
+				}
+			}
+			// And sync must still be able to fill the marker in place.
+			if _, err := render.Splice(got, "body\n", render.BlockMeta{Packs: []string{"p@1"}}); err != nil {
+				t.Fatalf("render.Splice rejected applyPlacement's output: %v", err)
+			}
+		})
+	}
+}
+
 // restoreFile must preserve the destination's existing permission bits
 // rather than forcing 0o644, so a user's CLAUDE.md at, say, 0o600 is not
 // silently made world-readable just because escapement wrote to it.
@@ -140,56 +214,159 @@ func TestApplyPlacementPreservesFileMode(t *testing.T) {
 	}
 }
 
-// --- initOffer: the prompt-parsing seam itself, called directly with a
-// controlled reader so no test depends on the real stdin/TTY plumbing. ---
+// --- askPlacement: the prompt itself, called directly with a controlled
+// reader so no test depends on the real stdin/TTY plumbing. ---
 
-func TestInitOfferAnswers(t *testing.T) {
-	d := Detected{Target: render.TargetClaude, Path: "CLAUDE.md"}
+func TestAskPlacementAnswers(t *testing.T) {
+	targets := []Detected{{Target: render.TargetClaude, Path: "CLAUDE.md"}}
 	cases := []struct {
 		name, input string
 		want        placement
 	}{
-		{"above", "a\n", placeAbove},
-		{"end", "e\n", placeEnd},
-		{"keep", "k\n", placeDefault},
-		{"empty", "\n", placeDefault},
-		{"unrecognized", "zzz\n", placeDefault},
-		{"eof no newline", "a", placeAbove},
+		{"yes then above", "y\na\n", placeAbove},
+		{"yes then end", "y\ne\n", placeEnd},
+		{"yes spelled out", "yes\ne\n", placeEnd},
+		{"uppercase yes", "Y\nA\n", placeAbove},
+		{"declined", "n\n", placeDefault},
+		{"empty declines", "\n", placeDefault},
+		{"unrecognized gate answer declines", "zzz\n", placeDefault},
+		{"eof declines", "", placeDefault},
+		{"yes then eof", "y\n", placeDefault},
+		{"yes then unrecognized position", "y\nq\n", placeDefault},
+		{"eof after yes with no newline", "y", placeDefault},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			var out bytes.Buffer
-			got := initOffer(&out, strings.NewReader(tc.input), true, d)
+			got := askPlacement(&out, bufio.NewReader(strings.NewReader(tc.input)), targets, false)
 			if got != tc.want {
-				t.Errorf("initOffer(%q) = %q, want %q", tc.input, got, tc.want)
+				t.Errorf("askPlacement(%q) = %q, want %q", tc.input, got, tc.want)
 			}
-			if out.Len() == 0 {
-				t.Error("an interactive offer must print the prompt")
+			if !strings.Contains(out.String(), "Place the marker now? [y/N]") {
+				t.Errorf("the gate must always be printed, got:\n%s", out.String())
+			}
+			asked := strings.Contains(out.String(), "[a] above the title")
+			if wantAsked := strings.HasPrefix(strings.ToLower(tc.input), "y"); asked != wantAsked {
+				t.Errorf("position question printed = %v, want %v:\n%s", asked, wantAsked, out.String())
 			}
 		})
 	}
 }
 
-func TestInitOfferNonInteractiveIgnoresInputAndPrintsNothing(t *testing.T) {
-	d := Detected{Target: render.TargetClaude, Path: "CLAUDE.md"}
-	var out bytes.Buffer
-	// The reader offers "a" (place above); a non-interactive call must never
-	// read it and must never print the prompt that would ask for it.
-	got := initOffer(&out, strings.NewReader("a\n"), false, d)
-	if got != placeDefault {
-		t.Errorf("non-interactive initOffer = %q, want placeDefault", got)
+// The gate is asked once for the whole run, not once per file, and its one
+// position answer names every file it will apply to.
+func TestAskPlacementAsksOnceForAllFiles(t *testing.T) {
+	targets := []Detected{
+		{Target: render.TargetClaude, Path: "CLAUDE.md"},
+		{Target: render.TargetAgents, Path: "AGENTS.md"},
+		{Target: render.TargetGemini, Path: "GEMINI.md"},
+		{Target: render.TargetGovernance, Path: "GOVERNANCE.md"},
 	}
-	if out.Len() != 0 {
-		t.Errorf("non-interactive initOffer must not print a prompt: %q", out.String())
+	var out bytes.Buffer
+	if got := askPlacement(&out, bufio.NewReader(strings.NewReader("y\na\n")), targets, false); got != placeAbove {
+		t.Fatalf("got %q, want placeAbove", got)
+	}
+	s := out.String()
+	if n := strings.Count(s, "Place the marker now?"); n != 1 {
+		t.Errorf("the gate must be asked exactly once for %d files, asked %d times:\n%s", len(targets), n, s)
+	}
+	if n := strings.Count(s, "[a] above the title"); n != 1 {
+		t.Errorf("the position must be asked exactly once, asked %d times:\n%s", n, s)
+	}
+	for _, d := range targets {
+		if !strings.Contains(s, "  "+d.Path+"\n") {
+			t.Errorf("the gate must list %s as a file it will write to:\n%s", d.Path, s)
+		}
+	}
+	if !strings.Contains(s, "all 4 files") {
+		t.Errorf("the position question should say the answer applies to all of them:\n%s", s)
+	}
+}
+
+// Item C: in a directory git cannot undo a write in, the gate says so rather
+// than treating "no version control at all" as the safest case of all.
+func TestAskPlacementWarnsWhenNoGitUndo(t *testing.T) {
+	targets := []Detected{{Target: render.TargetClaude, Path: "CLAUDE.md"}}
+	var warned, quiet bytes.Buffer
+	askPlacement(&warned, bufio.NewReader(strings.NewReader("n\n")), targets, true)
+	askPlacement(&quiet, bufio.NewReader(strings.NewReader("n\n")), targets, false)
+	if !strings.Contains(warned.String(), "not a git repository") || !strings.Contains(warned.String(), "no undo") {
+		t.Errorf("expected a no-undo warning at the gate, got:\n%s", warned.String())
+	}
+	if strings.Contains(quiet.String(), "not a git repository") {
+		t.Errorf("a real git repo must not be warned about:\n%s", quiet.String())
+	}
+}
+
+// The gate and the position question read from ONE bufio.Reader. A fresh
+// reader per question would buffer past "y\n" and discard the "a\n" behind
+// it, silently turning every piped or pasted answer into a decline. This
+// fails if that reuse is ever dropped.
+func TestAskPlacementReusesOneReaderAcrossBothQuestions(t *testing.T) {
+	targets := []Detected{{Target: render.TargetClaude, Path: "CLAUDE.md"}}
+	var out bytes.Buffer
+	// One plain reader holding both answers at once, exactly as a pipe or a
+	// paste delivers them.
+	if got := askPlacement(&out, bufio.NewReader(strings.NewReader("y\ne\n")), targets, false); got != placeEnd {
+		t.Errorf("got %q, want placeEnd: the position answer buffered behind the gate answer was lost", got)
+	}
+}
+
+// infiniteReader never yields a newline and never ends, standing in for
+// `esc init < /dev/zero`, which tty.IsInteractive cannot distinguish from a
+// terminal (a character device that simply never sends '\n').
+type infiniteReader struct{ b byte }
+
+func (r infiniteReader) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = r.b
+	}
+	return len(p), nil
+}
+
+// Without the byte bound this hangs forever instead of failing, which is the
+// honest test: the guard's whole job is that the read terminates.
+func TestReadBoundedLineStopsAtTheBound(t *testing.T) {
+	got := readBoundedLine(bufio.NewReader(infiniteReader{'y'}), maxOfferAnswerBytes)
+	if len(got) != maxOfferAnswerBytes {
+		t.Errorf("read %d bytes, want the bound of %d", len(got), maxOfferAnswerBytes)
+	}
+}
+
+// A stream that never terminates a line must not be read as consent: the
+// truncated answer matches nothing, so the gate declines.
+func TestAskPlacementUnterminatedStreamDeclines(t *testing.T) {
+	targets := []Detected{{Target: render.TargetClaude, Path: "CLAUDE.md"}}
+	var out bytes.Buffer
+	if got := askPlacement(&out, bufio.NewReader(infiniteReader{'y'}), targets, false); got != placeDefault {
+		t.Errorf("got %q, want placeDefault for an answer that never ends", got)
 	}
 }
 
 func TestInitInteractiveYesForcesFalse(t *testing.T) {
-	// Go's short-circuit && guarantees --yes short-circuits before the real
-	// TTY check runs, so this holds regardless of the test's own stdin.
-	if got := initInteractive(true); got {
+	// --yes returns before the seam is consulted at all, so this holds
+	// regardless of the test process's own stdin. Pinned by making the seam
+	// fail the test if it is reached.
+	old := initInput
+	initInput = func() (io.Reader, bool) {
+		t.Error("--yes must not consult the interactivity seam at all")
+		return strings.NewReader("y\na\n"), true
+	}
+	t.Cleanup(func() { initInput = old })
+	if _, got := initInteractive(true); got {
 		t.Error("--yes must force non-interactive")
 	}
+}
+
+// fakeStdin makes a run interactive with a scripted answer, driving the real
+// prompt code (gate parsing, position parsing, reader reuse) end to end
+// instead of stubbing past it.
+func fakeStdin(t *testing.T, input string) {
+	t.Helper()
+	old := initInput
+	r := strings.NewReader(input)
+	initInput = func() (io.Reader, bool) { return r, true }
+	t.Cleanup(func() { initInput = old })
 }
 
 // tty.IsInteractive itself (including the /dev/null exclusion this package
@@ -359,10 +536,7 @@ func TestOfferPlacementSurfacesWriteFailure(t *testing.T) {
 	initGitRepo(t, root)
 	commitAll(t, root, "init")
 	d := Detected{Target: render.TargetClaude, Path: "CLAUDE.md"}
-
-	old := initOffer
-	initOffer = func(w io.Writer, in io.Reader, interactive bool, det Detected) placement { return placeAbove }
-	t.Cleanup(func() { initOffer = old })
+	fakeStdin(t, "y\na\n")
 
 	// applyPlacement's atomic write needs to create a temp file in root;
 	// removing write permission on root makes that fail, without touching
@@ -402,9 +576,7 @@ func TestInitOfferWriteFailureIsVisibleAndNonZero(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	old := initOffer
-	initOffer = func(w io.Writer, in io.Reader, interactive bool, d Detected) placement { return placeAbove }
-	t.Cleanup(func() { initOffer = old })
+	fakeStdin(t, "y\na\n")
 
 	if err := os.Chmod(root, 0o500); err != nil {
 		t.Fatal(err)
@@ -435,6 +607,10 @@ func TestInitExitsZeroWhenGitCheckFailsButConfigWritten(t *testing.T) {
 	root := t.TempDir()
 	writeFiles(t, root, map[string]string{"CLAUDE.md": "rules\n"})
 	t.Setenv("PATH", t.TempDir()) // no git binary anywhere on PATH
+	// Interactive, because a non-interactive run now returns before doing
+	// any git work at all (there is nothing it could write); the git check
+	// only runs on the path where the offer is about to be made.
+	fakeStdin(t, "y\na\n")
 
 	code, out := run(t, root, "init")
 	if code != 0 {
@@ -443,8 +619,12 @@ func TestInitExitsZeroWhenGitCheckFailsButConfigWritten(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, ".escapement", "config.yaml")); err != nil {
 		t.Errorf("config scaffolding should still have succeeded: %v", err)
 	}
-	if !strings.Contains(out, "CLAUDE.md") || !strings.Contains(out, "could not check git status") {
+	if !strings.Contains(out, "could not check git status") {
 		t.Errorf("the skip should still be reported, got:\n%s", out)
+	}
+	after, _ := os.ReadFile(filepath.Join(root, "CLAUDE.md"))
+	if string(after) != "rules\n" {
+		t.Errorf("nothing may be written when the git check could not run:\n%s", after)
 	}
 }
 
@@ -453,6 +633,70 @@ func TestInitHelpFlagExitsUsage(t *testing.T) {
 	code, _ := run(t, root, "init", "-h")
 	if code != 2 {
 		t.Errorf("esc init -h should exit 2 (usage), got %d", code)
+	}
+}
+
+// `esc init /some/other/repo` used to exit 0 and scaffold the CURRENT
+// directory instead, which is how a live .escapement/ once landed in this
+// project's own repo. A positional argument is a usage error.
+func TestInitRejectsPositionalArguments(t *testing.T) {
+	root := t.TempDir()
+	other := t.TempDir()
+	code, out := run(t, root, "init", other)
+	if code != 2 {
+		t.Fatalf("esc init <path> should exit 2 (usage), got %d:\n%s", code, out)
+	}
+	if !strings.Contains(out, "takes no arguments") {
+		t.Errorf("the error should say why, got:\n%s", out)
+	}
+	for _, dir := range []string{root, other} {
+		if _, err := os.Stat(filepath.Join(dir, ".escapement")); !os.IsNotExist(err) {
+			t.Errorf("a rejected init must not scaffold anything in %s (err=%v)", dir, err)
+		}
+	}
+}
+
+// The whole offer for the worst case: all six targets detected, four of them
+// eligible files. One gate, one position question, one answer applied to
+// every file. Pinned as exact output, since the entire point of the reshape
+// was what this reads like.
+func TestInitOfferFullFlowForSixTargets(t *testing.T) {
+	root := t.TempDir()
+	writeFiles(t, root, map[string]string{
+		"CLAUDE.md":                      "# P\n\nrules\n",
+		"AGENTS.md":                      "# P\n\nrules\n",
+		"GEMINI.md":                      "# P\n\nrules\n",
+		"GOVERNANCE.md":                  "# P\n\nrules\n",
+		".mcp.json":                      `{"mcpServers":{}}`,
+		".claude/skills/team-x/SKILL.md": "---\nname: team-x\n---\n",
+	})
+	initGitRepo(t, root)
+	commitAll(t, root, "init")
+	fakeStdin(t, "y\na\n")
+
+	code, out := run(t, root, "init")
+	if code != 0 {
+		t.Fatalf("init exit %d:\n%s", code, out)
+	}
+	wantOffer := "\nOptional: write " + render.Placeholder + " into all 4 files now, to choose where the block lands.\n" +
+		"  CLAUDE.md\n  AGENTS.md\n  GEMINI.md\n  GOVERNANCE.md\n" +
+		"Place the marker now? [y/N] " +
+		"Where should it go in all 4 files?\n" +
+		"  [a] above the title, the first thing in the file (below any frontmatter)\n" +
+		"  [e] end of the file\n> "
+	if !strings.HasSuffix(out, wantOffer) {
+		t.Errorf("offer output =\n%q\nwant suffix\n%q", out, wantOffer)
+	}
+	// mcp and skills are never offered a marker, and the one answer reached
+	// every eligible file.
+	for _, name := range []string{"CLAUDE.md", "AGENTS.md", "GEMINI.md", "GOVERNANCE.md"} {
+		content, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(content) != render.Placeholder+"\n# P\n\nrules\n" {
+			t.Errorf("%s: one answer must apply to every eligible file, got:\n%q", name, content)
+		}
 	}
 }
 
@@ -491,14 +735,13 @@ func TestInitYesWritesNothing(t *testing.T) {
 	}
 }
 
-func TestInitOfferAppliesInjectedAnswer(t *testing.T) {
+func TestInitOfferAppliesTheAnswer(t *testing.T) {
 	cases := []struct {
-		name string
-		p    placement
-		want func(content string) bool
+		name, input string
+		want        func(content string) bool
 	}{
-		{"above", placeAbove, func(c string) bool { return strings.HasPrefix(c, render.Placeholder+"\n") }},
-		{"end", placeEnd, func(c string) bool { return strings.HasSuffix(c, render.Placeholder+"\n") }},
+		{"above", "y\na\n", func(c string) bool { return strings.HasPrefix(c, render.Placeholder+"\n") }},
+		{"end", "y\ne\n", func(c string) bool { return strings.HasSuffix(c, render.Placeholder+"\n") }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -506,10 +749,7 @@ func TestInitOfferAppliesInjectedAnswer(t *testing.T) {
 			writeFiles(t, root, map[string]string{"CLAUDE.md": "# P\n\nrules\n"})
 			initGitRepo(t, root)
 			commitAll(t, root, "init")
-
-			old := initOffer
-			initOffer = func(w io.Writer, in io.Reader, interactive bool, d Detected) placement { return tc.p }
-			t.Cleanup(func() { initOffer = old })
+			fakeStdin(t, tc.input)
 
 			code, out := run(t, root, "init")
 			if code != 0 {
@@ -520,7 +760,7 @@ func TestInitOfferAppliesInjectedAnswer(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !tc.want(string(content)) {
-				t.Errorf("placement %q not applied as expected:\n%s", tc.p, content)
+				t.Errorf("answer %q not applied as expected:\n%s", tc.input, content)
 			}
 			if strings.Count(string(content), render.Placeholder) != 1 {
 				t.Errorf("placeholder must appear exactly once:\n%s", content)
@@ -529,30 +769,81 @@ func TestInitOfferAppliesInjectedAnswer(t *testing.T) {
 	}
 }
 
-// The seam's own parsing of "k", empty, and unrecognized input is covered
-// directly by TestInitOfferAnswers (no TTY to fake through Run() without a
-// pty dependency, which the single-dependency policy rules out). This
-// covers the other half: cmdInit's wiring must actually apply whatever
-// initOffer returns, and placeDefault in particular must produce zero
-// bytes written, end to end.
-func TestInitOfferDefaultWritesNothingThroughRun(t *testing.T) {
+// Declining the gate is the recommended answer and the default, and it must
+// produce zero bytes written, end to end, through the real prompt.
+func TestInitDeclinedGateWritesNothingThroughRun(t *testing.T) {
+	for _, input := range []string{"n\n", "\n", "", "zzz\n"} {
+		t.Run(fmt.Sprintf("%q", input), func(t *testing.T) {
+			root := t.TempDir()
+			writeFiles(t, root, map[string]string{"CLAUDE.md": "rules\n"})
+			initGitRepo(t, root)
+			commitAll(t, root, "init")
+			fakeStdin(t, input)
+
+			before, _ := os.ReadFile(filepath.Join(root, "CLAUDE.md"))
+			code, out := run(t, root, "init")
+			if code != 0 {
+				t.Fatalf("init exit %d:\n%s", code, out)
+			}
+			after, _ := os.ReadFile(filepath.Join(root, "CLAUDE.md"))
+			if string(before) != string(after) {
+				t.Errorf("a declined gate must not modify the file, input %q", input)
+			}
+		})
+	}
+}
+
+// Item C, the other half of the honest resolution: in a plain directory with
+// no git at all, the write is still offered (running init there is
+// legitimate) but the gate states there is no undo.
+func TestInitWarnsThereIsNoUndoOutsideAGitRepo(t *testing.T) {
 	root := t.TempDir()
-	writeFiles(t, root, map[string]string{"CLAUDE.md": "rules\n"})
-	initGitRepo(t, root)
-	commitAll(t, root, "init")
+	writeFiles(t, root, map[string]string{"CLAUDE.md": "# P\n\nrules\n"})
+	fakeStdin(t, "y\ne\n")
 
-	old := initOffer
-	initOffer = func(w io.Writer, in io.Reader, interactive bool, d Detected) placement { return placeDefault }
-	t.Cleanup(func() { initOffer = old })
-
-	before, _ := os.ReadFile(filepath.Join(root, "CLAUDE.md"))
 	code, out := run(t, root, "init")
 	if code != 0 {
 		t.Fatalf("init exit %d:\n%s", code, out)
 	}
-	after, _ := os.ReadFile(filepath.Join(root, "CLAUDE.md"))
-	if string(before) != string(after) {
-		t.Error("placeDefault must not modify the file")
+	if !strings.Contains(out, "not a git repository") || !strings.Contains(out, "no undo") {
+		t.Errorf("the gate must say there is no undo here, got:\n%s", out)
+	}
+	content, _ := os.ReadFile(filepath.Join(root, "CLAUDE.md"))
+	if !strings.HasSuffix(string(content), render.Placeholder+"\n") {
+		t.Errorf("an explicit yes must still be honored outside a git repo:\n%s", content)
+	}
+}
+
+// Item D: a non-interactive run must not do git work or print per-file skip
+// noise about a prompt that was never going to be shown and a write that was
+// never contemplated.
+func TestInitNonInteractivePrintsNoOfferNoise(t *testing.T) {
+	root := t.TempDir()
+	writeFiles(t, root, map[string]string{
+		"CLAUDE.md":     "# P\n\nrules\n",
+		"AGENTS.md":     "# P\n\nrules\n",
+		"GEMINI.md":     "# P\n\nrules\n",
+		"GOVERNANCE.md": "# P\n\nrules\n",
+	})
+	initGitRepo(t, root)
+	commitAll(t, root, "init")
+	// Dirty every file: pre-fix, this printed four skip lines and ran eight
+	// git subprocesses for a prompt --yes had already ruled out.
+	writeFiles(t, root, map[string]string{
+		"CLAUDE.md":     "# P\n\nrules\nmore\n",
+		"AGENTS.md":     "# P\n\nrules\nmore\n",
+		"GEMINI.md":     "# P\n\nrules\nmore\n",
+		"GOVERNANCE.md": "# P\n\nrules\nmore\n",
+	})
+
+	code, out := run(t, root, "init", "--yes")
+	if code != 0 {
+		t.Fatalf("init --yes exit %d:\n%s", code, out)
+	}
+	for _, noise := range []string{"skipping the placement offer", "Place the marker now?"} {
+		if strings.Contains(out, noise) {
+			t.Errorf("--yes must not print %q:\n%s", noise, out)
+		}
 	}
 }
 
@@ -566,10 +857,7 @@ func TestInitSkipsDirtyFileButProcessesOthers(t *testing.T) {
 	commitAll(t, root, "init")
 	// Dirty CLAUDE.md after the commit: an uncommitted local edit.
 	writeFiles(t, root, map[string]string{"CLAUDE.md": "# P\n\nrules\nmore\n"})
-
-	old := initOffer
-	initOffer = func(w io.Writer, in io.Reader, interactive bool, d Detected) placement { return placeAbove }
-	t.Cleanup(func() { initOffer = old })
+	fakeStdin(t, "y\na\n")
 
 	dirtyBefore, _ := os.ReadFile(filepath.Join(root, "CLAUDE.md"))
 	code, out := run(t, root, "init")
@@ -610,21 +898,15 @@ func TestInitNoOfferWhenAlreadyPlaced(t *testing.T) {
 			initGitRepo(t, root)
 			commitAll(t, root, "init")
 
-			called := false
-			old := initOffer
-			initOffer = func(w io.Writer, in io.Reader, interactive bool, d Detected) placement {
-				called = true
-				return placeEnd
-			}
-			t.Cleanup(func() { initOffer = old })
+			fakeStdin(t, "y\ne\n")
 
 			before, _ := os.ReadFile(filepath.Join(root, "CLAUDE.md"))
 			code, out := run(t, root, "init")
 			if code != 0 {
 				t.Fatalf("init exit %d:\n%s", code, out)
 			}
-			if called {
-				t.Error("a file that already has a block or placeholder must not be offered")
+			if strings.Contains(out, "Place the marker now?") {
+				t.Errorf("a file that already has a block or placeholder must not be offered:\n%s", out)
 			}
 			after, _ := os.ReadFile(filepath.Join(root, "CLAUDE.md"))
 			if string(before) != string(after) {
@@ -640,10 +922,7 @@ func TestInitOfferPlacementThenSyncFillsIt(t *testing.T) {
 	writeFiles(t, root, map[string]string{"CLAUDE.md": "# Team notes\n\nOur build uses pnpm.\n"})
 	initGitRepo(t, root)
 	commitAll(t, root, "init")
-
-	old := initOffer
-	initOffer = func(w io.Writer, in io.Reader, interactive bool, d Detected) placement { return placeEnd }
-	t.Cleanup(func() { initOffer = old })
+	fakeStdin(t, "y\ne\n")
 
 	if code, out := run(t, root, "init"); code != 0 {
 		t.Fatalf("init exit %d:\n%s", code, out)

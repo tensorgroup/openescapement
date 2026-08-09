@@ -18,27 +18,33 @@ import (
 )
 
 // placement is where `esc init` offers to put the managed-block placeholder
-// in a file it detected without one already.
+// in the files it detected without one already.
 //
-// There are exactly three options, not four. The design spec's "top
-// (recommended)" and "after the leading title" are the same position:
-// render.Splice's own top placement already inserts after any leading YAML
-// frontmatter and a leading H1, so offering both would mean the recommended
-// choice writes a placeholder that changes nothing. Collapsing them removes
-// a distinction a user would otherwise have to think about for no gain, and
-// it has a consequence worth keeping: placeAbove writes at byte 0 and
-// placeDefault writes nothing, so neither needs any copy of the
-// frontmatter-and-H1 parsing logic. That logic stays solely in
-// render.Splice (see insertAt).
+// The offer is one gate ("place the marker now?", default no) and, only if
+// that gate is accepted, one position question whose answer applies to every
+// eligible file. It is deliberately not asked per file. The recommended
+// answer is to write nothing, and declining, an empty answer, EOF,
+// unrecognized input, a non-interactive run and --yes all converge on that
+// same outcome; asking that same question once per detected file meant a
+// repo with four instruction files got four consecutive prompts that each
+// recommended doing nothing, immediately after the explanation had already
+// said how to place the marker by hand. A team that wants policy to be
+// literally first in the file wants that in every one of its instruction
+// files, so one position answer for all of them loses nothing real.
+//
+// The former third option ("keep the default", which wrote nothing) is gone
+// because declining the gate IS keeping the default.
 type placement string
 
 const (
 	// placeDefault keeps the shipped behavior: the block lands at the top,
-	// after any frontmatter and title, at first sync. It writes nothing —
-	// the same outcome as a declined, empty, or unrecognized answer.
-	placeDefault placement = "k"
-	// placeAbove writes the placeholder at byte 0, above the title, for a
-	// team that wants policy to be the literal first thing in the file.
+	// after any frontmatter and title, at first sync. It writes nothing, and
+	// it is what every path other than an explicit yes-plus-position
+	// produces.
+	placeDefault placement = ""
+	// placeAbove writes the placeholder above the title (but below any YAML
+	// frontmatter, see applyPlacement) for a team that wants policy to be
+	// the first thing in the file a reader or an agent meets.
 	placeAbove placement = "a"
 	// placeEnd writes the placeholder at the end of the file.
 	placeEnd placement = "e"
@@ -53,40 +59,69 @@ const (
 // single character, so this cap is generous but finite.
 const maxOfferAnswerBytes = 64
 
-// initOffer is the placement-prompt seam: production reads a real TTY, tests
-// inject a deterministic reader — or replace this var outright, the same
-// pattern maybeUpdates uses — so no test can ever block on real stdin.
-var initOffer = func(w io.Writer, in io.Reader, interactive bool, d Detected) placement {
-	if !interactive {
+// initInput is the interactive seam for the whole placement offer:
+// production prompts on the real stdin and asks the real TTY whether it is
+// one; tests inject a deterministic reader and force the flag, so no test
+// blocks on real stdin and the prompt's own parsing (the gate, the position
+// question, the read bound, and the reader reuse between the two questions)
+// is exercised as written rather than stubbed past. Same seam pattern as
+// maybeUpdates.
+var initInput = func() (io.Reader, bool) { return os.Stdin, tty.IsInteractive(os.Stdin) }
+
+// askPlacement runs the offer: one gate, then one position question asked
+// only if the gate was accepted, with the answer applying to every file in
+// targets. Both reads come from the same *bufio.Reader (see offerPlacement)
+// so the second question cannot lose input the first one buffered past.
+//
+// noGitUndo makes the gate say so when root is not a git repository git will
+// vouch for. Everywhere else init refuses to write what git cannot undo (a
+// file with uncommitted changes is skipped for exactly that reason), but in
+// a plain directory there is no undo at all to lean on, and silently
+// treating that as the safest case of all would be backwards. The write is
+// still offered, since a directory with no version control is a legitimate
+// place to run init, but the user opts in knowing.
+func askPlacement(w io.Writer, br *bufio.Reader, targets []Detected, noGitUndo bool) placement {
+	fmt.Fprintf(w, "\nOptional: write %s into %s now, to choose where the block lands.\n",
+		render.Placeholder, describeTargets(targets))
+	for _, d := range targets {
+		fmt.Fprintf(w, "  %s\n", d.Path)
+	}
+	if noGitUndo {
+		fmt.Fprintln(w, "Note: this directory is not a git repository, so there is no undo for that write.")
+	}
+	fmt.Fprint(w, "Place the marker now? [y/N] ")
+	switch strings.ToLower(strings.TrimSpace(readBoundedLine(br, maxOfferAnswerBytes))) {
+	case "y", "yes":
+	default:
+		// No, empty, EOF/Ctrl-D, the read bound, and anything unrecognized
+		// all land here: the recommended answer, and the one that writes
+		// nothing. Never guess, never block, never grow without limit.
 		return placeDefault
 	}
-	fmt.Fprintf(w, "Where should the managed block go in %s?\n", d.Path)
-	fmt.Fprintln(w, "  [k] keep default: top of the file, below any title (recommended)")
-	fmt.Fprintln(w, "  [a] above the title, the very first thing in the file")
+	fmt.Fprintf(w, "Where should it go in %s?\n", describeTargets(targets))
+	fmt.Fprintln(w, "  [a] above the title, the first thing in the file (below any frontmatter)")
 	fmt.Fprintln(w, "  [e] end of the file")
 	fmt.Fprint(w, "> ")
-	// A brand-new bufio.Reader wrapping a brand-new underlying reader on
-	// every call would silently swallow buffered-ahead bytes the moment
-	// init offers more than one file in a session: each fresh bufio.Reader
-	// over-reads past the first line and discards what it didn't return
-	// when it goes out of scope. Reuse the caller's *bufio.Reader when it
-	// hands us one, so buffered state survives across files in the same
-	// run; only wrap a raw reader (as direct calls and tests do) once.
-	br, ok := in.(*bufio.Reader)
-	if !ok {
-		br = bufio.NewReader(in)
-	}
-	switch strings.TrimSpace(readBoundedLine(br, maxOfferAnswerBytes)) {
+	switch strings.ToLower(strings.TrimSpace(readBoundedLine(br, maxOfferAnswerBytes))) {
 	case string(placeAbove):
 		return placeAbove
 	case string(placeEnd):
 		return placeEnd
 	default:
-		// Empty or unrecognized input returns placeDefault, same as a
-		// read error (EOF/Ctrl-D) or hitting the byte bound: never guess,
-		// never block, never grow without limit.
+		// An unrecognized position is not a licence to pick one: fall back
+		// to writing nothing, the same as declining the gate.
 		return placeDefault
 	}
+}
+
+// describeTargets names the files the one position answer will apply to:
+// the single file by name, or a count, since listing four paths inline in
+// two separate sentences reads worse than the list printed above the gate.
+func describeTargets(targets []Detected) string {
+	if len(targets) == 1 {
+		return targets[0].Path
+	}
+	return fmt.Sprintf("all %d files", len(targets))
 }
 
 // readBoundedLine reads up to max bytes from br looking for '\n' and returns
@@ -107,9 +142,15 @@ func readBoundedLine(br *bufio.Reader, max int) string {
 // applyPlacement writes render.Placeholder into the detected file at the
 // chosen position, preserving every original byte. placeDefault writes
 // nothing: sync's own top placement (render.Splice) already produces the
-// outcome the offer promised for that choice, so there is nothing to write
-// and no parsing of "where does the top of this file begin" here — that
-// logic stays solely in render.Splice.
+// outcome the offer promised for that choice, so there is nothing to write.
+//
+// placeAbove is "above the title", not "at byte 0". Writing at byte 0
+// preserves every byte of a file that opens with YAML frontmatter and still
+// destroys it: frontmatter is only frontmatter when it starts the file, so a
+// marker above it demotes `---\ntitle: x\n---` to a setext heading plus a
+// horizontal rule. The offset comes from render.FrontmatterEnd, the same
+// parser render.Splice's own top placement uses, so there is exactly one
+// answer in the codebase to "where does the frontmatter end".
 func applyPlacement(root string, d Detected, p placement) error {
 	if p == placeDefault {
 		return nil
@@ -119,31 +160,31 @@ func applyPlacement(root string, d Detected, p placement) error {
 	if err != nil {
 		return err
 	}
-	var out []byte
+	var at int
 	switch p {
 	case placeAbove:
-		// Byte 0, above everything — no frontmatter/title parsing needed.
-		out = append([]byte(render.Placeholder+"\n"), existing...)
+		at = render.FrontmatterEnd(existing)
 	case placeEnd:
-		// Mirrors render.Splice's own append-at-end guard (block.go's
-		// Splice, the len(s)==at case): only insert a separating newline
-		// when the file doesn't already end in one. Without this, a file
-		// with no trailing newline (or an empty file) would get the
-		// placeholder glued onto its last byte — e.g. "rules" would become
-		// "rules<!-- escapement:block -->", and when sync later substitutes
-		// the block at that exact index, the managed block's begin marker
-		// lands mid-line, immediately after "rules" with no separator.
-		sep := ""
-		if len(existing) > 0 && existing[len(existing)-1] != '\n' {
-			sep = "\n"
-		}
-		out = make([]byte, 0, len(existing)+len(sep)+len(render.Placeholder)+1)
-		out = append(out, existing...)
-		out = append(out, sep...)
-		out = append(out, []byte(render.Placeholder+"\n")...)
+		at = len(existing)
 	default:
 		return fmt.Errorf("applyPlacement: unknown placement %q", p)
 	}
+	// Mirrors render.Splice's own append-at-end guard (block.go's Splice,
+	// the len(s)==at case), generalized to any insertion point: the marker
+	// must start its own line. Without this, a file with no trailing newline
+	// (or one whose frontmatter fence has none) would get the placeholder
+	// glued onto the preceding byte — "rules" becoming
+	// "rules<!-- escapement:block -->" — and when sync later substitutes the
+	// block at that exact index, the begin marker lands mid-line.
+	sep := ""
+	if at > 0 && existing[at-1] != '\n' {
+		sep = "\n"
+	}
+	out := make([]byte, 0, len(existing)+len(sep)+len(render.Placeholder)+1)
+	out = append(out, existing[:at]...)
+	out = append(out, sep...)
+	out = append(out, render.Placeholder+"\n"...)
+	out = append(out, existing[at:]...)
 	// Same atomic-write discipline as restoreFile: temp file + rename in the
 	// destination directory (preserving the original file's mode), so a
 	// crash mid-write never leaves a half-written instruction file behind
@@ -216,6 +257,13 @@ func fileIsClean(ctx context.Context, root, path string) (bool, error) {
 	if !inRepo {
 		return true, nil
 	}
+	return gitFileIsClean(ctx, root, path)
+}
+
+// gitFileIsClean is fileIsClean's second half, split out so offerPlacement
+// can ask the repo-ness question once for the whole run instead of paying a
+// `git rev-parse` subprocess per detected file.
+func gitFileIsClean(ctx context.Context, root, path string) (bool, error) {
 	cmd := gitCommand(ctx, root, "status", "--porcelain", "--", path)
 	var out, errOut bytes.Buffer
 	cmd.Stdout = &out
@@ -226,31 +274,41 @@ func fileIsClean(ctx context.Context, root, path string) (bool, error) {
 	return out.Len() == 0, nil
 }
 
-// initInteractive decides whether `esc init` should prompt at all. --yes
-// forces this false even on a real TTY: it exists so a scripted run never
-// stalls waiting for input, not so it can accept a file write — the
-// recommended answer (placeDefault) never writes one anyway. Go's
-// short-circuit && guarantees this regardless of the actual terminal, which
-// is what makes it safe to pin with a unit test that doesn't control stdin.
-func initInteractive(yes bool) bool {
-	return !yes && tty.IsInteractive(os.Stdin)
+// initInteractive decides whether `esc init` should prompt at all, and with
+// what reader. --yes forces this false even on a real TTY: it exists so a
+// scripted run never stalls waiting for input, not so it can accept a file
+// write — the recommended answer never writes one anyway. The early return
+// on yes also guarantees the seam is not consulted at all, which is what
+// makes it safe to pin with a unit test that doesn't control stdin.
+func initInteractive(yes bool) (io.Reader, bool) {
+	if yes {
+		return nil, false
+	}
+	return initInput()
 }
 
-// offerPlacement asks, for each detected file that could still take the
-// placeholder, where the managed block should go, and applies the answer.
-// Called only after detection and config scaffolding are already written
-// (see cmdInit): the offer can only add a placeholder, never undoes
-// anything, so a user who declines everything still ends up with a working
-// config.
+// offerPlacement asks once whether to write the placeholder marker, once
+// where it should go, and applies that one answer to every eligible detected
+// file. Called only after detection and config scaffolding are already
+// written (see cmdInit): the offer can only add a placeholder, never undoes
+// anything, so a user who declines still ends up with a working config.
+//
+// It returns immediately when the run is not interactive. Nothing below the
+// gate can write a byte in that case, so doing the work anyway meant `esc
+// init --yes` spending up to one git subprocess per detected file and
+// printing per-file "skipping the placement offer" lines about a prompt that
+// was never going to be shown.
 //
 // A file already carrying a managed block or a placeholder is never
 // offered — detectExisting already found the right sync clause for it, and
 // writing a second placeholder or a stray marker into a file that already
 // has one would just corrupt it. A file with uncommitted changes is
-// reported (on stdout: expected, not a failure) and skipped even when
-// interactive, because git is the undo mechanism for anything init writes,
-// and init must not write somewhere git cannot undo it; the other detected
-// files are still processed.
+// reported (on stdout: expected, not a failure) and left out of the offer,
+// because git is the undo mechanism for anything init writes; the other
+// detected files are still offered. Where there is no git at all, the gate
+// says so instead (see askPlacement): the honest statement of the rule is
+// that init does not write over changes git cannot restore, and does not
+// write anywhere at all without being asked.
 //
 // A placement write actually failing (applyPlacement returning an error) is
 // different from a routine skip: it is collected and returned rather than
@@ -269,30 +327,55 @@ func initInteractive(yes bool) bool {
 // couldn't run. Each detected file is still attempted regardless of an
 // earlier one's outcome, failure or not.
 func offerPlacement(ctx context.Context, root string, stdout io.Writer, detected []Detected, yes bool) error {
-	interactive := initInteractive(yes)
-	var br *bufio.Reader
-	if interactive {
-		br = bufio.NewReader(os.Stdin)
+	in, interactive := initInteractive(yes)
+	if !interactive {
+		return nil
 	}
-	var errs []error
+	// One bufio.Reader for the whole offer. A fresh one per question would
+	// silently swallow whatever the first read buffered past its newline,
+	// losing the position answer whenever both arrive together (a pasted
+	// "y\na\n", or any piped input).
+	br := bufio.NewReader(in)
+
+	// The repo-ness question is asked once for the whole offer, not once per
+	// file: it is the same answer every time, it decides what the gate says
+	// about undo, and a failure to answer it (git missing from PATH) is a
+	// property of the environment rather than of any one file, so it is
+	// reported once and skips the offer entirely at exit 0 — init's config
+	// scaffolding already succeeded, and a git-check failure must not turn
+	// that into a non-zero exit.
+	inRepo, err := isGitRepo(ctx, root)
+	if err != nil {
+		fmt.Fprintf(stdout, "  could not check git status, skipping the placement offer: %v\n", err)
+		return nil
+	}
+	var eligible []Detected
 	for _, d := range orderDetected(detected) {
 		if !isFileTarget(d.Target) || d.HasBlock || d.HasPlaceholder {
 			continue
 		}
-		clean, err := fileIsClean(ctx, root, d.Path)
-		if err != nil {
-			fmt.Fprintf(stdout, "  %s: could not check git status, skipping the placement offer: %v\n", d.Path, err)
-			continue
+		if inRepo {
+			clean, err := gitFileIsClean(ctx, root, d.Path)
+			if err != nil {
+				fmt.Fprintf(stdout, "  %s: could not check git status, skipping the placement offer: %v\n", d.Path, err)
+				continue
+			}
+			if !clean {
+				fmt.Fprintf(stdout, "  %s: uncommitted changes, skipping the placement offer (git could not undo a write here)\n", d.Path)
+				continue
+			}
 		}
-		if !clean {
-			fmt.Fprintf(stdout, "  %s: uncommitted changes, skipping the placement offer (git could not undo a write here)\n", d.Path)
-			continue
-		}
-		var in io.Reader
-		if interactive {
-			in = br
-		}
-		p := initOffer(stdout, in, interactive, d)
+		eligible = append(eligible, d)
+	}
+	if len(eligible) == 0 {
+		return nil
+	}
+	p := askPlacement(stdout, br, eligible, !inRepo)
+	if p == placeDefault {
+		return nil
+	}
+	var errs []error
+	for _, d := range eligible {
 		if err := applyPlacement(root, d, p); err != nil {
 			errs = append(errs, fmt.Errorf("%s: could not write the placement marker: %w", d.Path, err))
 		}
