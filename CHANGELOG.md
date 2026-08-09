@@ -153,8 +153,12 @@ tagged releases begin.
   insert below the fence instead of above it (which silently demoted the
   frontmatter to a setext heading), and a single blank line between
   frontmatter and a leading H1 no longer stops the block from landing below
-  the title. Escapement still renders LF; a managed block converted to CRLF
-  on disk (e.g. by `core.autocrlf`) reports as altered, byte-truthfully.
+  the title. Escapement still renders LF; line endings are now treated as
+  presentation, not policy content, on the whole managed axis: a managed
+  block or a whole-file target (`GOVERNANCE.md`) converted to CRLF on disk
+  (e.g. by `core.autocrlf`) classifies in sync. A hand edit that only
+  changes line endings is therefore no longer reported; a genuine content
+  edit arriving under CRLF endings still is.
 - A whitespace-only `.mcp.json` is treated as empty instead of failing the
   sync with a JSON parse error.
 - `esc status` no longer follows a hostile lockfile path out of the repo (or

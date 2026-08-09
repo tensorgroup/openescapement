@@ -362,7 +362,10 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 			return Finding{Subject: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "file does not exist — run `esc sync`"}
 		}
 		f := Finding{Subject: a.Path, Kind: a.Kind, Local: LocalNone}
-		actual := esc.HashBytes(content)
+		// Same ruling as render.BodyHash: line endings are git's
+		// presentation, not policy content, so whole-file targets
+		// (GOVERNANCE.md) join the endings-normalized managed axis too.
+		actual := esc.HashBytes(render.NormalizeEndings(content))
 		if actual == a.Hash {
 			f.State = InSync
 			return f
