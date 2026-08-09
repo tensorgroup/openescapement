@@ -168,6 +168,29 @@ blocking a rollout; this decides open question 2 below.
 Full data model, JSON contract, and sync semantics:
 `docs/superpowers/specs/2026-08-05-local-amendment-model-design.md`.
 
+### Reconciliation is agent-executed, not a CLI feature (DECIDED)
+
+A team's hand-written `CLAUDE.md` or `AGENTS.md` will often restate part of what a
+pack's managed block says, and occasionally disagree with it. Telling duplicate from
+contradictory from unrelated is judgment work, not a lookup, and `esc` has exactly
+two ways to do judgment work: a heuristic, or a model call. A heuristic will be wrong
+often enough to erode trust in a tool whose entire pitch is that it's trustworthy;
+a model call breaks the single-external-dependency and no-network posture this
+product treats as a security stance, not a preference (see AGENTS.md). Neither is
+worth what it costs.
+
+So reconciliation ships as a skill inside the rule pack instead of as logic in
+`esc`: the seeded demo pack carries `skills/esc-reconcile`, which an agent already
+working in the repo runs after a sync. It reads the managed block and the
+surrounding human-authored content in the same file, reports rules that duplicate or
+contradict each other, and proposes edits to the human-authored side only. Editing
+inside the managed markers is out of bounds by design, since that would put the
+artifact into the `altered` state and stop it from receiving further updates until a
+person resolves it. Shipping the guidance this way means an org revises its
+reconciliation instructions the same way it revises every other rule: as a pack
+version, through the same versioned, signed channel. `esc` stays deterministic; the
+judgment lives where an agent, not the CLI, can actually exercise it.
+
 ## 7. MVP Cut (strawman — challenge this in Claude Code)
 
 **v0.1 (weeks, not months):**

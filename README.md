@@ -64,6 +64,45 @@ git clone https://github.com/tensorgroup/openescapement && cd openescapement/exa
 go run ../../cmd/esc sync && go run ../../cmd/esc status
 ```
 
+### Adding `esc` to a repo that already has instruction files
+
+Most first contact isn't a blank repo, it's one with a hand-written `CLAUDE.md` or
+`AGENTS.md` already in place. `esc init` handles that case explicitly:
+
+- **Detects** what's already there (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`,
+  `GOVERNANCE.md`, `.mcp.json`, `.claude/skills/`) and pre-fills `targets` in the
+  generated config with exactly what it found. A repo with `AGENTS.md` and no
+  `GEMINI.md` doesn't get `GEMINI.md` conjured into existence by its first sync.
+  Nothing detected leaves `targets` empty, which still means all targets.
+- **Explains**, in the same vocabulary `esc status` uses, what the first `esc sync`
+  will do to each detected file: your content is preserved byte for byte and
+  reported as a local amendment. A file that already carries a managed block or the
+  placeholder marker is told that instead of promised an insert it won't get.
+- **Offers** to place the managed-block marker (`<!-- escapement:block -->`) in each
+  detected file, on a TTY: keep the default (writes nothing, the block lands at the
+  top of the file, after any frontmatter and title, at first sync), the very top of
+  the file (byte 0, above everything), or the end of the file. Declining, an empty
+  answer, and the default all leave the file untouched; the placeholder is the only
+  way to override where the block lands.
+
+`esc init` never writes rendered policy, only the marker, and only when you ask it
+to. A getting-started command shouldn't put rules into your instruction files before
+you've seen them; `esc sync` is what writes policy, later, once you've reviewed the
+pack.
+
+Guard rails: init never touches a file with uncommitted changes (git is the undo
+mechanism for anything it writes, so it doesn't write where git can't undo it; that
+file is reported and skipped instead, and the rest still get processed), and
+`--yes` selects the default placement for every detected file, so a scripted
+`esc init --yes` writes nothing beyond the config scaffold.
+
+Once a pack is synced, run its `esc-reconcile` skill, if it ships one (the seeded
+demo pack does), to compare your existing rules against the pack's for duplicates or
+contradictions. That comparison is judgment work for an agent: a CLI heuristic would
+be wrong often enough to erode trust, and a model call would break `esc`'s
+no-network, single-dependency design, so the guidance ships as a skill instead of
+code in `esc` itself.
+
 ### `esc serve` — the admin portal
 
 ```sh

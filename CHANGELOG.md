@@ -39,6 +39,8 @@ tagged releases begin.
   refusals already exit 4.
 
 ### Added
+- `esc init` detects instruction files a repo already has, pre-fills `targets` from them, explains what the first sync will do, and offers to place the managed-block marker. It never writes rendered policy and never touches a file with uncommitted changes.
+- The seeded demo pack ships an `esc-reconcile` skill: guidance for an agent comparing a team's existing rules against the pack's.
 - Local amendments: content escapement does not own is preserved everywhere, reported on a new `local` axis, and surfaced in `esc status`. Files added to skill directories are no longer deleted by sync.
 - `esc sync` skips artifacts whose managed region was hand-edited instead of overwriting them, warns, and exits 0. `esc sync --force` converges.
 - New managed blocks are inserted at the top of a file rather than appended.
