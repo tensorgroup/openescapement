@@ -247,3 +247,55 @@ func TestIngestLegacyRawEventStillAccepted(t *testing.T) {
 		t.Fatalf("events=%v err=%v", events, err)
 	}
 }
+
+// TestIngestEnvelopeRejectsFabricatedKind closes the gap between
+// store.ValidKind's full set and what a real esc report can ever produce:
+// engine.NewReport only ever sets Command to "status" or "sync" (see
+// report.go), so a Command of "provider_usage" (a store.ValidKind member,
+// but not a report-producible one) can only be a fabricated injection by a
+// token-holder, not a real client. The envelope path must reject it, even
+// though the legacy raw-Event path legitimately accepts provider_usage as a
+// first-class kind from a different producer.
+func TestIngestEnvelopeRejectsFabricatedKind(t *testing.T) {
+	s := newTestServer(t, "tok")
+	env := testEnvelope("https://github.com/acme/repo.git")
+	env.Report.Command = "provider_usage"
+	rr := postEnvelope(t, s, "tok", env)
+	if rr.Code != 400 {
+		t.Fatalf("code=%d body=%s, want 400", rr.Code, rr.Body.String())
+	}
+	if events, _ := s.Store.Events(); len(events) != 0 {
+		t.Fatal("fabricated-kind envelope was stored")
+	}
+}
+
+// TestIngestEnvelopeOversizedBodyRejected413 is the poison-pill guard: a
+// content-level envelope just over maxIngestBody must get 413 (a size
+// problem, not "malformed json"), so a caller with a legitimately large but
+// still-too-big payload gets an accurate, retryable-only-after-shrinking
+// signal instead of looking indistinguishable from garbage JSON.
+func TestIngestEnvelopeOversizedBodyRejected413(t *testing.T) {
+	s := newTestServer(t, "tok")
+	env := testEnvelope("https://github.com/acme/repo.git")
+	// Pad well past maxIngestBody via a single large Detail field, the
+	// simplest way to blow the byte budget without changing the envelope's
+	// shape.
+	env.Report.Findings[0].Detail = strings.Repeat("x", maxIngestBody+1024)
+	body, err := json.Marshal(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(body) <= maxIngestBody {
+		t.Fatalf("test body is %d bytes, want > maxIngestBody (%d)", len(body), maxIngestBody)
+	}
+	req := httptest.NewRequest("POST", "/api/v1/events", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer tok")
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != 413 {
+		t.Fatalf("code=%d body=%s, want 413", rr.Code, rr.Body.String())
+	}
+	if events, _ := s.Store.Events(); len(events) != 0 {
+		t.Fatal("oversized envelope was stored")
+	}
+}

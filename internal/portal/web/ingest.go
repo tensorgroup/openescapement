@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -12,8 +13,24 @@ import (
 	"github.com/tensorgroup/openescapement/internal/publisher"
 )
 
-// maxEventBody caps a single ingested event's JSON body at 64KB.
-const maxEventBody = 64 << 10
+// maxIngestBody caps a single ingest body at 1MB. It used to be 64KB, sized
+// for the raw store.Event shape; a content-level envelope (Envelope.Report
+// with Findings' Amendment.Content / Alteration.Diff populated) is
+// legitimately much larger, and the two shapes cannot be capped separately
+// up front: handleEvents does not know which shape a body is until it has
+// read enough of it to probe for the top-level "schema" key. One shared
+// cap, raised to fit the larger shape, is simpler than a provisional read.
+const maxIngestBody = 1 << 20
+
+// envelopeKinds is the closed set of Report.Command values a real esc report
+// can ever produce (engine.NewReport sets Command to exactly "status" or
+// "sync"). The envelope path gates on this narrower set rather than
+// store.ValidKind's full set, which also admits provider_usage/mcp_connect/
+// update_check: those are legitimate kinds from other producers on the
+// legacy raw-Event path, but no Report ever carries one, so admitting them
+// here would let a token-holder fabricate event kinds no real report
+// produces.
+var envelopeKinds = map[string]bool{"sync": true, "status": true}
 
 // handleEvents accepts either shape of ingest body, distinguished by the
 // presence of a top-level "schema" key:
@@ -28,9 +45,15 @@ const maxEventBody = 64 << 10
 // Auth follows the same policy as the page routes (withAuth wraps this
 // handler too).
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, maxEventBody)
+	r.Body = http.MaxBytesReader(w, r.Body, maxIngestBody)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeJSONError(w, http.StatusRequestEntityTooLarge,
+				fmt.Sprintf("body exceeds %d byte limit", maxIngestBody))
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, "malformed json")
 		return
 	}
@@ -75,8 +98,11 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 //   - Schema must equal publisher.EnvelopeSchema; any other value is a 400
 //     naming the expected version, since ingest cannot safely guess how an
 //     unknown schema maps to store.Event.
-//   - Report.Command becomes Event.Kind (already a valid store.ValidKind
-//     value: "sync"/"status").
+//   - Report.Command becomes Event.Kind, gated against the closed
+//     sync|status set (envelopeKinds) rather than store.ValidKind's full
+//     set: a real report only ever produces one of those two, so admitting
+//     provider_usage/mcp_connect/update_check here would let a token-holder
+//     fabricate event kinds no report can produce.
 //   - Report.Packs maps to Event.Packs: EventPack.Name <- ReportPack.Source,
 //     EventPack.Version <- ReportPack.Pinned (the resolved content hash, the
 //     one identifier every pin always carries, since Ref is empty for local
@@ -108,7 +134,7 @@ func (s *Server) handleEnvelope(w http.ResponseWriter, body []byte) {
 		return
 	}
 	rep := env.Report
-	if !store.ValidKind(rep.Command) {
+	if !envelopeKinds[rep.Command] {
 		writeJSONError(w, http.StatusBadRequest, "unknown kind")
 		return
 	}

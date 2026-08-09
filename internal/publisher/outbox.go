@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"time"
@@ -195,12 +196,29 @@ func AppendOutbox(root, endpoint string, e Envelope, now time.Time) (dropped int
 // dropped rather than sent: the portal stamps each event's timestamp at
 // ingest, not from the envelope, so a stale entry that happened to flush
 // successfully weeks late would masquerade as fresh fleet data. A corrupt
-// line encountered on load is likewise never sent. dropped folds both
-// cases into one count — "not sent and not kept" — since a caller reporting
-// loss on stderr does not need to distinguish why an entry never went out.
+// line encountered on load is likewise never sent. dropped folds all three
+// cases, aged out, corrupt on load, and (see next paragraph) permanently
+// rejected by send, into one count, "not sent and not kept", since a
+// caller reporting loss on stderr does not need to distinguish why an entry
+// never went out.
+//
+// Within a group, a send error matching errors.Is(err, errPermanent) is
+// this function's third outcome, alongside success and an ordinary
+// (transient) failure: the entry is dropped (counted in dropped, never
+// retained) and the SAME endpoint's next entry is still attempted. A
+// permanently-rejected entry, such as a payload over the server's size
+// limit, will never succeed no matter how many times it is retried, so
+// unlike a transient failure it carries no useful "stop here" signal about
+// the entries queued behind it; retaining it would only let one poisoned
+// entry stall every later entry on that endpoint forever. An ordinary error
+// still stops the group and retains it plus everything queued behind it,
+// exactly as before.
+//
 // sent counts successful sends; remaining counts entries left queued
-// afterward. err is the first error encountered, in group-visit order, or
-// nil if every group fully drained. A missing or empty outbox is a no-op.
+// afterward. err is the first ordinary (non-permanent) error encountered,
+// in group-visit order, or nil if every group fully drained without one:
+// a permanent failure is fully resolved by being dropped, so it is not
+// reflected in err, only in dropped. A missing or empty outbox is a no-op.
 func FlushOutbox(root string, send func(endpoint string, e Envelope) error, now time.Time) (sent, dropped, remaining int, err error) {
 	entries, corrupt, err := loadOutbox(root)
 	if err != nil {
@@ -248,15 +266,24 @@ func FlushOutbox(root string, send func(endpoint string, e Envelope) error, now 
 				retained[i] = true
 				continue
 			}
-			if serr := send(fresh[i].Endpoint, fresh[i].Envelope); serr != nil {
-				if sendErr == nil {
-					sendErr = serr
-				}
-				stopped = true
-				retained[i] = true
+			serr := send(fresh[i].Endpoint, fresh[i].Envelope)
+			if serr == nil {
+				sent++
 				continue
 			}
-			sent++
+			if errors.Is(serr, errPermanent) {
+				// Never accepted, never will be: drop it and keep going
+				// within this same endpoint's group. Unlike an ordinary
+				// failure, a permanent one says nothing about whether the
+				// entries queued behind it would succeed.
+				dropped++
+				continue
+			}
+			if sendErr == nil {
+				sendErr = serr
+			}
+			stopped = true
+			retained[i] = true
 		}
 	}
 

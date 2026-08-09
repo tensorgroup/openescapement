@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +16,33 @@ import (
 	"github.com/tensorgroup/openescapement/internal/engine"
 	"github.com/tensorgroup/openescapement/internal/pack"
 )
+
+// errPermanent marks a postEnvelope failure the server will never accept on
+// retry: a problem with this exact payload (see permanentStatus), not a
+// transient outage. FlushOutbox distinguishes it via errors.Is rather than
+// its own status-code inspection, so the classification lives in exactly
+// one place. Kept unexported: both postEnvelope (which produces it) and
+// FlushOutbox (which consumes it, in outbox.go) live in this package.
+var errPermanent = errors.New("permanent send failure")
+
+// permanentStatus reports whether status is one FlushOutbox should treat as
+// permanent. These six mean the server has said, unambiguously, that this
+// exact payload will never be accepted: retaining it would only requeue the
+// same failure forever and head-of-line-block every later entry queued
+// behind it on the same endpoint. Every other status, including network
+// errors, 5xx, 429, 401, and 403, stays transient: FlushOutbox's existing
+// stop-group-and-retain behavior is exactly the retry mechanism those need
+// (a bad token fixed on a later run, or a server recovered from an outage,
+// is what the outbox exists for).
+func permanentStatus(status int) bool {
+	switch status {
+	case http.StatusBadRequest, http.StatusNotFound, http.StatusMethodNotAllowed,
+		http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusUnprocessableEntity:
+		return true
+	default:
+		return false
+	}
+}
 
 // Envelope is the wire document a publisher transport sends: repo identity
 // alongside the (possibly redacted, see Redact) Report. Defined here, ahead
@@ -189,7 +217,11 @@ func postEnvelope(ctx context.Context, endpoint, token string, e Envelope) error
 	io.Copy(io.Discard, resp.Body) //nolint:errcheck // draining lets the connection be reused; a copy error here does not change the outcome
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("publish to %s: unexpected status %d", endpoint, resp.StatusCode)
+		err := fmt.Errorf("publish to %s: unexpected status %d", endpoint, resp.StatusCode)
+		if permanentStatus(resp.StatusCode) {
+			return fmt.Errorf("%w: %v", errPermanent, err)
+		}
+		return err
 	}
 	return nil
 }
