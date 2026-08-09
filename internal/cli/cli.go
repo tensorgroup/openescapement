@@ -17,6 +17,8 @@ import (
 	"github.com/tensorgroup/openescapement/internal/engine"
 	"github.com/tensorgroup/openescapement/internal/esc"
 	"github.com/tensorgroup/openescapement/internal/lockfile"
+	"github.com/tensorgroup/openescapement/internal/pack"
+	"github.com/tensorgroup/openescapement/internal/publisher"
 	"github.com/tensorgroup/openescapement/internal/updatecheck"
 )
 
@@ -318,7 +320,7 @@ func cmdSync(ctx context.Context, root string, args []string, stdout, stderr io.
 		return 2
 	}
 	if *asJSON {
-		return exitCode(syncJSON(ctx, root, *force, stdout), stderr)
+		return exitCode(syncJSON(ctx, root, *force, stdout, stderr), stderr)
 	}
 	return exitCode(syncOnce(ctx, root, *force, stdout, stderr), stderr)
 }
@@ -330,7 +332,7 @@ func cmdSync(ctx context.Context, root string, args []string, stdout, stderr io.
 // report reflects the actual post-write state on disk (including any
 // artifact Apply declined to touch) instead of an assumption about what
 // Apply did.
-func syncJSON(ctx context.Context, root string, force bool, stdout io.Writer) error {
+func syncJSON(ctx context.Context, root string, force bool, stdout, stderr io.Writer) error {
 	plan, err := engine.Plan(ctx, root)
 	if err != nil {
 		return err
@@ -344,15 +346,49 @@ func syncJSON(ctx context.Context, root string, force bool, stdout io.Writer) er
 	if err != nil {
 		return err
 	}
-	return writeJSONReport(ctx, root, stdout, st, res)
+	rep, coll, err := writeJSONReport(ctx, root, stdout, st, res)
+	if err != nil {
+		return err
+	}
+	// Publish runs only after the lockfile write (engine.Apply, above),
+	// updatecheck.RecordSync, and every byte of stdout output: nothing past
+	// this point may change the exit code (see publisher.Publish's doc
+	// comment for why it has no error return at all).
+	publisher.Publish(ctx, root, rep, packsOf(st), coll, stderr, time.Now())
+	return nil
+}
+
+// buildPublishReport assembles the same Report document writeJSONReport
+// puts on the wire (NewReport, then PopulateDiffs for the diff-bearing
+// finding kinds) so the JSON path and the two human-output paths that also
+// publish (syncOnce, cmdStatus's text branch) share one assembly pipeline
+// rather than growing a second, divergent one.
+func buildPublishReport(ctx context.Context, root string, st *engine.StatusResult, coll engine.Collection, sync *engine.SyncResult) (*engine.Report, error) {
+	rep := engine.NewReport(st, coll, sync)
+	if err := engine.PopulateDiffs(ctx, root, st.Plan, rep); err != nil {
+		return nil, err
+	}
+	return rep, nil
+}
+
+// packsOf returns the packs behind st's Plan, or nil if st carries no Plan
+// (st.Plan is never nil after a successful engine.Status in production, but
+// every caller here guards it anyway rather than assume a hand-built
+// StatusResult always sets it, matching writeJSONReport's own guard).
+func packsOf(st *engine.StatusResult) []*pack.Pack {
+	if st.Plan == nil {
+		return nil
+	}
+	return st.Plan.PackObjs
 }
 
 // writeJSONReport resolves the reporting Collection, assembles the Report
-// document, fills in Alteration.Diff for the kinds where it's meaningful
-// (see engine.PopulateDiffs), and writes it to stdout as indented JSON for
-// stable, diffable output. Shared by cmdStatus and cmdSync's --json paths;
-// sync is nil for a status report.
-func writeJSONReport(ctx context.Context, root string, stdout io.Writer, st *engine.StatusResult, sync *engine.SyncResult) error {
+// document via buildPublishReport, and writes it to stdout as indented JSON
+// for stable, diffable output. Shared by cmdStatus and cmdSync's --json
+// paths; sync is nil for a status report. Returns the assembled Report and
+// Collection so callers can hand them to publisher.Publish without
+// rebuilding either.
+func writeJSONReport(ctx context.Context, root string, stdout io.Writer, st *engine.StatusResult, sync *engine.SyncResult) (*engine.Report, engine.Collection, error) {
 	// st.Plan is never nil after a successful engine.Status in production
 	// (Status always sets it before returning a nil error), but NewReport
 	// itself guards against a nil Plan, so this call site should too rather
@@ -362,22 +398,24 @@ func writeJSONReport(ctx context.Context, root string, stdout io.Writer, st *eng
 		var err error
 		coll, err = engine.ResolveReporting(st.Plan.PackObjs, st.Plan.Config)
 		if err != nil {
-			return err
+			return nil, engine.Collection{}, err
 		}
 	}
-	rep := engine.NewReport(st, coll, sync)
-	if err := engine.PopulateDiffs(ctx, root, st.Plan, rep); err != nil {
-		return err
+	rep, err := buildPublishReport(ctx, root, st, coll, sync)
+	if err != nil {
+		return nil, engine.Collection{}, err
 	}
 	data, err := json.MarshalIndent(rep, "", "  ")
 	if err != nil {
-		return err
+		return nil, engine.Collection{}, err
 	}
 	if _, err := stdout.Write(data); err != nil {
-		return err
+		return nil, engine.Collection{}, err
 	}
-	_, err = stdout.Write([]byte("\n"))
-	return err
+	if _, err := stdout.Write([]byte("\n")); err != nil {
+		return nil, engine.Collection{}, err
+	}
+	return rep, coll, nil
 }
 
 // syncOnce runs one sync (fetch, verify, render, write) and reports the
@@ -418,7 +456,39 @@ func syncOnce(ctx context.Context, root string, force bool, stdout, stderr io.Wr
 		fmt.Fprintf(stderr, "  skipped %s: %s\n", s.Subject, s.Reason)
 		fmt.Fprintf(stderr, "    %s\n", skipHint(s))
 	}
+	publishSyncResult(ctx, root, res, stderr)
 	return nil
+}
+
+// publishSyncResult resolves fresh status and the reporting collection
+// purely to feed publisher.Publish: syncOnce's own stdout/stderr output
+// above is already complete, and the lockfile write and RecordSync already
+// happened in syncOnce before this call, so everything from here on is the
+// publish side channel. Any failure resolving status or the reporting
+// level here is reported on stderr and swallowed rather than returned:
+// nothing this deep in an already-successful sync may change its exit
+// code, the same non-fatality Publish itself guarantees for the network
+// half of this path.
+func publishSyncResult(ctx context.Context, root string, sync *engine.SyncResult, stderr io.Writer) {
+	st, err := engine.Status(ctx, root)
+	if err != nil {
+		fmt.Fprintf(stderr, "esc: resolving status for publish failed: %v\n", err)
+		return
+	}
+	var coll engine.Collection
+	if st.Plan != nil {
+		coll, err = engine.ResolveReporting(st.Plan.PackObjs, st.Plan.Config)
+		if err != nil {
+			fmt.Fprintf(stderr, "esc: resolving reporting level for publish failed: %v\n", err)
+			return
+		}
+	}
+	rep, err := buildPublishReport(ctx, root, st, coll, sync)
+	if err != nil {
+		fmt.Fprintf(stderr, "esc: building publish report failed: %v\n", err)
+		return
+	}
+	publisher.Publish(ctx, root, rep, packsOf(st), coll, stderr, time.Now())
 }
 
 // skipHint is the one-line remedy printed under a declined artifact.
@@ -473,9 +543,12 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 		}
 	}
 	if *asJSON {
-		if err := writeJSONReport(ctx, root, stdout, st, nil); err != nil {
+		rep, coll, err := writeJSONReport(ctx, root, stdout, st, nil)
+		if err != nil {
 			return exitCode(err, stderr)
 		}
+		// After all stdout output: see syncJSON's identical placement note.
+		publisher.Publish(ctx, root, rep, packsOf(st), coll, stderr, time.Now())
 	} else {
 		// st.Plan is never nil after a successful engine.Status in production,
 		// but guard it anyway rather than assume every caller (or future test)
@@ -526,11 +599,13 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 		// additions are reported upstream without reading the pack
 		// manifest. Never gated behind a verbose flag.
 		//
-		// Future tense, deliberately. v0.1 ships no publisher: esc resolves
-		// the reporting level and displays it, and nothing is transmitted
-		// anywhere. A present-tense claim here would be a false statement
-		// about the user's own data, made by the tool itself, which is worse
-		// than the same slip in prose. Update this when a publisher lands.
+		// Future tense, deliberately, even now that Publish exists (below):
+		// whether THIS run actually transmits anything still depends on the
+		// pack declaring reporting.endpoint and ESC_PORTAL_TOKEN being set,
+		// neither of which this notice's condition (coll.Amendments,
+		// anyAmendment) inspects. A present-tense claim here would overstate
+		// what a repo with a resolved level but no endpoint/token configured
+		// actually sends, which is nothing.
 		if coll.Amendments != engine.ReportOff && anyAmendment(st.Findings) {
 			what := "counts and hashes only"
 			if coll.Amendments == engine.ReportContent {
@@ -538,6 +613,17 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 			}
 			fmt.Fprintf(stdout, "\nLocal amendments will be reported upstream once a publisher is configured, %s.\n", what)
 			fmt.Fprintln(stdout, "(pack policy; set report_amendments: metrics or off in .escapement.yaml to withhold)")
+		}
+		// After all stdout output above, exactly like the *asJSON branch:
+		// build the same Report shape writeJSONReport would have (via the
+		// shared buildPublishReport) purely to feed Publish. A failure here
+		// is reported and swallowed, never returned, so it cannot change
+		// this command's exit code any more than a publish failure itself
+		// could.
+		if rep, err := buildPublishReport(ctx, root, st, coll, nil); err != nil {
+			fmt.Fprintf(stderr, "esc: building publish report failed: %v\n", err)
+		} else {
+			publisher.Publish(ctx, root, rep, packsOf(st), coll, stderr, time.Now())
 		}
 	}
 	if st.Clean() {

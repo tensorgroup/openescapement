@@ -1,0 +1,351 @@
+package publisher
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/tensorgroup/openescapement/internal/engine"
+	"github.com/tensorgroup/openescapement/internal/pack"
+)
+
+// withClient swaps the package-level Client for the duration of the test
+// and restores the original after, so no test's transport (short timeout,
+// or none at all) leaks into another.
+func withClient(t *testing.T, c *http.Client) {
+	t.Helper()
+	orig := Client
+	Client = c
+	t.Cleanup(func() { Client = orig })
+}
+
+// packWithEndpoint builds the minimal *pack.Pack Publish needs: just enough
+// Manifest.Reporting to be picked up by distinctEndpoints.
+func packWithEndpoint(name, endpoint string) *pack.Pack {
+	return &pack.Pack{
+		Manifest: pack.Manifest{
+			Name: name,
+			Reporting: &pack.Reporting{
+				Amendments: engine.ReportMetrics,
+				Endpoint:   endpoint,
+			},
+		},
+	}
+}
+
+func metricsCollection() engine.Collection {
+	return engine.Collection{Amendments: engine.ReportMetrics, Source: "pack"}
+}
+
+// recordingServer captures every request body it receives, in arrival
+// order, and responds with status for every request.
+type recordingServer struct {
+	mu     sync.Mutex
+	bodies [][]byte
+	auths  []string
+}
+
+func (r *recordingServer) handler(status int) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		body, _ := io.ReadAll(req.Body)
+		r.mu.Lock()
+		r.bodies = append(r.bodies, body)
+		r.auths = append(r.auths, req.Header.Get("Authorization"))
+		r.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+	}
+}
+
+func (r *recordingServer) requests() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.bodies)
+}
+
+func TestPublishSuccessPostsEnvelope(t *testing.T) {
+	rs := &recordingServer{}
+	srv := httptest.NewServer(rs.handler(202))
+	defer srv.Close()
+	withClient(t, &http.Client{Timeout: 5 * time.Second})
+
+	root := t.TempDir()
+	t.Setenv("ESC_PORTAL_TOKEN", "test-token")
+	rep := fixtureReport()
+	packs := []*pack.Pack{packWithEndpoint("acme", srv.URL)}
+	var stderr bytes.Buffer
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	Publish(context.Background(), root, rep, packs, metricsCollection(), &stderr, now)
+
+	if n := rs.requests(); n != 1 {
+		t.Fatalf("server received %d requests, want 1", n)
+	}
+	if got := rs.auths[0]; got != "Bearer test-token" {
+		t.Errorf("Authorization header = %q, want %q", got, "Bearer test-token")
+	}
+	var env Envelope
+	if err := json.Unmarshal(rs.bodies[0], &env); err != nil {
+		t.Fatalf("body did not decode as Envelope: %v\nbody: %s", err, rs.bodies[0])
+	}
+	if env.Schema != EnvelopeSchema {
+		t.Errorf("Schema = %d, want %d", env.Schema, EnvelopeSchema)
+	}
+	if env.ConfigPath != ".escapement/config.yaml" {
+		t.Errorf("ConfigPath = %q, want %q", env.ConfigPath, ".escapement/config.yaml")
+	}
+	if env.Report == nil || len(env.Report.Findings) != len(rep.Findings) {
+		t.Errorf("Report findings did not survive the envelope: %+v", env.Report)
+	}
+	// coll.Amendments is metrics: content-only fields must have been redacted
+	// before the body ever left the process.
+	for _, f := range env.Report.Findings {
+		if f.Amendment != nil && f.Amendment.Content != "" {
+			t.Errorf("Amendment.Content survived redaction: %q", f.Amendment.Content)
+		}
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr should be empty on success, got: %s", stderr.String())
+	}
+	// The outbox must end up empty: the one queued entry was flushed.
+	entries, _, err := loadOutbox(root)
+	if err != nil {
+		t.Fatalf("loadOutbox: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("outbox has %d leftover entries, want 0", len(entries))
+	}
+}
+
+func TestPublishFailureModesQueueAndWarn(t *testing.T) {
+	sleeper := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		w.WriteHeader(202)
+	}))
+	defer sleeper.Close()
+
+	refused := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	refusedURL := refused.URL
+	refused.Close() // closed before use: nothing listens at refusedURL anymore
+
+	unauthorized := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(401)
+	}))
+	defer unauthorized.Close()
+
+	serverError := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+	}))
+	defer serverError.Close()
+
+	tests := []struct {
+		name     string
+		endpoint string
+		timeout  time.Duration
+	}{
+		{"connection refused", refusedURL, 5 * time.Second},
+		{"timeout", sleeper.URL, 50 * time.Millisecond},
+		{"401", unauthorized.URL, 5 * time.Second},
+		{"500", serverError.URL, 5 * time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			withClient(t, &http.Client{Timeout: tt.timeout})
+			root := t.TempDir()
+			t.Setenv("ESC_PORTAL_TOKEN", "test-token")
+			rep := fixtureReport()
+			packs := []*pack.Pack{packWithEndpoint("acme", tt.endpoint)}
+			var stderr bytes.Buffer
+			now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+			Publish(context.Background(), root, rep, packs, metricsCollection(), &stderr, now)
+
+			lines := nonEmptyLines(stderr.String())
+			if len(lines) != 1 {
+				t.Fatalf("stderr lines = %d, want 1:\n%s", len(lines), stderr.String())
+			}
+			entries, _, err := loadOutbox(root)
+			if err != nil {
+				t.Fatalf("loadOutbox: %v", err)
+			}
+			if len(entries) != 1 {
+				t.Fatalf("outbox has %d entries, want 1 (payload must land in outbox)", len(entries))
+			}
+			if entries[0].Endpoint != tt.endpoint {
+				t.Errorf("queued entry endpoint = %q, want %q", entries[0].Endpoint, tt.endpoint)
+			}
+		})
+	}
+}
+
+func TestPublishNextSuccessFlushesOldestFirst(t *testing.T) {
+	rs := &recordingServer{}
+	srv := httptest.NewServer(rs.handler(202))
+	defer srv.Close()
+
+	root := t.TempDir()
+	t.Setenv("ESC_PORTAL_TOKEN", "test-token")
+	rep := fixtureReport()
+	packs := []*pack.Pack{packWithEndpoint("acme", srv.URL)}
+
+	// First call: server is down, so the envelope is queued rather than sent.
+	down := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	downURL := down.URL
+	down.Close()
+	packsDown := []*pack.Pack{packWithEndpoint("acme", downURL)}
+	withClient(t, &http.Client{Timeout: 5 * time.Second})
+	var stderr1 bytes.Buffer
+	older := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	Publish(context.Background(), root, rep, packsDown, metricsCollection(), &stderr1, older)
+	entries, _, err := loadOutbox(root)
+	if err != nil {
+		t.Fatalf("loadOutbox: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("setup: outbox has %d entries, want 1", len(entries))
+	}
+
+	// Manually rebind the queued entry's endpoint to the live server, and
+	// mark it distinctly from the fresh envelope Publish is about to build,
+	// so this test can observe it flushed BEFORE the fresh one, not merely
+	// that both eventually arrive.
+	entries[0].Endpoint = srv.URL
+	entries[0].Envelope.Report.Command = "queued-older"
+	if err := atomicWriteOutbox(root, entries); err != nil {
+		t.Fatalf("atomicWriteOutbox: %v", err)
+	}
+
+	var stderr2 bytes.Buffer
+	newer := older.Add(time.Minute)
+	Publish(context.Background(), root, rep, packs, metricsCollection(), &stderr2, newer)
+
+	if n := rs.requests(); n != 2 {
+		t.Fatalf("server received %d requests, want 2 (queued entry + fresh envelope)", n)
+	}
+	var first, second Envelope
+	if err := json.Unmarshal(rs.bodies[0], &first); err != nil {
+		t.Fatalf("decode first request body: %v", err)
+	}
+	if err := json.Unmarshal(rs.bodies[1], &second); err != nil {
+		t.Fatalf("decode second request body: %v", err)
+	}
+	if first.Report.Command != "queued-older" {
+		t.Errorf("first request Command = %q, want %q (the queued backlog entry must arrive first)", first.Report.Command, "queued-older")
+	}
+	if second.Report.Command != rep.Command {
+		t.Errorf("second request Command = %q, want %q (the fresh envelope must arrive after the backlog)", second.Report.Command, rep.Command)
+	}
+	remaining, _, err := loadOutbox(root)
+	if err != nil {
+		t.Fatalf("loadOutbox: %v", err)
+	}
+	if len(remaining) != 0 {
+		t.Errorf("outbox has %d leftover entries after a successful flush, want 0", len(remaining))
+	}
+}
+
+func TestPublishTwoEndpointsBothReceive(t *testing.T) {
+	rsA := &recordingServer{}
+	srvA := httptest.NewServer(rsA.handler(202))
+	defer srvA.Close()
+	rsB := &recordingServer{}
+	srvB := httptest.NewServer(rsB.handler(202))
+	defer srvB.Close()
+	withClient(t, &http.Client{Timeout: 5 * time.Second})
+
+	root := t.TempDir()
+	t.Setenv("ESC_PORTAL_TOKEN", "test-token")
+	rep := fixtureReport()
+	packs := []*pack.Pack{
+		packWithEndpoint("acme-a", srvA.URL),
+		packWithEndpoint("acme-b", srvB.URL),
+	}
+	var stderr bytes.Buffer
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	Publish(context.Background(), root, rep, packs, metricsCollection(), &stderr, now)
+
+	if n := rsA.requests(); n != 1 {
+		t.Errorf("endpoint A received %d requests, want 1", n)
+	}
+	if n := rsB.requests(); n != 1 {
+		t.Errorf("endpoint B received %d requests, want 1", n)
+	}
+}
+
+func TestPublishOffSendsNothing(t *testing.T) {
+	rs := &recordingServer{}
+	srv := httptest.NewServer(rs.handler(202))
+	defer srv.Close()
+	withClient(t, &http.Client{Timeout: 5 * time.Second})
+
+	root := t.TempDir()
+	// Deliberately no ESC_PORTAL_TOKEN: off must return before the token
+	// check ever runs, so an absent token must not produce a warning either.
+	rep := fixtureReport()
+	packs := []*pack.Pack{packWithEndpoint("acme", srv.URL)}
+	var stderr bytes.Buffer
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	Publish(context.Background(), root, rep, packs, engine.Collection{Amendments: engine.ReportOff, Source: "default"}, &stderr, now)
+
+	if n := rs.requests(); n != 0 {
+		t.Errorf("server received %d requests, want 0", n)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr should be empty when off, got: %s", stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, ".escapement", "outbox.jsonl")); !os.IsNotExist(err) {
+		t.Errorf("outbox file should not exist when off, stat err = %v", err)
+	}
+}
+
+func TestPublishMissingTokenWarnsAndSkips(t *testing.T) {
+	rs := &recordingServer{}
+	srv := httptest.NewServer(rs.handler(202))
+	defer srv.Close()
+	withClient(t, &http.Client{Timeout: 5 * time.Second})
+
+	root := t.TempDir()
+	t.Setenv("ESC_PORTAL_TOKEN", "")
+	rep := fixtureReport()
+	packs := []*pack.Pack{packWithEndpoint("acme", srv.URL)}
+	var stderr bytes.Buffer
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	Publish(context.Background(), root, rep, packs, metricsCollection(), &stderr, now)
+
+	if n := rs.requests(); n != 0 {
+		t.Errorf("server received %d requests, want 0", n)
+	}
+	lines := nonEmptyLines(stderr.String())
+	if len(lines) != 1 {
+		t.Fatalf("stderr lines = %d, want 1:\n%s", len(lines), stderr.String())
+	}
+	if !strings.Contains(lines[0], "ESC_PORTAL_TOKEN") {
+		t.Errorf("warning does not name the missing env var: %q", lines[0])
+	}
+	if _, err := os.Stat(filepath.Join(root, ".escapement", "outbox.jsonl")); !os.IsNotExist(err) {
+		t.Errorf("outbox file should not exist when token is missing (nothing enqueued), stat err = %v", err)
+	}
+}
+
+func nonEmptyLines(s string) []string {
+	var out []string
+	for _, l := range strings.Split(s, "\n") {
+		if l != "" {
+			out = append(out, l)
+		}
+	}
+	return out
+}
