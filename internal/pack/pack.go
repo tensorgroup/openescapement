@@ -40,6 +40,7 @@ type Manifest struct {
 // construction, the same stance UpdateCheck takes.
 type Reporting struct {
 	Amendments string `yaml:"amendments"` // "metrics" | "content"
+	Endpoint   string `yaml:"endpoint,omitempty"`
 }
 
 // MCPSpec declares MCP server entries a pack injects into .mcp.json.
@@ -188,6 +189,11 @@ func (m *Manifest) validate(dir string) error {
 		}
 		if e := m.UpdateCheck.Endpoint; e != "" && !strings.HasPrefix(e, "https://") {
 			return fail("update_check.endpoint %q: must be an https:// URL", e)
+		}
+	}
+	if m.Reporting != nil {
+		if e := m.Reporting.Endpoint; e != "" && !strings.HasPrefix(e, "https://") {
+			return fail("reporting.endpoint %q: must be an https:// URL", e)
 		}
 	}
 	seenCustomName := map[string]string{}

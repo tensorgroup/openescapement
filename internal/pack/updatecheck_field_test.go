@@ -3,6 +3,7 @@ package pack
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -64,5 +65,34 @@ func TestManifestUpdateCheck(t *testing.T) {
 	// Non-https endpoint → manifest error.
 	if _, err := loadManifestPack(t, base+"update_check:\n  every: 7d\n  endpoint: http://cp.example\n"); err == nil {
 		t.Error("http endpoint: want error")
+	}
+}
+
+func TestManifestReportingEndpoint(t *testing.T) {
+	base := "schema: 1\nname: p\nversion: 1.0.0\nrules: [a.md]\n"
+	// Valid: https endpoint accepted.
+	p, err := loadManifestPack(t, base+"reporting:\n  endpoint: https://telemetry.example/ingest\n")
+	if err != nil {
+		t.Fatalf("valid reporting.endpoint rejected: %v", err)
+	}
+	if p.Manifest.Reporting == nil || p.Manifest.Reporting.Endpoint != "https://telemetry.example/ingest" {
+		t.Fatalf("reporting.endpoint not parsed: %+v", p.Manifest.Reporting)
+	}
+	// Empty endpoint accepted: absent means nothing is sent.
+	p, err = loadManifestPack(t, base+"reporting:\n  amendments: metrics\n")
+	if err != nil {
+		t.Fatalf("empty reporting.endpoint rejected: %v", err)
+	}
+	if p.Manifest.Reporting == nil || p.Manifest.Reporting.Endpoint != "" {
+		t.Fatalf("empty reporting.endpoint: %+v", p.Manifest.Reporting)
+	}
+	// Non-https endpoint → manifest error, same message style as update_check.
+	_, err = loadManifestPack(t, base+"reporting:\n  endpoint: http://telemetry.example\n")
+	if err == nil {
+		t.Fatal("http endpoint: want error")
+	}
+	const wantMsg = `reporting.endpoint "http://telemetry.example": must be an https:// URL`
+	if !strings.Contains(err.Error(), wantMsg) {
+		t.Errorf("error message = %q, want it to contain %q", err.Error(), wantMsg)
 	}
 }
