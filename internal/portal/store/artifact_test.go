@@ -3,6 +3,8 @@ package store
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/tensorgroup/openescapement/internal/engine"
 )
 
 func TestDeriveDrift(t *testing.T) {
@@ -89,4 +91,67 @@ func TestOldShapeEventDecodes(t *testing.T) {
 	if len(rows) != 1 || rows[0].Status != "drifted" {
 		t.Fatalf("FleetRows on old-shape event: %+v", rows)
 	}
+}
+
+// TestEventArtifactJSONKeysAreLowercase pins the wire shape: an artifact's
+// keys are all lowercase, matching engine.Finding's own convention
+// (subject/kind/managed/local/amendment/alteration), so Amendment and
+// Alteration never regress to the capitalized default Go field name.
+func TestEventArtifactJSONKeysAreLowercase(t *testing.T) {
+	e := Event{
+		TS:   day(1),
+		Kind: "status",
+		Artifacts: []EventArtifact{{
+			Path:      "CLAUDE.md",
+			Kind:      "file",
+			Managed:   "altered",
+			Local:     "amended",
+			Amendment: &engine.Amendment{Bytes: 12, Lines: 1, Hash: "abc123"},
+			Alteration: &engine.Alteration{
+				ExpectedHash: "exp123",
+				ActualHash:   "act456",
+			},
+		}},
+	}
+	data, err := json.Marshal(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	var arts []json.RawMessage
+	if err := json.Unmarshal(raw["artifacts"], &arts); err != nil {
+		t.Fatal(err)
+	}
+	if len(arts) != 1 {
+		t.Fatalf("want 1 artifact, got %d", len(arts))
+	}
+	var artKeys map[string]json.RawMessage
+	if err := json.Unmarshal(arts[0], &artKeys); err != nil {
+		t.Fatal(err)
+	}
+
+	want := map[string]bool{
+		"path": true, "kind": true, "managed": true, "local": true,
+		"amendment": true, "alteration": true,
+	}
+	if len(artKeys) != len(want) {
+		t.Fatalf("artifact keys = %v, want exactly %v", keysOf(artKeys), keysOf(want))
+	}
+	for k := range want {
+		if _, ok := artKeys[k]; !ok {
+			t.Fatalf("missing lowercase key %q in artifact JSON: %s", k, arts[0])
+		}
+	}
+}
+
+func keysOf[V any](m map[string]V) []string {
+	var out []string
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }

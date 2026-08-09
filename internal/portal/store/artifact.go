@@ -12,8 +12,8 @@ type EventArtifact struct {
 	Kind       string             `json:"kind"`
 	Managed    string             `json:"managed"`
 	Local      string             `json:"local"`
-	Amendment  *engine.Amendment  `json:",omitempty"`
-	Alteration *engine.Alteration `json:",omitempty"`
+	Amendment  *engine.Amendment  `json:"amendment,omitempty"`
+	Alteration *engine.Alteration `json:"alteration,omitempty"`
 }
 
 // DeriveDrift computes Event.Drift's value from artifacts: "drifted" if any
