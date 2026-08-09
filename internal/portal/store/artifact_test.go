@@ -16,9 +16,17 @@ func TestDeriveDrift(t *testing.T) {
 		{"no artifacts", nil, "in-sync"},
 		{"all in-sync", []EventArtifact{{Managed: "in-sync"}, {Managed: "in-sync"}}, "in-sync"},
 		{"one altered", []EventArtifact{{Managed: "in-sync"}, {Managed: "altered"}}, "drifted"},
-		{"one stale", []EventArtifact{{Managed: "stale"}}, "drifted"},
+		// Adjudicated correction (telemetry-surface plan, Task 8 ledger): the
+		// original two-valued DeriveDrift folded stale into drifted, but the
+		// spec's migration promise is that existing rollups continue to
+		// work, and rollup.FleetRow.Status renders "stale" as its own
+		// state. A stale-only artifact list must derive "stale", not
+		// "drifted" — this case's want changed from "drifted" to "stale".
+		{"one stale", []EventArtifact{{Managed: "stale"}}, "stale"},
 		{"one missing", []EventArtifact{{Managed: "missing"}}, "drifted"},
 		{"one orphan", []EventArtifact{{Managed: "orphan"}}, "drifted"},
+		{"stale only, multiple artifacts", []EventArtifact{{Managed: "in-sync"}, {Managed: "stale"}}, "stale"},
+		{"stale and altered: altered wins precedence", []EventArtifact{{Managed: "stale"}, {Managed: "altered"}}, "drifted"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

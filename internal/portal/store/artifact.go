@@ -16,14 +16,30 @@ type EventArtifact struct {
 	Alteration *engine.Alteration `json:"alteration,omitempty"`
 }
 
-// DeriveDrift computes Event.Drift's value from artifacts: "drifted" if any
-// artifact's Managed state is not in-sync, else "in-sync". The sender no
+// DeriveDrift computes Event.Drift's value from artifacts. The sender no
 // longer chooses drift directly; this is the one place that decides it.
+// Three-valued with precedence, so the stale distinction survives
+// derivation instead of collapsing into drifted: rollup.FleetRow.Status
+// renders "stale" as its own state (FleetRows reads e.Drift verbatim), and
+// the spec's migration promise is that existing rollups continue to work —
+// a two-valued derivation that folded stale into drifted would silently
+// break that contract.
+//
+//  1. any artifact's Managed in {altered, missing, orphan} -> "drifted"
+//  2. else any artifact's Managed == "stale" -> "stale"
+//  3. else -> "in-sync"
 func DeriveDrift(arts []EventArtifact) string {
+	stale := false
 	for _, a := range arts {
-		if a.Managed != "in-sync" {
+		switch a.Managed {
+		case "altered", "missing", "orphan":
 			return "drifted"
+		case "stale":
+			stale = true
 		}
+	}
+	if stale {
+		return "stale"
 	}
 	return "in-sync"
 }
