@@ -151,7 +151,7 @@ constraints:
 # CLAUDE.md                       ← your file, your content above the block
 
 <!-- escapement:begin packs=acme-org@1.4.0 hash=sha256:9f2c… -->
-> Managed by escapement — do not edit. …policy text…
+> Managed by escapement. Do not edit. …policy text…
 <!-- escapement:end -->
 ```
 

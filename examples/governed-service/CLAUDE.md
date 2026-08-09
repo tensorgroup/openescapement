@@ -9,8 +9,8 @@ This file is owned by the team. Everything above the managed block is ours;
 - Test: `pnpm test`
 - This service is a demo — it has no real code, it exists to show escapement managing a repo.
 
-<!-- escapement:begin packs=acme-org@0.1.0 hash=sha256:e5abb502c886ee2c2f46029101848bbdfbf8383d58afc229d91049a1c1020c97 -->
-> Managed by escapement — do not edit. Run `esc diff` to see source. Team content goes outside this block.
+<!-- escapement:begin packs=acme-org@0.1.0 hash=sha256:8f8112f52510b935098cdd37b2cb906c9a26472c2b8457b759fca831523b13b7 -->
+> Managed by escapement. Do not edit. Run `esc diff` to see source. Team content goes outside this block.
 
 ## Secrets & keys
 

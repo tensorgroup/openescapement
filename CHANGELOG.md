@@ -29,10 +29,12 @@ tagged releases begin.
   which only ever covers a hand-edited managed region, so a declined skill
   directory or an undeleted orphaned block sent the reader to a command that
   shows nothing about it.
-- `esc status` reports a retired esc skill directory as an `orphan` finding,
-  the way it already did for an orphaned managed block. A retirement that
-  `esc sync` declines is therefore visible to `esc status --check` instead of
-  passing it at exit 0.
+- **BREAKING for CI gating on `esc status --check`.** `esc status` reports a
+  retired esc skill directory as an `orphan` finding, the way it already did
+  for an orphaned managed block. A retirement that `esc sync` declines is
+  therefore visible to `esc status --check` instead of passing it at exit 0.
+  Repos previously green on `--check` while parked in a declined retirement
+  now exit 1 there.
 - A symlink standing where escapement is about to write now exits 4, not 1.
   Exit 1 is the drift-and-constraint class a CI gate reads as routine and
   self-healing; a containment refusal is neither, and the other containment
@@ -139,6 +141,32 @@ tagged releases begin.
 - `esc serve --demo` now resets its demo-owned data (org store, pack repos,
   demo repo, guidance) to pristine on every startup and prints
   `esc: demo data reset`. Non-demo servers are unaffected.
+
+### Fixed
+- CRLF instruction files: leading YAML frontmatter with CRLF line endings is
+  now recognized, so sync's top placement and the `esc init` marker offer
+  insert below the fence instead of above it (which silently demoted the
+  frontmatter to a setext heading), and a single blank line between
+  frontmatter and a leading H1 no longer stops the block from landing below
+  the title. Escapement still renders LF; a managed block converted to CRLF
+  on disk (e.g. by `core.autocrlf`) reports as altered, byte-truthfully.
+- A whitespace-only `.mcp.json` is treated as empty instead of failing the
+  sync with a JSON parse error.
+- `esc status` no longer follows a hostile lockfile path out of the repo (or
+  through a symlink) when reporting an orphaned managed block, matching the
+  containment rules the skill-directory pass already enforced.
+- `esc status` no longer advises `esc sync --force` for a lockfile directory
+  entry that `esc sync` refuses to touch as not escapement-owned; it now
+  reports what sync will actually do.
+
+### Changed
+- The managed-block notice line reads "Managed by escapement. Do not edit."
+  (previously an em-dash). Cosmetic for humans; a hash change for tooling:
+  the next `esc sync` rewrites the block, and until then `esc status`
+  reports `stale`, which is routine drift.
+- `esc init` confirms each marker write ("CLAUDE.md: wrote <!-- escapement:block -->")
+  and says so when a position answer is not recognized, instead of writing
+  or declining silently.
 
 Planned — see `docs/roadmap/`:
 - v0.2: MCP server surface (live policy queries, connection telemetry, agent-initiated registration)

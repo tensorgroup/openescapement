@@ -26,7 +26,7 @@ var TargetFile = map[string]string{
 	TargetGovernance: "GOVERNANCE.md",
 }
 
-const notice = "> Managed by escapement — do not edit. Run `esc diff` to see source. Team content goes outside this block."
+const notice = "> Managed by escapement. Do not edit. Run `esc diff` to see source. Team content goes outside this block."
 
 var statusOrder = []string{"preferred", "allowed", "review-required", "banned"}
 
