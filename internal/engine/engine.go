@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -223,10 +224,16 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 				Path: render.TargetFile[t], Kind: KindFile, Hash: esc.HashBytes([]byte(content)), Body: content,
 			})
 		case render.TargetSkills:
+			// Conflicts are first-class and fail closed (spec §3): two entries
+			// across all configured packs resolving to the same on-disk path is
+			// a config-combination problem — no single manifest is invalid, so
+			// this is ErrConfig (exit 2), not ErrManifest, and certainly not
+			// exit 1: a CI gate reads exit 1 as routine and self-healing, and
+			// no amount of syncing resolves a name collision.
+			skillOwner := map[string]string{} // target path -> pack name
 			for _, p := range res.PackObjs {
 				for _, e := range p.Manifest.Skills {
-					rel := e.Path
-					src := filepath.Join(p.Dir, filepath.FromSlash(rel))
+					src := filepath.Join(p.Dir, filepath.FromSlash(e.Path))
 					// One walk (pack.DirFiles) produces the file list that
 					// both the hash and Files are built from, so the two
 					// cannot disagree by construction — a second, ad hoc
@@ -242,9 +249,15 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 					if err != nil {
 						return nil, err
 					}
-					name := "esc-" + p.Manifest.Name + "-" + filepath.Base(rel)
+					name := e.DirName(p.Manifest.Name)
+					target := path.Join(".claude", "skills", name)
+					if owner, ok := skillOwner[target]; ok {
+						return nil, fmt.Errorf("%w: skill directory %s is declared by packs %s and %s; rename one entry (skills: {path, name}) so they do not collide",
+							esc.ErrConfig, target, owner, p.Manifest.Name)
+					}
+					skillOwner[target] = p.Manifest.Name
 					res.Artifacts = append(res.Artifacts, Artifact{
-						Path: filepath.ToSlash(filepath.Join(".claude", "skills", name)),
+						Path: target,
 						Kind: KindDir, Hash: h, SrcDir: src, Files: files,
 					})
 				}
