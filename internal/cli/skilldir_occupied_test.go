@@ -58,3 +58,50 @@ func TestStatusReportsOccupiedAndCheckGates(t *testing.T) {
 		t.Fatalf("status --check must gate on occupied, got %d", code)
 	}
 }
+
+// TestSyncAdoptsIdenticalDirAtTarget covers the narrow exception to the
+// occupied gate: a pre-existing, unmanaged target directory that is
+// byte-for-byte identical to what the pack would have written is adopted —
+// lock entry recorded, nothing written to disk, one stderr notice — rather
+// than skipped. This is what lets a sync interrupted between writing a dir
+// and saving the lockfile converge cleanly on the next run instead of
+// dead-ending as permanently "occupied" with --force excluded from
+// resolving it.
+func TestSyncAdoptsIdenticalDirAtTarget(t *testing.T) {
+	root := t.TempDir()
+	src := writeLocalPack(t, root, "policy", "acme",
+		"skills:\n  - path: skills/brainstorming\n    name: brainstorming\n")
+	writeFiles(t, root, map[string]string{
+		".escapement/config.yaml": localConfig(src),
+		// Byte-identical to writeLocalPack's own skill fixture content.
+		".claude/skills/brainstorming/SKILL.md": "---\nname: brainstorming\n---\n\nUpstream method.\n",
+	})
+	out, code := runEscOut(t, root, "sync")
+	if code != 0 {
+		t.Fatalf("esc sync exited %d:\n%s", code, out)
+	}
+	if !strings.Contains(out, "adopted .claude/skills/brainstorming") {
+		t.Fatalf("esc sync printed no adoption notice:\n%s", out)
+	}
+	if strings.Contains(out, "skipped .claude/skills/brainstorming") {
+		t.Fatalf("esc sync skipped an identical directory instead of adopting it:\n%s", out)
+	}
+	lock, err := os.ReadFile(filepath.Join(root, ".escapement", "escapement.lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(lock), ".claude/skills/brainstorming") {
+		t.Fatalf("lockfile carries no entry for the adopted directory:\n%s", lock)
+	}
+	// Second sync converges: the directory is now tracked and in sync.
+	out, code = runEscOut(t, root, "status")
+	if code != 0 {
+		t.Fatalf("status after adoption exited %d:\n%s", code, out)
+	}
+	if strings.Contains(out, "occupied") {
+		t.Fatalf("status still reports occupied after adoption:\n%s", out)
+	}
+	if !strings.Contains(out, "✓ .claude/skills/brainstorming") {
+		t.Fatalf("status did not report the adopted directory in sync:\n%s", out)
+	}
+}

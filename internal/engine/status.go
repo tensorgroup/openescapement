@@ -380,6 +380,14 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 			// declines. No prior lock entry + something on disk = a directory
 			// escapement never wrote occupying the target.
 			if _, lerr := os.Lstat(abs); lerr == nil {
+				// Mirrors Apply's identicalDirContent exception too: a
+				// byte-for-byte match has nothing to destroy, so the next
+				// sync adopts it rather than skipping, and status must
+				// report the same in-sync verdict it will converge to,
+				// not "occupied" for a directory that is already correct.
+				if _, identical := identicalDirContent(abs, a.Files, a.Hash); identical {
+					return Finding{Subject: a.Path, Kind: a.Kind, State: InSync, Local: LocalNone}
+				}
 				return Finding{Subject: a.Path, Kind: a.Kind, State: Occupied, Local: LocalNone,
 					Detail: "an unmanaged directory occupies this path; escapement will not adopt or overwrite it — move it aside, then run `esc sync` (`--force` does not override this)"}
 			}

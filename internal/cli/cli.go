@@ -438,15 +438,25 @@ func syncOnce(ctx context.Context, root string, force bool, stdout, stderr io.Wr
 	for _, s := range res.Skipped {
 		skipped[s.Subject] = true
 	}
+	adopted := make(map[string]bool, len(res.Adopted))
+	for _, s := range res.Adopted {
+		adopted[s] = true
+	}
 	// Applied and skipped counts both go on stdout: len(plan.Artifacts)
 	// alone would report a declined artifact as "synced" to anyone reading
-	// only stdout, when its content is stderr-only.
+	// only stdout, when its content is stderr-only. Adopted artifacts are
+	// folded into neither count — nothing was written (unlike Applied) and
+	// nothing was declined (unlike Skipped) — so they get their own mark
+	// below and their own stderr notice, not a count in this line.
 	fmt.Fprintf(stdout, "Synced %d pack(s), %d artifact(s) applied, %d skipped:\n",
 		len(plan.Packs), len(res.Applied), len(res.Skipped))
 	for _, a := range plan.Artifacts {
 		mark := ""
-		if skipped[a.Path] {
+		switch {
+		case skipped[a.Path]:
 			mark = "  (skipped, see warning below)"
+		case adopted[a.Path]:
+			mark = "  (adopted, see notice below)"
 		}
 		fmt.Fprintf(stdout, "  %-10s %s%s\n", a.Kind, a.Path, mark)
 	}
@@ -456,6 +466,9 @@ func syncOnce(ctx context.Context, root string, force bool, stdout, stderr io.Wr
 	for _, s := range res.Skipped {
 		fmt.Fprintf(stderr, "  skipped %s: %s\n", s.Subject, s.Reason)
 		fmt.Fprintf(stderr, "    %s\n", skipHint(s))
+	}
+	for _, s := range res.Adopted {
+		fmt.Fprintf(stderr, "  adopted %s: existing directory matches pack content exactly\n", s)
 	}
 	publishSyncResult(ctx, root, res, stderr)
 	return nil

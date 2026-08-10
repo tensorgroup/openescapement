@@ -153,13 +153,69 @@ const (
 	// destruction inside, something the team owns, so sync declines. force
 	// does NOT override this cause: force is consent to overwrite
 	// escapement's own content, and this content never was.
+	//
+	// One narrow exception is not a skip at all: identicalDirContent's
+	// byte-for-byte match, adopted below instead of reaching this cause.
+	// There is nothing this cause protects when there is nothing to destroy.
 	SkipUnmanagedDirAtTarget SkipCause = "unmanaged-dir-at-target"
 )
 
 // SyncResult reports what a sync wrote and what it declined to write.
 type SyncResult struct {
-	Applied []string  `json:"applied"`
+	Applied []string `json:"applied"`
+	// Adopted lists the repo-relative paths of KindDir artifacts where a
+	// pre-existing, unmanaged target directory turned out to be
+	// byte-for-byte identical to what the pack would have written
+	// (identicalDirContent). Apply records the lock entry and writes nothing
+	// to disk. Kept separate from Applied (nothing was actually written) and
+	// from Skipped (nothing was declined — the sync succeeded): a consumer
+	// asking "did this artifact converge" needs adoption to read as success,
+	// not as a decline that happens to carry no warning.
+	Adopted []string  `json:"adopted,omitempty"`
 	Skipped []Skipped `json:"skipped,omitempty"`
+}
+
+// identicalDirContent reports whether the pre-existing directory at abs is
+// byte-for-byte identical to the KindDir artifact a would have written: the
+// same set of pack-relative file paths as a.Files, and the same content hash
+// as a.Hash (pack.DirHashOf, the same function that produced a.Hash at plan
+// time — see engine.go's TargetSkills branch). This is the ONLY condition
+// under which the occupied gate below adopts rather than skips: adoption is
+// safe precisely and only when there is nothing to destroy. It is what lets
+// a sync interrupted between this loop's dir write (further down, in the
+// ordinary per-Kind switch) and the final lock.Save at the bottom of Apply
+// converge cleanly on the next run, instead of dead-ending forever on
+// "occupied" with force deliberately excluded from resolving it.
+//
+// pack.DirFiles performs its own symlink refusal while walking abs (it fails
+// closed the instant it meets one), so a hostile or merely unusual nested
+// symlink can never be read through here to produce a spoofed match. Any
+// error from DirFiles or DirHashOf — a symlink, a permission failure, a file
+// that vanished mid-walk — is treated as "not identical", not as grounds to
+// fail the whole sync: abs is a directory escapement does not yet own, so an
+// unreadable entry inside it is evidence this particular adoption isn't
+// safe, not the kind of repo-containment failure refuseSymlinks (already run
+// unconditionally on a.Path, above this call site) exists to catch.
+func identicalDirContent(abs string, wantFiles []string, wantHash string) ([]string, bool) {
+	got, err := pack.DirFiles(abs)
+	if err != nil {
+		return nil, false
+	}
+	want := append([]string(nil), wantFiles...)
+	sort.Strings(want)
+	if len(want) != len(got) {
+		return nil, false
+	}
+	for i := range want {
+		if want[i] != got[i] {
+			return nil, false
+		}
+	}
+	actual, err := pack.DirHashOf(abs, got)
+	if err != nil || actual != wantHash {
+		return nil, false
+	}
+	return got, true
 }
 
 // alterationActual returns the on-disk hash recorded on an Altered finding,
@@ -271,6 +327,17 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 				// refused above (refuseSymlinks); this catches a plain dir or
 				// file. Checked outside the force gate deliberately.
 				if _, statErr := os.Lstat(abs); statErr == nil {
+					if files, identical := identicalDirContent(abs, a.Files, a.Hash); identical {
+						// Nothing to destroy: record the lock entry, write
+						// nothing to disk. See identicalDirContent's doc
+						// comment for why this is the one safe exception to
+						// the occupied skip below.
+						arts = append(arts, lockfile.LockArtifact{
+							Path: a.Path, Kind: a.Kind, Hash: a.Hash, Files: files,
+						})
+						res.Adopted = append(res.Adopted, a.Path)
+						continue
+					}
 					res.Skipped = append(res.Skipped, Skipped{
 						Subject: a.Path, Kind: a.Kind, Cause: SkipUnmanagedDirAtTarget,
 						Reason:       "an unmanaged directory already occupies this path",

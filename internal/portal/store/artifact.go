@@ -25,14 +25,21 @@ type EventArtifact struct {
 // a two-valued derivation that folded stale into drifted would silently
 // break that contract.
 //
-//  1. any artifact's Managed in {altered, missing, orphan} -> "drifted"
+//  1. any artifact's Managed in {altered, missing, orphan, occupied} -> "drifted"
 //  2. else any artifact's Managed == "stale" -> "stale"
 //  3. else -> "in-sync"
+//
+// occupied joins this set (not a fourth precedence level) because it is
+// exit-1 territory on `esc status --check` exactly like the rest of the set:
+// an unmanaged directory sitting at a KindDir artifact's target with no
+// prior lock entry. The CLI's --check verdict and this rollup must agree on
+// what counts as compliant, or a repo failing CI would still publish as
+// in-sync to the fleet view.
 func DeriveDrift(arts []EventArtifact) string {
 	stale := false
 	for _, a := range arts {
 		switch a.Managed {
-		case "altered", "missing", "orphan":
+		case "altered", "missing", "orphan", "occupied":
 			return "drifted"
 		case "stale":
 			stale = true

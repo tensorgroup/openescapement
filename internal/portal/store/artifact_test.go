@@ -25,6 +25,12 @@ func TestDeriveDrift(t *testing.T) {
 		{"one stale", []EventArtifact{{Managed: "stale"}}, "stale"},
 		{"one missing", []EventArtifact{{Managed: "missing"}}, "drifted"},
 		{"one orphan", []EventArtifact{{Managed: "orphan"}}, "drifted"},
+		// occupied is exit-1 territory on `esc status --check` (an unmanaged
+		// directory sits at a KindDir artifact's target with no prior lock
+		// entry), so it must derive "drifted" here too: the CLI's --check
+		// verdict and the portal's fleet rollup must agree on what counts as
+		// compliant.
+		{"one occupied", []EventArtifact{{Managed: "occupied"}}, "drifted"},
 		{"stale only, multiple artifacts", []EventArtifact{{Managed: "in-sync"}, {Managed: "stale"}}, "stale"},
 		{"stale and altered: altered wins precedence", []EventArtifact{{Managed: "stale"}, {Managed: "altered"}}, "drifted"},
 	}
