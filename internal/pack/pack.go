@@ -126,6 +126,7 @@ func Load(dir string) (*Pack, error) {
 		return nil, err
 	}
 	p := &Pack{Dir: dir, Manifest: m}
+	p.Warnings = LintMCP(m.MCP)
 	customNames := map[string]bool{}
 	for _, ct := range m.CustomTargets {
 		customNames[ct.Name] = true

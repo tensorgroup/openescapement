@@ -191,3 +191,15 @@ func TestPackAddSkillNoTagsFallsBackToHeadWithWarning(t *testing.T) {
 		t.Fatalf("root skill not vendored under repo name: %v", err)
 	}
 }
+
+func TestPackCommandsPrintMCPFloatWarning(t *testing.T) {
+	t.Setenv("ESC_CACHE_DIR", t.TempDir())
+	root := newAuthorPack(t)
+	writeFiles(t, root, map[string]string{
+		"pack.yaml": "schema: 1\nname: acme\nversion: 1.0.0\nmcp:\n  servers:\n    floaty:\n      command: npx\n      args: [\"-y\", \"@scope/server@latest\"]\n",
+	})
+	out, _ := runEscOut(t, root, "pack", "outdated")
+	if !strings.Contains(out, "warning:") || !strings.Contains(out, "floaty") {
+		t.Fatalf("pack command did not surface the float warning:\n%s", out)
+	}
+}
