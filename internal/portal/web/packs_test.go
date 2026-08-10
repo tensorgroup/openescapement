@@ -68,6 +68,64 @@ func newTestServerWithPacks(t *testing.T) *Server {
 	return New(st, packs, "", "test")
 }
 
+// newPackCloneWithSkill builds an "org-baseline" clone like newPackClone but
+// with an additional skill entry (skills/esc-reconcile, with a SKILL.md),
+// for tests exercising the pack detail page against a pack that has skills.
+func newPackCloneWithSkill(t *testing.T) (mgrDir string) {
+	t.Helper()
+	mgrDir = t.TempDir()
+	dir := filepath.Join(mgrDir, "org-baseline")
+	if err := os.MkdirAll(filepath.Join(dir, "rules"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "skills", "esc-reconcile"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		"pack.yaml": "schema: 1\nname: org-baseline\nversion: 1.2.0\ndescription: Org baseline rules\n" +
+			"rules:\n  - rules/security.md\nskills:\n  - skills/esc-reconcile\n",
+		"rules/security.md":             "---\ntargets: [claude, agents]\n---\n# Security\n\n- Never commit secrets.\n",
+		"skills/esc-reconcile/SKILL.md": "---\nname: esc-reconcile\ndescription: reconcile skill\n---\nDo the thing.\n",
+	}
+	for p, c := range files {
+		if err := os.WriteFile(filepath.Join(dir, p), []byte(c), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	packGit(t, dir, "init", "-q", "-b", "main")
+	packGit(t, dir, "config", "user.email", "t@t")
+	packGit(t, dir, "config", "user.name", "t")
+	packGit(t, dir, "config", "commit.gpgsign", "false")
+	packGit(t, dir, "config", "tag.gpgsign", "false")
+	packGit(t, dir, "add", "-A")
+	packGit(t, dir, "commit", "-q", "-m", "init")
+	packGit(t, dir, "tag", "-a", "v1.2.0", "-m", "v1.2.0")
+	return mgrDir
+}
+
+// TestPackDetailRendersPackWithSkill is the user-reported bug: viewing a
+// pack detail page for a pack that has a skill entry 500'd with
+// "read .../skills/esc-reconcile: is a directory", because the fragment
+// list carried the skill's bare directory path into os.ReadFile. The
+// detail page must render 200 and show the skill's SKILL.md as a fragment.
+func TestPackDetailRendersPackWithSkill(t *testing.T) {
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	packs := publish.NewManager(newPackCloneWithSkill(t))
+	s := New(st, packs, "", "test")
+	h := s.Handler()
+	rr := get(t, h, "/packs/org-baseline", nil)
+	if rr.Code != 200 {
+		t.Fatalf("pack detail with skill: %d %s", rr.Code, rr.Body.String())
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "skills/esc-reconcile/SKILL.md") {
+		t.Fatalf("detail page missing skill fragment: %s", body)
+	}
+}
+
 func TestPacksListAndDetail(t *testing.T) {
 	s := newTestServerWithPacks(t)
 	h := s.Handler()

@@ -132,7 +132,22 @@ func (m *Manager) Get(ctx context.Context, name string) (*PackInfo, error) {
 	frags := make([]string, 0, len(p.Manifest.Rules)+len(p.Manifest.Skills))
 	frags = append(frags, p.Manifest.Rules...)
 	for _, e := range p.Manifest.Skills {
-		frags = append(frags, e.Path)
+		// A skill entry's Path is a directory, not a fragment: os.ReadFile
+		// on it (ReadFragment, and every page/handler that iterates
+		// Fragments) fails with EISDIR. The skill's displayable content is
+		// its SKILL.md, so the fragment is the file within the directory,
+		// joined with "/" rather than filepath.Join to keep the string
+		// forward-slash on every platform, matching every other fragment
+		// path here and what safeFragPath expects. Manifest validation only
+		// checks that the declared path is a directory, not that a
+		// SKILL.md lives inside it, so a missing SKILL.md is skipped
+		// rather than added: contributing a fragment that would also 500
+		// is worse than a pack rendering with one less fragment.
+		skillFrag := e.Path + "/SKILL.md"
+		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(skillFrag))); err != nil {
+			continue
+		}
+		frags = append(frags, skillFrag)
 	}
 	sort.Strings(frags)
 	tags, err := listTags(ctx, dir)

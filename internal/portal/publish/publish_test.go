@@ -59,6 +59,85 @@ func newPackClone(t *testing.T) (mgrDir string) {
 	return mgrDir
 }
 
+// newPackCloneWithSkills builds an "org-baseline" clone whose manifest
+// declares one skill directory with a SKILL.md (the normal, renderable
+// case) and one skill directory without one (a shape pack.Load's manifest
+// validation permits today: it only checks that the declared path is a
+// directory, not that SKILL.md lives inside it).
+func newPackCloneWithSkills(t *testing.T) (mgrDir string) {
+	t.Helper()
+	mgrDir = t.TempDir()
+	dir := filepath.Join(mgrDir, "org-baseline")
+	if err := os.MkdirAll(filepath.Join(dir, "rules"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "skills", "esc-reconcile"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "skills", "no-skill-md"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		"pack.yaml": "schema: 1\nname: org-baseline\nversion: 1.2.0\nrules:\n  - rules/security.md\n" +
+			"skills:\n  - skills/esc-reconcile\n  - skills/no-skill-md\n",
+		"rules/security.md":             "---\ntargets: [claude, agents]\n---\n# Security\n\n- Never commit secrets.\n",
+		"skills/esc-reconcile/SKILL.md": "---\nname: esc-reconcile\ndescription: reconcile skill\n---\nDo the thing.\n",
+		"skills/no-skill-md/notes.txt":  "not a skill file\n",
+	}
+	for p, c := range files {
+		if err := os.WriteFile(filepath.Join(dir, p), []byte(c), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git(t, dir, "init", "-q", "-b", "main")
+	git(t, dir, "config", "user.email", "t@t")
+	git(t, dir, "config", "user.name", "t")
+	git(t, dir, "config", "commit.gpgsign", "false")
+	git(t, dir, "config", "tag.gpgsign", "false")
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-q", "-m", "init")
+	git(t, dir, "tag", "-a", "v1.2.0", "-m", "v1.2.0")
+	return mgrDir
+}
+
+// TestGetSkillFragmentIsSkillMdPath reproduces the portal 500
+// ("read .../skills/esc-reconcile: is a directory") reported viewing a pack
+// detail page and adding a rule pack for a pack with a skill entry. Get
+// built Fragments from the skill entry's bare directory Path; every fragment
+// then had to survive os.ReadFile in handlePackDetail/ReadFragment, and a
+// directory can't. The fragment for a skill must be its SKILL.md file, and a
+// skill directory that has no SKILL.md must be skipped rather than
+// contributing a fragment that would also 500.
+func TestGetSkillFragmentIsSkillMdPath(t *testing.T) {
+	m := NewManager(newPackCloneWithSkills(t))
+	ctx := context.Background()
+	p, err := m.Get(ctx, "org-baseline")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = "skills/esc-reconcile/SKILL.md"
+	found := false
+	for _, f := range p.Fragments {
+		if f == "skills/esc-reconcile" {
+			t.Fatalf("fragment list still carries the bare skill directory %q", f)
+		}
+		if strings.Contains(f, "no-skill-md") {
+			t.Fatalf("skill dir with no SKILL.md must not contribute a fragment, got %q", f)
+		}
+		if f == want {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("fragments %v missing %q", p.Fragments, want)
+	}
+	// The whole point: every fragment Get returns must be readable, unlike
+	// the bare directory path this replaces.
+	if _, err := m.ReadFragment("org-baseline", want); err != nil {
+		t.Fatalf("ReadFragment(%q): %v", want, err)
+	}
+}
+
 func TestListAndGet(t *testing.T) {
 	m := NewManager(newPackClone(t))
 	infos, err := m.List(context.Background())
