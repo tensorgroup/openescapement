@@ -106,6 +106,31 @@ skills:
 	}
 }
 
+// TestManifestRejectsInvalidSkillName is the negative test for the
+// ValidName check on an object-form {path, name} skill entry (pack.go's
+// validate, "skill %s: name %q must match..."). This is the control that
+// backstops both Important-1 (add-skill validates before writing) and the
+// sources.yaml traversal fix: an invalid name reaching pack.yaml at all
+// must fail Load, and until now nothing exercised that branch directly.
+func TestManifestRejectsInvalidSkillName(t *testing.T) {
+	dir := t.TempDir()
+	writeSkillFile(t, dir, "skills/a/SKILL.md")
+	manifest := `schema: 1
+name: acme
+version: 1.0.0
+skills:
+  - path: skills/a
+    name: ../../evil
+`
+	if err := os.WriteFile(filepath.Join(dir, "pack.yaml"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(dir)
+	if err == nil || !errors.Is(err, esc.ErrManifest) {
+		t.Fatalf("want ErrManifest for an invalid skill name, got %v", err)
+	}
+}
+
 func writeSkillFile(t *testing.T, root, rel string) {
 	t.Helper()
 	abs := filepath.Join(root, filepath.FromSlash(rel))

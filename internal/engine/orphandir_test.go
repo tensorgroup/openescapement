@@ -110,6 +110,46 @@ func TestApplyOrphanDirPreservesLocalAmendments(t *testing.T) {
 	}
 }
 
+// TestApplyOrphanDirPreservesLocalAmendmentsUnprefixedDir is the same
+// regression as TestApplyOrphanDirPreservesLocalAmendments, but for a
+// name-overridden skill directory (pack.SkillEntry.Name) that carries no
+// "esc-" prefix at all — e.g. a vendored skill kept under its upstream name
+// (AGENTS.md's vendoring-cycle note). ownedSkillPath replaced the old
+// prefix-based ownership check specifically so this directory shape could
+// still retire; the existing coverage only ever exercised a prefixed
+// directory, so nothing pinned that an unprefixed one keeps the same
+// local-amendment guarantee.
+func TestApplyOrphanDirPreservesLocalAmendmentsUnprefixedDir(t *testing.T) {
+	root := t.TempDir()
+	const artPath = ".claude/skills/brainstorming"
+	orphanDirRepo(t, root, artPath,
+		map[string]string{"SKILL.md": "pack content\n"},
+		map[string]string{"team-notes.md": "our own notes\n"})
+
+	res, err := Apply(root, &PlanResult{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dir := filepath.Join(root, filepath.FromSlash(artPath))
+	if _, err := os.Stat(filepath.Join(dir, "SKILL.md")); !os.IsNotExist(err) {
+		t.Errorf("a pack-provided file in a retired, unprefixed skill dir must be removed, stat err = %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "team-notes.md"))
+	if err != nil {
+		t.Fatalf("retiring an unprefixed skill dir destroyed a local amendment: %v", err)
+	}
+	if string(got) != "our own notes\n" {
+		t.Errorf("local amendment mutated: %q", got)
+	}
+	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+		t.Errorf("a directory still holding unmanaged files must be left in place: %v", err)
+	}
+	if len(res.Skipped) != 1 || res.Skipped[0].Subject != artPath {
+		t.Fatalf("want one Skipped entry for %s, got %+v", artPath, res.Skipped)
+	}
+}
+
 // TestApplyOrphanDirRemovedWhenFullyManaged is the other half: the fix must
 // not over-correct into never cleaning up. A retired skill dir holding
 // nothing but pack-provided files still goes away entirely, silently, with
@@ -157,6 +197,33 @@ func TestApplyOrphanDirOwnershipGuardUsesRelativePath(t *testing.T) {
 
 	if _, err := Apply(root, &PlanResult{}, false); err == nil {
 		t.Fatal("Apply must refuse a lockfile dir entry that is not escapement-owned, even nested inside an owned skill directory")
+	}
+	got, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(artPath), "notes.md"))
+	if err != nil {
+		t.Fatalf("a directory escapement does not own was deleted: %v", err)
+	}
+	if string(got) != "do not touch\n" {
+		t.Errorf("non-owned file mutated: %q", got)
+	}
+}
+
+// TestApplyOrphanDirOwnershipGuardRefusesOutsideSkillsTree is the other half
+// of the ownership guard's coverage: TestApplyOrphanDirOwnershipGuardUsesRelativePath
+// pins a path nested too DEEP under .claude/skills (still inside that tree,
+// just more than one element below it); this pins a path that is not under
+// .claude/skills AT ALL. ownedSkillPath became the sole containment marker
+// for the removal scope once the "esc-" name-prefix check was dropped (a
+// name-overridden skill has no prefix), so a lockfile entry naming a
+// completely unrelated directory — e.g. ".claude/hooks/evil", something an
+// attacker-controlled lockfile could name directly — must be refused just as
+// firmly as one nested too deep.
+func TestApplyOrphanDirOwnershipGuardRefusesOutsideSkillsTree(t *testing.T) {
+	root := t.TempDir()
+	const artPath = ".claude/hooks/evil"
+	orphanDirRepo(t, root, artPath, map[string]string{"notes.md": "do not touch\n"}, nil)
+
+	if _, err := Apply(root, &PlanResult{}, false); err == nil {
+		t.Fatal("Apply must refuse a lockfile dir entry outside .claude/skills entirely")
 	}
 	got, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(artPath), "notes.md"))
 	if err != nil {

@@ -52,6 +52,14 @@ func runSplit(t *testing.T, root string, args ...string) (stdout, stderr string,
 // a control repo that declares no endpoint at all. Only stderr may differ
 // (see runSplit's doc comment), and only on the two failing endpoints.
 func TestSyncPublishNeverAffectsOutcome(t *testing.T) {
+	// runSplit calls Run() directly, bypassing the run() helper (cli_test.go)
+	// that otherwise pins $HOME to a fresh temp dir on a test's first call.
+	// engine.Status's cross-level duplicate scan calls os.UserHomeDir() on
+	// every status/sync, so without this the test reads the developer's
+	// real ~/.claude/skills — harmless today, but exactly the flakiness
+	// homeIsolated exists to prevent everywhere else in this package.
+	t.Setenv("HOME", t.TempDir())
+
 	up := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(202)
 	}))
