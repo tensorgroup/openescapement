@@ -1,6 +1,7 @@
 {{define "title"}}Fleet{{end}}
-{{define "explainer"}}Every team and repository, which rulebook version it follows, and whether it's up to date.{{end}}
+{{define "explainer"}}Every team and repository: Status is whether its rulebook is current, and Local edits is whether anyone has hand-edited or added to it.{{end}}
 {{define "content"}}
+{{if .Error}}<div class="error">{{.Error}}</div>{{end}}
 <div class="filters">
   <div class="segmented" role="group" aria-label="Filter by status">
     {{if eq .Status ""}}<span class="seg active" aria-current="true">All</span>{{else}}<a class="seg" href="/fleet">All</a>{{end}}
@@ -14,7 +15,7 @@
 
 <section class="unregistered">
   <h2>Unregistered</h2>
-  <p class="explainer">Activity from remotes that don't match any registered repo &mdash; AI tools in use with no governance record at all.</p>
+  <p class="explainer">Activity from remotes that don't match any registered repo: AI tools in use with no governance record at all.</p>
   {{if .Unregistered}}
   <table>
     <thead>
@@ -37,7 +38,8 @@
           {{if $.RegisterTargets}}
           <form method="post" action="/fleet/register">
             <input type="hidden" name="remote" value="{{.Remote}}">
-            <select name="repo_id" aria-label="Register {{.Remote}} as">
+            <select name="repo_id" aria-label="Register {{.Remote}} as" required>
+              <option value="" disabled selected>Choose repo&hellip;</option>
               {{range $.RegisterTargets}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
             </select>
             <button type="submit">Register</button>
@@ -79,7 +81,7 @@
             hx-get="{{.LastSyncSort.Href}}" hx-target="#fleet-table" hx-swap="innerHTML">Last sync</button>
         </form>
       </th>
-      <th scope="col" aria-sort="{{.StatusSort.Aria}}">
+      <th scope="col" aria-sort="{{.StatusSort.Aria}}" title="Currency: whether the repo's applied rule pack is up to date.">
         <form method="get" action="/fleet">
           <input type="hidden" name="status" value="{{.Status}}">
           <input type="hidden" name="dir" value="{{.StatusSort.NextDir}}">
@@ -87,7 +89,7 @@
             hx-get="{{.StatusSort.Href}}" hx-target="#fleet-table" hx-swap="innerHTML">Status</button>
         </form>
       </th>
-      <th scope="col">State</th>
+      <th scope="col" title="Local tampering: whether anyone has hand-edited managed content or added their own notes.">Local edits</th>
       <th scope="col">Agent tools</th>
     </tr>
   </thead>

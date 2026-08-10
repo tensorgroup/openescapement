@@ -385,13 +385,24 @@ type fleetData struct {
 	// set of repos a remote can be assigned to (those with no Remote yet).
 	Unregistered    []store.UnregisteredRemote
 	RegisterTargets []store.Repo
+
+	// Error is a validation message from a failed POST /fleet/register,
+	// rendered back into this same page as an in-page banner (the
+	// handlePackPublish/handleModelAdoptSave convention) rather than a bare
+	// http.Error that would dump the admin out of the portal chrome. "" on
+	// an ordinary GET.
+	Error string
 }
 
-func (s *Server) handleFleet(w http.ResponseWriter, r *http.Request) {
+// buildFleetData computes the fleet page's data for the current request:
+// rows (filtered/sorted per query params), sort-header state, and the
+// unregistered-remote bucket. Shared by handleFleet (the GET) and
+// handleFleetRegister's failure paths (which re-render this same page with
+// Error set, following handlePackPublish's validation-error convention).
+func (s *Server) buildFleetData(r *http.Request) (fleetData, error) {
 	events, err := s.Store.Events()
 	if err != nil {
-		serverError(w, err)
-		return
+		return fleetData{}, err
 	}
 	rows := store.FleetRows(s.Store.Registry(), events)
 
@@ -424,7 +435,7 @@ func (s *Server) handleFleet(w http.ResponseWriter, r *http.Request) {
 		sortCol = ""
 	}
 
-	data := fleetData{
+	return fleetData{
 		layoutData:      s.baseData("fleet"),
 		Rows:            rows,
 		Status:          status,
@@ -434,12 +445,35 @@ func (s *Server) handleFleet(w http.ResponseWriter, r *http.Request) {
 		StatusSort:      fleetHeader("status", status, sortCol, dir),
 		Unregistered:    store.UnregisteredRemotes(events),
 		RegisterTargets: s.Store.Registry().UnassignedRepos(),
+	}, nil
+}
+
+func (s *Server) handleFleet(w http.ResponseWriter, r *http.Request) {
+	data, err := s.buildFleetData(r)
+	if err != nil {
+		serverError(w, err)
+		return
 	}
 	if isHX(r) {
 		s.renderFragment(w, "fleet", "fleet-table", data)
 		return
 	}
 	s.render(w, "fleet", data)
+}
+
+// fleetRegisterError re-renders the fleet page with msg as an in-page
+// banner at the given status code, instead of a bare http.Error that would
+// dump the admin out of the portal chrome (matches handlePackPublish's and
+// handleModelAdoptSave's validation-error convention). A failure building
+// the fleet page itself is a genuine internal error, reported the usual way.
+func (s *Server) fleetRegisterError(w http.ResponseWriter, r *http.Request, status int, msg string) {
+	data, err := s.buildFleetData(r)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	data.Error = msg
+	s.renderStatus(w, status, "fleet", data)
 }
 
 // handleFleetRegister is the unregistered-remote register affordance: it
@@ -450,15 +484,33 @@ func (s *Server) handleFleet(w http.ResponseWriter, r *http.Request) {
 // flow; see the task report for why.
 func (s *Server) handleFleetRegister(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad form", http.StatusBadRequest)
+		s.fleetRegisterError(w, r, http.StatusBadRequest, "That registration form could not be read. Please try again.")
 		return
 	}
 	remote := r.FormValue("remote")
 	repoID := r.FormValue("repo_id")
 	if remote == "" || repoID == "" {
-		http.Error(w, "remote and repo_id are required", http.StatusBadRequest)
+		s.fleetRegisterError(w, r, http.StatusBadRequest, "Choose a repo before registering a remote.")
 		return
 	}
+
+	events, err := s.Store.Events()
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	stillUnregistered := false
+	for _, u := range store.UnregisteredRemotes(events) {
+		if u.Remote == remote {
+			stillUnregistered = true
+			break
+		}
+	}
+	if !stillUnregistered {
+		s.fleetRegisterError(w, r, http.StatusBadRequest, "That remote is no longer unregistered; someone may have already registered it.")
+		return
+	}
+
 	reg := s.Store.Registry()
 	found := false
 	for i := range reg.Repos {
@@ -466,7 +518,7 @@ func (s *Server) handleFleetRegister(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if reg.Repos[i].Remote != "" {
-			http.Error(w, "repo already has a remote", http.StatusConflict)
+			s.fleetRegisterError(w, r, http.StatusConflict, "That repo already has a remote registered.")
 			return
 		}
 		reg.Repos[i].Remote = remote
@@ -474,7 +526,7 @@ func (s *Server) handleFleetRegister(w http.ResponseWriter, r *http.Request) {
 		break
 	}
 	if !found {
-		http.NotFound(w, r)
+		s.fleetRegisterError(w, r, http.StatusNotFound, "That repo no longer exists.")
 		return
 	}
 	if err := s.Store.SaveRegistry(reg); err != nil {
@@ -506,11 +558,18 @@ type artifactDetail struct {
 }
 
 // buildArtifactDetail derives one artifact's detail-page view. Withheld
-// detection relies on a structural invariant, not the reporting level: an
-// EventArtifact.Amendment is only ever constructed (engine.newAmendment)
-// when it has visible Content or Items, so a local amendment (Local ==
-// "amended") whose Amendment carries neither means the publisher stripped
-// Content below content level — which is exactly the withheld case.
+// detection cannot key on Content == "" alone: an items-only amendment
+// (kind=dir/json-keys — engine.Amendment's Content carries surrounding
+// text for kind=block, Items carries discrete names for dir/json-keys) has
+// an always-empty Content regardless of reporting level, so a fully
+// visible items amendment must never be mistaken for a withheld one.
+// Genuinely withheld means: there IS a local amendment, it carries neither
+// Content nor Items (impossible from construction — engine.newAmendment
+// refuses to build an Amendment with both empty — so their absence here
+// means the publisher stripped a Content-bearing amendment down), and the
+// Collection the event carries confirms the reporting level was below
+// content (an items-only amendment reported at the content level is simply
+// complete, not withheld).
 func buildArtifactDetail(a store.EventArtifact, coll *engine.Collection) artifactDetail {
 	d := artifactDetail{Path: a.Path, Kind: a.Kind, Managed: a.Managed, Local: a.Local}
 	if a.Amendment != nil {
@@ -518,9 +577,12 @@ func buildArtifactDetail(a store.EventArtifact, coll *engine.Collection) artifac
 		d.Bytes = a.Amendment.Bytes
 		d.Lines = a.Amendment.Lines
 		d.Items = a.Amendment.Items
-		if a.Amendment.Content != "" {
+		switch {
+		case a.Amendment.Content != "":
 			d.Content = a.Amendment.Content
-		} else if a.Local == "amended" {
+		case len(a.Amendment.Items) > 0:
+			// Items-only amendment: complete as-is, nothing withheld.
+		case a.Local == "amended" && (coll == nil || coll.Amendments != engine.ReportContent):
 			d.Withheld = true
 			d.WithheldSource = "policy"
 			if coll != nil && coll.Source != "" {

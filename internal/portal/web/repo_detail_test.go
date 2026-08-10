@@ -1,6 +1,7 @@
 package web
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
@@ -117,6 +118,60 @@ func TestRepoDetailNoAmendmentsCase(t *testing.T) {
 	}
 }
 
+// TestRepoDetailItemsOnlyAmendmentIsNotWithheld covers the review finding:
+// an items-only amendment (kind=dir/json-keys) always has empty Content by
+// construction (engine.Amendment: Content carries block text, Items carries
+// discrete names), regardless of reporting level. It must render its items
+// as a complete, visible amendment, never the withheld copy.
+func TestRepoDetailItemsOnlyAmendmentIsNotWithheld(t *testing.T) {
+	evt := &store.Event{
+		TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "ligo", Drift: "in-sync",
+		// Collection is deliberately "content" level: even at the highest
+		// level, an items-only amendment's Content is still "".
+		Collection: &engine.Collection{Amendments: "content", Source: "pack"},
+		Artifacts: []store.EventArtifact{{
+			Path: ".claude/skills/esc-reconcile", Kind: engine.KindDir, Managed: "in-sync", Local: "amended",
+			Amendment: &engine.Amendment{Bytes: 30, Lines: 2, Hash: "items123", Items: []string{"NOTES.md", "scratch.sh"}},
+		}},
+	}
+	h := newTestServerWithRepo(t, evt).Handler()
+	body := get(t, h, "/fleet/r1", nil).Body.String()
+	for _, want := range []string{"NOTES.md", "scratch.sh", "30 bytes, 2 lines, 2 items"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "content withheld by") {
+		t.Fatalf("an items-only amendment must never render as withheld: %s", body)
+	}
+	if strings.Contains(body, "No amendments.") {
+		t.Fatalf("an items-only amendment is an amendment: %s", body)
+	}
+}
+
+// TestRepoDetailItemsOnlyAmendmentBelowContentLevelIsStillNotWithheld pins
+// the same invariant when the reporting level is metrics, not content: an
+// items-only amendment carries its items regardless of level (Items,
+// unlike Content, isn't redacted), so it's still complete, not withheld.
+func TestRepoDetailItemsOnlyAmendmentBelowContentLevelIsStillNotWithheld(t *testing.T) {
+	evt := &store.Event{
+		TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "ligo", Drift: "in-sync",
+		Collection: &engine.Collection{Amendments: "metrics", Source: "repo-override"},
+		Artifacts: []store.EventArtifact{{
+			Path: ".mcp.json", Kind: engine.KindJSONKeys, Managed: "in-sync", Local: "amended",
+			Amendment: &engine.Amendment{Bytes: 12, Lines: 1, Hash: "items456", Items: []string{"team-server"}},
+		}},
+	}
+	h := newTestServerWithRepo(t, evt).Handler()
+	body := get(t, h, "/fleet/r1", nil).Body.String()
+	if !strings.Contains(body, "team-server") {
+		t.Fatalf("items not rendered: %s", body)
+	}
+	if strings.Contains(body, "content withheld by") {
+		t.Fatalf("an items-only amendment must never render as withheld, even below content level: %s", body)
+	}
+}
+
 func TestRepoDetailAlteredArtifactShowsHashesAndDiff(t *testing.T) {
 	evt := &store.Event{
 		TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "ligo", Drift: "drifted",
@@ -214,5 +269,128 @@ func TestUnregisteredBucketEmptyState(t *testing.T) {
 	body := get(t, h, "/fleet", nil).Body.String()
 	if !strings.Contains(body, "No unregistered activity.") {
 		t.Fatalf("missing empty state: %s", body)
+	}
+}
+
+// TestFleetAxisLabelsNameBothAxes pins the axis-legibility fixes: the fleet
+// table's local-tampering column is named (not a bare "State"), both
+// sortable/non-sortable axis headers carry a title tooltip, and the page
+// explainer names both axes in plain language.
+func TestFleetAxisLabelsNameBothAxes(t *testing.T) {
+	h := newTestServer(t, "").Handler()
+	body := get(t, h, "/fleet", nil).Body.String()
+	for _, want := range []string{
+		">Local edits<",
+		`title="Currency: whether the repo's applied rule pack is up to date."`,
+		`title="Local tampering: whether anyone has hand-edited managed content or added their own notes."`,
+		"Status is whether its rulebook is current, and Local edits is whether anyone has hand-edited or added to it.",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, ">State<") {
+		t.Fatalf("bare, unnamed axis header should be gone: %s", body)
+	}
+}
+
+// TestRepoDetailAxesAreLabeled pins the "unlabeled pill pairs" UI fix: both
+// the repo-level (Status/Local edits) and artifact-level (Managed/Local)
+// pill pairs render inside a definition list naming each axis, so the page
+// is self-explanatory without relying on a reader already knowing the
+// governance vocabulary.
+func TestRepoDetailAxesAreLabeled(t *testing.T) {
+	evt := &store.Event{
+		TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "ligo", Drift: "in-sync",
+		Artifacts: []store.EventArtifact{{Path: "CLAUDE.md", Kind: engine.KindBlock, Managed: "in-sync", Local: "none"}},
+	}
+	h := newTestServerWithRepo(t, evt).Handler()
+	body := get(t, h, "/fleet/r1", nil).Body.String()
+	for _, want := range []string{"<dt>Status</dt>", "<dt>Local edits</dt>", "<dt>Managed</dt>", "<dt>Local</dt>"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q: %s", want, body)
+		}
+	}
+}
+
+// TestFleetRegisterSelectHasPlaceholderOption pins the register-form safety
+// fix: a disabled, selected placeholder option means a bare click-submit
+// (without explicitly choosing a repo) cannot silently bind the first repo
+// in the list.
+func TestFleetRegisterSelectHasPlaceholderOption(t *testing.T) {
+	reg := store.Registry{Repos: []store.Repo{{ID: "r1", Name: "ligo-pipeline"}}}
+	s := newTestServerWithRegistry(t, "", reg)
+	remote := "https://github.com/acme/shadow-repo"
+	if err := s.Store.AppendEvent(store.Event{TS: time.Now(), Kind: "mcp_connect", Remote: remote}); err != nil {
+		t.Fatal(err)
+	}
+	body := get(t, s.Handler(), "/fleet", nil).Body.String()
+	if !strings.Contains(body, `<option value="" disabled selected>Choose repo`) {
+		t.Fatalf("missing disabled placeholder option: %s", body)
+	}
+}
+
+// TestFleetRegisterMissingRepoRendersInPageBanner pins the error-handling
+// fix: a validation failure re-renders the fleet page (full chrome, correct
+// status code) with the message as a banner, instead of a bare http.Error
+// that would dump the admin out to a plaintext response.
+func TestFleetRegisterMissingRepoRendersInPageBanner(t *testing.T) {
+	h := newTestServerWithRepo(t, nil).Handler()
+	form := url.Values{"remote": {"https://github.com/acme/shadow-repo"}, "repo_id": {""}}
+	req := httptest.NewRequest("POST", "/fleet/register", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("code=%d", rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "<html") || !strings.Contains(body, "esc <strong>portal</strong>") {
+		t.Fatalf("error response must stay inside the portal chrome: %s", body)
+	}
+	if !strings.Contains(body, `class="error"`) || !strings.Contains(body, "Choose a repo before registering a remote.") {
+		t.Fatalf("missing in-page error banner: %s", body)
+	}
+}
+
+// TestFleetRegisterRejectsRemoteNotCurrentlyUnregistered covers the parked
+// minor closed in this rework: a remote that was never seen in an
+// unregistered event (e.g. a stale form resubmission after someone else
+// already registered it) must be rejected, not silently bound.
+func TestFleetRegisterRejectsRemoteNotCurrentlyUnregistered(t *testing.T) {
+	h := newTestServerWithRepo(t, nil).Handler()
+	form := url.Values{"remote": {"https://github.com/acme/never-seen"}, "repo_id": {"r1"}}
+	req := httptest.NewRequest("POST", "/fleet/register", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "no longer unregistered") {
+		t.Fatalf("missing stale-remote banner: %s", rr.Body.String())
+	}
+}
+
+// TestFleetRegisterRejectsAlreadyRegisteredRepo covers the conflict path:
+// registering against a repo that already has a Remote must fail with 409
+// and an in-page banner, not silently overwrite the existing binding.
+func TestFleetRegisterRejectsAlreadyRegisteredRepo(t *testing.T) {
+	reg := store.Registry{Repos: []store.Repo{{ID: "r1", Name: "ligo-pipeline", Remote: "github.com/acme/existing"}}}
+	s := newTestServerWithRegistry(t, "", reg)
+	remote := "https://github.com/acme/shadow-repo"
+	if err := s.Store.AppendEvent(store.Event{TS: time.Now(), Kind: "mcp_connect", Remote: remote}); err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{"remote": {remote}, "repo_id": {"r1"}}
+	req := httptest.NewRequest("POST", "/fleet/register", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("code=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if got, _ := s.Store.Registry().RepoByRemote("github.com/acme/existing"); got.ID != "r1" {
+		t.Fatalf("existing binding must survive a rejected re-registration: %+v", got)
 	}
 }

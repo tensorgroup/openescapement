@@ -3,10 +3,10 @@
 {{define "content"}}
 <p><a href="/fleet">&larr; Back to fleet</a></p>
 <h2>{{.RepoName}} <span class="muted">{{.DeptName}} / {{.TeamName}}</span></h2>
-<p>
-  <span class="pill {{.Status}}">{{.Status}}</span>
-  <span class="pill {{.State}}">{{.State}}</span>
-</p>
+<dl class="axes">
+  <dt>Status</dt><dd><span class="pill {{.Status}}">{{.Status}}</span></dd>
+  <dt>Local edits</dt><dd><span class="pill {{.State}}">{{.State}}</span></dd>
+</dl>
 {{if .HasEvent}}
 <p class="muted">
   Last sync: {{fmtTime .LastSync}}
@@ -19,10 +19,10 @@
   {{range .Artifacts}}
   <article class="fragment">
     <h4>{{.Path}} <span class="muted">{{.Kind}}</span></h4>
-    <p>
-      <span class="pill {{.Managed}}">{{.Managed}}</span>
-      <span class="pill {{.Local}}">{{.Local}}</span>
-    </p>
+    <dl class="axes">
+      <dt>Managed</dt><dd><span class="pill {{.Managed}}">{{.Managed}}</span></dd>
+      <dt>Local</dt><dd><span class="pill {{.Local}}">{{.Local}}</span></dd>
+    </dl>
     {{if .Altered}}
     <p class="muted">Hand-edited: expected <span class="mono">{{.ExpectedHash}}</span>, actual <span class="mono">{{.ActualHash}}</span></p>
     {{if .Diff}}<pre class="diff">{{range diffLines .Diff}}<span class="line {{.Class}}">{{.Text}}</span>{{end}}</pre>{{end}}

@@ -176,6 +176,18 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--border-strong); backgro
 .pill.altered { background: var(--stale-bg); color: var(--stale-ink); }
 
 /* ---- Chips ---- */
+/* ---- Labeled axis pairs (repo detail: Status/Local edits, Managed/Local) ---- */
+.axes { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); margin: var(--s3) 0; }
+.axes dt {
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--muted);
+  margin: 0 0 2px;
+}
+.axes dd { margin: 0; }
+
 .chips { list-style: none; display: flex; flex-wrap: wrap; gap: var(--s2); padding: 0; margin: 0; }
 .chips li {
   background: var(--surface);

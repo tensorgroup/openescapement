@@ -159,10 +159,29 @@ func Open(dir string) (*Store, error) {
 	return s, nil
 }
 
+// cloneRegistry returns a Registry whose slices share no backing array with
+// r's. Registry is a value type, but Go copies a slice field by header
+// only (pointer/len/cap) — a plain `x := r` still aliases r's backing
+// array, so mutating x.Repos[i] mutates whatever r itself points at. Every
+// slice is cloned, not just Repos, so the invariant holds regardless of
+// which field a future caller mutates in place.
+func cloneRegistry(r Registry) Registry {
+	out := r
+	out.Departments = append([]Department(nil), r.Departments...)
+	out.Teams = append([]Team(nil), r.Teams...)
+	out.Repos = append([]Repo(nil), r.Repos...)
+	return out
+}
+
+// Registry returns a copy that shares no backing array with the Store's
+// internal state (cloneRegistry): a caller mutating a Repo field on the
+// result (the register affordance's `reg.Repos[i].Remote = ...` pattern)
+// can never race a concurrent reader, and can never make that mutation
+// visible before it has actually been persisted via SaveRegistry.
 func (s *Store) Registry() Registry {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.reg
+	return cloneRegistry(s.reg)
 }
 
 // SaveRegistry persists r via the package-level atomic SaveRegistry and
@@ -171,11 +190,16 @@ func (s *Store) Registry() Registry {
 // visible to the very next request without a re-Open. Guarded by mu: unlike
 // AppendEvent, which only ever appends, this is the first path that mutates
 // s.reg after Open, and concurrent HTTP handlers read Registry() while it
-// runs.
+// runs. r is cloned (cloneRegistry) before the in-memory swap: persist
+// happens first against the caller's own value, then s.reg is set from an
+// independent copy, so nothing the caller does to r afterward can reach
+// internal state, and a failed persist leaves s.reg's backing arrays
+// completely untouched.
 func (s *Store) SaveRegistry(r Registry) error {
 	if err := SaveRegistry(s.dir, r); err != nil {
 		return err
 	}
+	r = cloneRegistry(r)
 	s.mu.Lock()
 	s.reg = r
 	s.mu.Unlock()
