@@ -133,22 +133,30 @@ func TestApplyOrphanDirRemovedWhenFullyManaged(t *testing.T) {
 }
 
 // TestApplyOrphanDirOwnershipGuardUsesRelativePath pins the ownership guard
-// to the repo-relative artifact path. It used to test the ABSOLUTE path for
-// "/esc-", which makes it vacuous for any repo that merely happens to live
-// under a directory containing "esc-" — the whole guard evaporates and the
-// removal reaches whatever in-repo path a lockfile entry names. The repo here
-// sits under "esc-tools" for exactly that reason: with an absolute-path
-// guard, this passes and deletes a directory escapement never owned.
+// (ownedSkillPath) to the repo-relative artifact path. It used to test the
+// ABSOLUTE path for "/esc-", which makes it vacuous for any repo that merely
+// happens to live under a directory containing "esc-" — the whole guard
+// evaporates and the removal reaches whatever in-repo path a lockfile entry
+// names. The repo here sits under "esc-tools" for exactly that reason: with
+// an absolute-path guard, this passes and deletes a directory escapement
+// never owned.
+//
+// The artifact path is nested two levels below .claude/skills. One level
+// below is always ownable now (Task 3 replaced the "esc-" name-prefix
+// marker with "exactly one path element below .claude/skills", so a
+// name-overridden skill with no prefix can still retire); a dir nested
+// deeper than that — a team directory sitting inside what looks like an
+// owned skill directory — never is, which is the case this test drives.
 func TestApplyOrphanDirOwnershipGuardUsesRelativePath(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "esc-tools", "repo")
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	const artPath = ".claude/skills/team-owned"
+	const artPath = ".claude/skills/esc-acme-org/team-owned"
 	orphanDirRepo(t, root, artPath, map[string]string{"notes.md": "do not touch\n"}, nil)
 
 	if _, err := Apply(root, &PlanResult{}, false); err == nil {
-		t.Fatal("Apply must refuse a lockfile dir entry that is not escapement-owned, even under an esc- parent directory")
+		t.Fatal("Apply must refuse a lockfile dir entry that is not escapement-owned, even nested inside an owned skill directory")
 	}
 	got, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(artPath), "notes.md"))
 	if err != nil {

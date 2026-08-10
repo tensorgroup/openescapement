@@ -57,3 +57,21 @@ func TestCrossPackSkillPathCollisionFailsPlan(t *testing.T) {
 		t.Fatalf("error must name the path and both packs:\n%s", out)
 	}
 }
+
+func TestNamedSkillRetiresCleanly(t *testing.T) {
+	root := t.TempDir()
+	src := writeLocalPack(t, root, "policy", "acme",
+		"skills:\n  - path: skills/brainstorming\n    name: brainstorming\n")
+	writeFiles(t, root, map[string]string{".escapement/config.yaml": localConfig(src)})
+	runEsc(t, root, "sync")
+	// Drop the skill from the pack and sync again: the unprefixed directory
+	// must retire exactly like an esc- prefixed one — via the manifest-file
+	// removal pass, not a refusal.
+	writeFiles(t, root, map[string]string{
+		"policy/pack.yaml": "schema: 1\nname: acme\nversion: 1.0.1\n",
+	})
+	runEsc(t, root, "sync")
+	if _, err := os.Stat(filepath.Join(root, ".claude", "skills", "brainstorming")); !os.IsNotExist(err) {
+		t.Fatalf("retired named skill dir still present (err=%v)", err)
+	}
+}

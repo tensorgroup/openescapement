@@ -207,6 +207,21 @@ func handEdited(f Finding, prev *lockfile.LockArtifact) bool {
 // outside it (mergeDir, render.Splice, and render.MergeMCP already preserve
 // local amendments regardless of force; force only bypasses the classify
 // skip gate above them).
+// ownedSkillPath reports whether a lockfile dir entry's repo-relative path is
+// one escapement could have written: exactly one path element below
+// .claude/skills. This replaces the old "esc-" name-prefix marker, which the
+// skill name override (pack.SkillEntry.Name) made unsound: a named skill has
+// no prefix, so retirement would refuse forever. Decided on the relative
+// path, never the absolute one, for the reason documented at the removal
+// pass. A hostile lockfile is still confined by construction: removal only
+// ever deletes manifest-listed files, and the DirHashOf gate below declines
+// (SkipOrphanDirEdited) whenever the recorded hash does not match what is on
+// disk — a directory escapement never wrote cannot match a hash escapement
+// recorded when writing it.
+func ownedSkillPath(rel string) bool {
+	return path.Dir(path.Clean(rel)) == ".claude/skills"
+}
+
 func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 	if len(p.Violations) > 0 {
 		msgs := make([]string, len(p.Violations))
@@ -323,14 +338,15 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 			// Ownership is decided on the repo-relative artifact path, never
 			// on the absolute one. An absolute-path test is vacuous: a repo
 			// that merely happens to live under a directory named e.g.
-			// "esc-tools" satisfies it for every lockfile entry, so a hostile
-			// lockfile could aim these removals at any in-repo path. Skill
-			// dirs are always .claude/skills/esc-<pack>-<base> (engine.go's
-			// TargetSkills case), so the "esc-" prefix on the final element
-			// is the ownership marker — checked there, not anywhere in the
-			// string, so a team-owned dir nested under an owned one
-			// (".claude/skills/esc-x/team-notes") can never match either.
-			if !strings.HasPrefix(path.Base(prev.Path), "esc-") {
+			// ".claude/skills" satisfies it for every lockfile entry, so a
+			// hostile lockfile could aim these removals at any in-repo path.
+			// Skill dirs always sit exactly one path element below
+			// .claude/skills (engine.go's TargetSkills case, via
+			// pack.SkillEntry.DirName) — checked by ownedSkillPath, so a
+			// team-owned dir nested under an owned one
+			// (".claude/skills/brainstorming/team-notes") can never match
+			// either.
+			if !ownedSkillPath(prev.Path) {
 				return nil, fmt.Errorf("refusing to remove %q: not an escapement-owned directory", prev.Path)
 			}
 			abs, err := containedPath(root, prev.Path)

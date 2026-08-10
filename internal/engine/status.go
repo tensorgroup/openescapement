@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/tensorgroup/openescapement/internal/esc"
@@ -214,15 +212,14 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 			if la.Kind != KindDir || desiredDirs[la.Path] {
 				continue
 			}
-			// Ownership mirrors Apply's rule (apply.go, orphan-dir removal):
-			// decided on the repo-relative path's final element, never the
-			// absolute path. Status must never advise `esc sync --force` for
-			// an entry Apply refuses to touch: that advice-versus-behavior
-			// divergence sends a user to a command that exits 4. Checked
-			// before containment or the existence stat below, mirroring
-			// Apply's check order, so the entry is reported even when the
-			// directory is already gone.
-			if !strings.HasPrefix(path.Base(la.Path), "esc-") {
+			// Ownership mirrors Apply's rule (apply.go, ownedSkillPath):
+			// decided on the repo-relative path, never the absolute path.
+			// Status must never advise `esc sync --force` for an entry Apply
+			// refuses to touch: that advice-versus-behavior divergence sends
+			// a user to a command that exits 4. Checked before containment
+			// or the existence stat below, mirroring Apply's check order, so
+			// the entry is reported even when the directory is already gone.
+			if !ownedSkillPath(la.Path) {
 				res.Findings = append(res.Findings, Finding{
 					Subject: la.Path, Kind: la.Kind, State: Orphan, Local: LocalNone,
 					Detail: "lockfile records a retired skill directory escapement does not own; `esc sync` refuses to remove it. Delete the stale lockfile entry by hand",
