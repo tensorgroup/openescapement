@@ -46,6 +46,17 @@ func TestDiscoverSkillsRejectsNestedAndEmpty(t *testing.T) {
 	}
 }
 
+func TestDiscoverSkillsRootIsSkillRejectsNestedDescendant(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"SKILL.md":       "root\n",
+		"inner/SKILL.md": "nested\n",
+	})
+	if _, err := discoverSkills(dir, "root-skill"); err == nil {
+		t.Fatal("root skill containing a nested SKILL.md must be an error")
+	}
+}
+
 func TestVendorCopyMatchesDirFilesAndRefusesExisting(t *testing.T) {
 	src := t.TempDir()
 	writeFiles(t, src, map[string]string{"SKILL.md": "s\n", "scripts/run.sh": "#!/bin/sh\n"})
@@ -74,6 +85,45 @@ func TestVendorCopyMatchesDirFilesAndRefusesExisting(t *testing.T) {
 	}
 	if _, _, err := vendorCopy(src, dst); err == nil {
 		t.Fatal("existing destination must be refused")
+	}
+}
+
+func TestVendorCopyCleansUpOnFailure(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: permission-based failure injection does not apply")
+	}
+	src := t.TempDir()
+	writeFiles(t, src, map[string]string{
+		"aaa.txt": "1\n",
+		"zzz.txt": "2\n",
+	})
+	blocked := filepath.Join(src, "zzz.txt")
+	if err := os.Chmod(blocked, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(blocked, 0o644) })
+
+	dstRoot := t.TempDir()
+	dst := filepath.Join(dstRoot, "skills", "demo")
+
+	if _, _, err := vendorCopy(src, dst); err == nil {
+		t.Fatal("expected vendorCopy to fail reading an unreadable source file")
+	}
+	if _, statErr := os.Lstat(dst); !os.IsNotExist(statErr) {
+		t.Fatalf("partial destination survived failed copy: Lstat(%s) err=%v", dst, statErr)
+	}
+
+	// Fixing the source and retrying at the same dst must succeed without
+	// any manual cleanup — that's the whole point of Finding 1's fix.
+	if err := os.Chmod(blocked, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	files, _, err := vendorCopy(src, dst)
+	if err != nil {
+		t.Fatalf("retry after fixing source failed: %v", err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("files: %v", files)
 	}
 }
 

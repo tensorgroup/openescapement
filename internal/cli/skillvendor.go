@@ -20,15 +20,19 @@ type discoveredSkill struct {
 
 // discoverSkills finds skill directories by the presence of SKILL.md (spec
 // §4). If dir itself directly contains SKILL.md, the whole tree is one skill
-// named fallbackName (the subdir's base, or the repo name). Otherwise every
-// directory directly containing SKILL.md is a skill named after its base.
-// Nested skills are ambiguous and refused. Symlinked entries are not
-// followed during discovery — the copy path (pack.DirFiles) fails closed on
-// any symlink inside a selected skill, which is the actual trust boundary.
+// named fallbackName (the subdir's base, or the repo name) — UNLESS a
+// descendant directory also directly contains SKILL.md, which is the same
+// ambiguous nesting one level up and is refused rather than silently
+// vendoring the descendant's SKILL.md inside the "single" skill. Otherwise
+// every directory directly containing SKILL.md is a skill named after its
+// base; nested skills among those are likewise ambiguous and refused.
+// Symlinked entries are not followed during discovery — the copy path
+// (pack.DirFiles) fails closed on any symlink inside a selected skill, which
+// is the actual trust boundary.
 func discoverSkills(dir, fallbackName string) ([]discoveredSkill, error) {
-	if _, err := os.Stat(filepath.Join(dir, "SKILL.md")); err == nil {
-		return []discoveredSkill{{Name: fallbackName, Dir: dir}}, nil
-	}
+	_, rootErr := os.Stat(filepath.Join(dir, "SKILL.md"))
+	rootIsSkill := rootErr == nil
+
 	var found []discoveredSkill
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -58,6 +62,12 @@ func discoverSkills(dir, fallbackName string) ([]discoveredSkill, error) {
 	if err != nil {
 		return nil, err
 	}
+	if rootIsSkill {
+		if len(found) > 0 {
+			return nil, fmt.Errorf("root skill directory %s contains a nested skill directory %s; ambiguous — vendor from a narrower #subdir", dir, found[0].Dir)
+		}
+		return []discoveredSkill{{Name: fallbackName, Dir: dir}}, nil
+	}
 	if len(found) == 0 {
 		return nil, fmt.Errorf("no SKILL.md found under %s: nothing to vendor", dir)
 	}
@@ -85,7 +95,11 @@ func discoverSkills(dir, fallbackName string) ([]discoveredSkill, error) {
 // hardening cycle documented exactly that bug class). Symlinks anywhere in
 // srcDir fail the copy closed. dstDir must not exist: overwriting is the
 // caller's explicit, separately-gated decision. The executable bit is
-// preserved (skills ship scripts); everything else lands 0o644.
+// preserved (skills ship scripts); everything else lands 0o644. Any failure
+// partway through removes whatever was written under dstDir before
+// returning: a caller must be able to retry at the same dstDir without first
+// deleting a partial copy it never asked for and the earlier failed call's
+// Lstat-exists refusal would otherwise force on them.
 func vendorCopy(srcDir, dstDir string) (files []string, hash string, err error) {
 	if _, serr := os.Lstat(dstDir); serr == nil {
 		return nil, "", fmt.Errorf("destination %s already exists", dstDir)
@@ -94,10 +108,22 @@ func vendorCopy(srcDir, dstDir string) (files []string, hash string, err error) 
 	if err != nil {
 		return nil, "", err
 	}
+
+	succeeded := false
+	defer func() {
+		if !succeeded {
+			os.RemoveAll(dstDir)
+		}
+	}()
+
 	for _, rel := range files {
 		src := filepath.Join(srcDir, filepath.FromSlash(rel))
 		dst := filepath.Join(dstDir, filepath.FromSlash(rel))
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return nil, "", err
+		}
+		info, err := os.Stat(src)
+		if err != nil {
 			return nil, "", err
 		}
 		content, err := os.ReadFile(src)
@@ -105,7 +131,7 @@ func vendorCopy(srcDir, dstDir string) (files []string, hash string, err error) 
 			return nil, "", err
 		}
 		mode := os.FileMode(0o644)
-		if info, err := os.Stat(src); err == nil && info.Mode()&0o111 != 0 {
+		if info.Mode()&0o111 != 0 {
 			mode = 0o755
 		}
 		if err := os.WriteFile(dst, content, mode); err != nil {
@@ -118,6 +144,7 @@ func vendorCopy(srcDir, dstDir string) (files []string, hash string, err error) 
 	if err != nil {
 		return nil, "", err
 	}
+	succeeded = true
 	return files, hash, nil
 }
 
