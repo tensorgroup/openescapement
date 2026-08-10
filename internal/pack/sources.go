@@ -52,6 +52,19 @@ func LoadSources(dir string) (*Sources, error) {
 	if s.Schema != 1 {
 		return nil, fmt.Errorf("%s: unsupported schema %d (want 1)", SourcesFile, s.Schema)
 	}
+	// sources.yaml is committed and travels inside the pack repo — untrusted
+	// input exactly like a lockfile's Files entries, and Name becomes a
+	// filesystem path component in every consumer (vendoredDir's fallback,
+	// update-skill's rename/delete). Reject an invalid name HERE, at load
+	// time, so nothing downstream — including a --force path that skips the
+	// divergence gate entirely — ever sees a name that could resolve outside
+	// the pack directory. This is a containment refusal, not a manifest
+	// content error: a plain error (exit 4), never esc.ErrConstraint.
+	for _, sk := range s.Skills {
+		if !ValidName.MatchString(sk.Name) {
+			return nil, fmt.Errorf("%s: skill name %q must match %s (it becomes a filesystem path component)", SourcesFile, sk.Name, ValidName)
+		}
+	}
 	return &s, nil
 }
 

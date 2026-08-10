@@ -61,7 +61,10 @@ func cmdPackUpdateSkill(ctx context.Context, root string, args []string, stdout,
 	}
 	for _, name := range names {
 		entry := srcs.Skill(name)
-		dir := vendoredDir(root, p, name)
+		dir, err := vendoredDir(root, p, name)
+		if err != nil {
+			return err
+		}
 		cur, err := pack.DirHash(dir)
 		if err != nil {
 			return fmt.Errorf("hashing skills/%s: %w", name, err)
@@ -164,19 +167,21 @@ func cmdPackUpdateSkill(ctx context.Context, root string, args []string, stdout,
 			fmt.Fprintf(stderr, "esc: warning: could not remove backup dir %s: %v\n", backup, err)
 		}
 		fmt.Fprintf(stdout, "%s: %s -> %s (%s), %d added, %d removed, %d changed\n",
-			name, entry.Ref, recorded, fr.Commit[:12], added, removed, changed)
+			name, entry.Ref, recorded, short(fr.Commit), added, removed, changed)
 	}
 	return nil
 }
 
 // vendoredDir resolves the pack-relative directory for a vendored skill from
 // the manifest entry whose resolved name matches; falls back to the
-// skills/<name>/ convention add-skill writes.
-func vendoredDir(root string, p *pack.Pack, name string) string {
+// skills/<name>/ convention add-skill writes, resolved through
+// containedSkillDir so a name that somehow reached here unvalidated still
+// cannot resolve outside the pack repo.
+func vendoredDir(root string, p *pack.Pack, name string) (string, error) {
 	for _, e := range p.Manifest.Skills {
 		if e.DirName(p.Manifest.Name) == name {
-			return filepath.Join(root, filepath.FromSlash(e.Path))
+			return filepath.Join(root, filepath.FromSlash(e.Path)), nil
 		}
 	}
-	return filepath.Join(root, "skills", name)
+	return containedSkillDir(root, name)
 }

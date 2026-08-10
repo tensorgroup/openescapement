@@ -94,8 +94,14 @@ var validCatalogStatus = map[string]bool{
 	"preferred": true, "allowed": true, "review-required": true, "banned": true,
 }
 
-// validName constrains pack names, which become filesystem path components.
-var validName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`)
+// ValidName constrains pack and skill names, which become filesystem path
+// components: it forbids "/" and any leading "." (so a value like
+// "../../victim" is rejected outright, never merely by luck of what
+// downstream code later does with it). Exported so every consumer that
+// turns an untrusted name into a path — pack.yaml skill entries here,
+// sources.yaml provenance entries (LoadSources), and the CLI commands that
+// author both — validates against the exact same pattern.
+var ValidName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`)
 
 // safeRel rejects manifest path entries that could escape the pack dir:
 // absolute paths and any path containing a ".." segment.
@@ -151,8 +157,8 @@ func (m *Manifest) validate(dir string) error {
 	if m.Name == "" {
 		return fail("name is required")
 	}
-	if !validName.MatchString(m.Name) {
-		return fail("name %q: must match %s (it becomes a filesystem path component)", m.Name, validName)
+	if !ValidName.MatchString(m.Name) {
+		return fail("name %q: must match %s (it becomes a filesystem path component)", m.Name, ValidName)
 	}
 	if m.Version == "" {
 		return fail("version is required")
@@ -175,11 +181,11 @@ func (m *Manifest) validate(dir string) error {
 		if err != nil || !info.IsDir() {
 			return fail("skill %s: not a directory", rel)
 		}
-		if !validName.MatchString(filepath.Base(rel)) {
-			return fail("skill %s: directory name must match %s", rel, validName)
+		if !ValidName.MatchString(filepath.Base(rel)) {
+			return fail("skill %s: directory name must match %s", rel, ValidName)
 		}
-		if e.Name != "" && !validName.MatchString(e.Name) {
-			return fail("skill %s: name %q must match %s (it becomes a filesystem path component)", rel, e.Name, validName)
+		if e.Name != "" && !ValidName.MatchString(e.Name) {
+			return fail("skill %s: name %q must match %s (it becomes a filesystem path component)", rel, e.Name, ValidName)
 		}
 		// Conflicts are first-class and fail closed (spec §3): two entries in
 		// one pack resolving to the same on-disk directory is a manifest

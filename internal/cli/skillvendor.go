@@ -184,6 +184,29 @@ func diffstat(old, new map[string]string) (added, removed, changed int) {
 	return added, removed, changed
 }
 
+// containedSkillDir resolves name to root/skills/name — the fallback
+// convention vendoredDir uses when no pack.yaml entry names an explicit
+// path. name is expected to already be pack.ValidName-valid (sources.yaml
+// entries are rejected at pack.LoadSources time, and discovered skill names
+// are validated before any write in cmdPackAddSkill), but this checks again
+// and resolves through containment regardless — the same belt-and-braces
+// posture AGENTS.md requires for lockfile paths (internal/engine's
+// containedPath): a name becoming a filesystem path is exactly the bug
+// class path traversal exploits, so this is the last line of defense, not
+// the first. Refusal is a plain error (exit 4), matching every other
+// containment refusal in this codebase.
+func containedSkillDir(root, name string) (string, error) {
+	if !pack.ValidName.MatchString(name) {
+		return "", fmt.Errorf("skill name %q must match %s (it becomes a filesystem path component)", name, pack.ValidName)
+	}
+	abs := filepath.Join(root, "skills", name)
+	rel, err := filepath.Rel(root, abs)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("skill name %q escapes the pack repository", name)
+	}
+	return abs, nil
+}
+
 // splitSkillURL splits the CLI's URL[#subdir] form. The spec's authoring
 // commands use '#' (not the pack-source '//' convention) so a URL can be
 // pasted verbatim; it is translated to internal/source's form by the caller.
