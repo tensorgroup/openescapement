@@ -118,6 +118,8 @@ repo only when someone runs `esc sync` there, same as any other pack source.
 
 `esc serve --demo` resets its example data to pristine on every startup and prints `esc: demo data reset`, so the demo always shows current content. Anything you change during a demo (published pack versions, adopted starters, guidance edits) is discarded when you restart. Non-demo servers keep your data and only refresh guidance files you have not edited.
 
+Outside `--demo`, `esc serve` prints a fresh random bearer token on every start unless you pass `esc serve --token <token>` to set it explicitly (the same token repos need in `ESC_PORTAL_TOKEN` to publish to this server's ingest endpoint). `--demo` always disables auth, regardless of `--token`.
+
 The portal is server-rendered with a strict CSP; its one third-party asset, htmx, is
 vendored and embedded (pinned by SHA-256 in `internal/portal/web/HTMX-VENDOR.md`), never
 fetched at runtime, and every interaction still works with JavaScript disabled.
@@ -190,17 +192,36 @@ artifact that is not in sync. Run `esc sync --force` to overwrite a
 hand-edited managed region and converge; `--force` only touches content
 escapement owns and never overwrites a local amendment.
 
-If a pack manifest declares `reporting: { amendments: metrics }` (or
-`content`), a repo will report local amendments upstream at that level once a
-publisher is configured; a repo's
-own `.escapement/config.yaml` can lower that via `report_amendments: metrics`
-or `off`, but never raise it above what the pack declared. With no
-`reporting` block at all, nothing is ever reported upstream. v0.1 ships no
-publisher: `esc` resolves the level and displays it, and nothing is
-transmitted anywhere. This governs
-only what a publisher forwards: your own `esc status` always shows your
-amendments in full, including content, on your own machine, regardless of
-the resolved level; see JSON output below.
+If a pack manifest declares `reporting: { amendments: metrics, endpoint:
+https://... }` (or `amendments: content`), a repo publishes local amendments
+to that endpoint at that level on every `esc sync` and `esc status`; a
+repo's own `.escapement/config.yaml` can lower the level via
+`report_amendments: metrics` or `off`, but never raise it above what the
+pack declared. With no `reporting` block, or a `reporting` block with no
+`endpoint`, nothing is ever sent anywhere. This governs only what leaves the
+repo: your own `esc status` always shows your amendments in full, including
+content, on your own machine, regardless of the resolved level; see JSON
+output below.
+
+#### Publishing to the admin portal
+
+Set `ESC_PORTAL_TOKEN` in the environment (never in config, so it can never
+be committed) to authenticate publishes. Publishing is always non-fatal: it
+runs after the lockfile is written and all normal output is printed, so a
+telemetry outage never changes a command's exit code or suppresses its
+output. An unset token with an endpoint configured is one stderr warning and
+a skipped publish, not a failure. Anything that could not be sent queues to
+the gitignored `.escapement/outbox.jsonl` (capped at 200 entries or 14 days,
+oldest evicted first, every drop reported on stderr) and flushes oldest-first
+on the next successful publish.
+
+What leaves the repo depends on the resolved `reporting.amendments` level:
+
+| Level | What leaves the repo |
+|---|---|
+| `off` (default, or no `reporting` block) | Nothing. Nothing is sent, ever. |
+| `metrics` | Repo identity, pack pins, and every artifact's `managed`/`local` state, counts, hashes, and item names (e.g. which `.mcp.json` keys or skill-directory files were added). Never amendment content, alteration diffs, or free-text detail/reason prose. |
+| `content` | Everything `metrics` sends, plus full amendment text and alteration diffs. |
 
 ### JSON output (`--json`)
 

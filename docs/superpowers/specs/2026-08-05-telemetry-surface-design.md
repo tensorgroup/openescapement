@@ -2,6 +2,14 @@
 
 Status: approved design, 2026-08-05. Second of three specs in this cycle. Depends on the local amendment model (2026-08-05), whose `esc status --json` document is the input this spec transports. Build after it.
 
+**As built (2026-08-09):** implementation deviated from this spec's sketch in five places, all adjudicated during the implementation cycle (see `.superpowers/sdd/2026-08-09-telemetry-surface/progress.md`):
+
+- The ingest route is `POST /api/v1/events`, not `POST /ingest` as sketched in §5. The path-versioned route already existed, was already tested, and already carried the legacy raw-`store.Event` producers; the envelope path was added alongside it rather than opening a second endpoint.
+- The operator sets the ingest token with `esc serve --token <token>`, overriding the default random per-start token, through the existing `withAuth` bearer/cookie/`?token=` gate. There is no parallel auth system for envelope ingest.
+- Redaction at `metrics` also strips `Finding.Detail` and `Skipped.Reason`, not just `Amendment.Content` and `Alteration.Diff` as §2 originally scoped. Both are human prose populated in places directly from `err.Error()`, an unbounded channel for local error text; their structural content already ships machine-readable (`managed`/`local` states, `skipped[].cause`), so tightening the redaction boundary costs nothing at `metrics` and closes a leak.
+- `Event.Drift` derivation (§6) is three-valued, not the boolean-shaped sketch implied there: `altered`/`missing`/`orphan` on any artifact maps to `drifted`; else `stale` on any artifact maps to `stale`; else `in-sync`. The existing rollup distinguishes `stale` from `drifted` and the migration promise was that rollups keep working, so collapsing `stale` into `drifted` would have silently broken that distinction.
+- The ingest body cap is 1MB, not the 64KB the endpoint carried before this spec. The two body shapes (raw `store.Event` and a content-level `publisher.Envelope`, which can carry full amendment text and diffs) cannot be capped separately before the handler has read enough of the body to tell them apart, so one shared cap sized for the larger shape replaced the smaller one.
+
 Motivation: the portal's event pipeline does not exist. `store.Event` is produced only by `internal/portal/seed/seed.go`, which is synthetic demo data. Nothing in `internal/cli` emits events and there is no ingest endpoint. Every dashboard in the portal today renders invented numbers. This spec builds the real path, end to end: a publisher in the CLI, an ingest endpoint on the portal, an extended event schema, and the views that show augmented versus unadulterated versus altered repos.
 
 ## 1. Endpoint declared by the pack

@@ -66,9 +66,41 @@ tagged releases begin.
 - New managed blocks are inserted at the top of a file rather than appended.
 - `esc status --json` and `esc sync --json` emit a machine-readable report.
 - `reporting.amendments` in a pack manifest and `report_amendments` in repo
-  config resolve the level at which a repo will report local amendments
-  upstream once a publisher is configured. v0.1 ships no publisher: `esc`
-  resolves the level and displays it, and nothing is transmitted anywhere.
+  config resolve the level at which a repo reports local amendments
+  upstream; see the telemetry publisher bullets below for the transport
+  that now sends them.
+- **Telemetry publisher.** `esc sync` and `esc status` publish the resolved,
+  redacted `esc status --json` document to every distinct `reporting.endpoint`
+  a pack declares, as a versioned envelope (schema 1) over HTTPS,
+  bearer-authenticated with `ESC_PORTAL_TOKEN` from the environment.
+  Publishing runs after the lockfile is written and all normal output is
+  printed, and is strictly non-fatal: no publish failure ever changes a
+  command's exit code or suppresses its output. Below `content`, `Redact`
+  strips amendment content, alteration diffs, and free-text finding/skip
+  detail before anything leaves the repo; counts, hashes, states, item
+  names, and pack pins still ship at `metrics`. Unsent envelopes queue to
+  the gitignored `.escapement/outbox.jsonl` (200-entry / 14-day cap, oldest
+  dropped first, every drop reported on stderr) and flush oldest-first on
+  the next successful publish; a permanently rejected payload (400/404/405/
+  413/415/422) is dropped rather than retried so it cannot stall the queue
+  behind it.
+- The portal's `POST /api/v1/events` now also accepts a versioned
+  `publisher.Envelope` alongside the legacy raw-event body, derives the
+  event's drift state from its artifacts, and matches it against the
+  registry by normalized remote (an unmatched remote lands in the
+  unregistered bucket instead of being dropped). Ingest body cap raised
+  from 64KB to 1MB to fit content-level payloads. `esc serve --token
+  <token>` sets the server's bearer token explicitly (default: a random
+  token printed on start; `--demo` still disables auth).
+- The fleet table gains a state column (unadulterated / augmented / altered
+  / ungoverned); repo detail lists each artifact's managed/local axes,
+  amendment size, and, at `content`, the amendment text and alteration
+  diff, naming the source when content is withheld; an unregistered bucket
+  lists repos reporting from unrecognized remotes with a register
+  affordance.
+- The seeded demo now covers all four fleet states, including a repo-level
+  override that withholds content, so every new fleet view has real data to
+  render against.
 - Vendor starter sets: each full-depth vendor page grows a starter-set panel
   that adopts any selection of model starters plus the model-routing overview
   as one composed fragment (`rules/models-<vendor>.md`). Single-model adoption

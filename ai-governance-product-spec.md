@@ -148,25 +148,45 @@ blocking a rollout; this decides open question 2 below.
   instead of silently overwritten, and `esc sync` still exits 0 for every
   other artifact it converged.
 - **Pack declares, repo may only decline.** A pack manifest may set
-  `reporting: { amendments: metrics | content }` to ask that local
-  amendments be reported upstream once a publisher is configured: counts and
-  hashes at `metrics`, full content at `content`. No publisher exists in
-  v0.1, so `esc` resolves and displays the level and transmits nothing.
-  Absent, nothing is ever sent, the same consent
-  posture as the update-check model above: the unconnected open-source path
-  stays silent by construction. A repo's own config may clamp the level
-  down (`report_amendments: metrics | off`) but never raise it above what
-  the pack asked for, so a repo can't opt itself into sending content its
-  org never requested. With multiple packs, the strictest (highest) level
-  wins, the same precedence rule the update-check cadence uses.
+  `reporting: { amendments: metrics | content, endpoint: <https URL> }` to
+  ask that local amendments be reported upstream: counts and hashes at
+  `metrics`, full content at `content`, to the declared endpoint. Absent
+  `reporting`, or absent `endpoint` even with `reporting` set, nothing is
+  ever sent, the same consent posture as the update-check model above: the
+  unconnected open-source path stays silent by construction. A repo's own
+  config may clamp the level down (`report_amendments: metrics | off`) but
+  never raise it above what the pack asked for, so a repo can't opt itself
+  into sending content its org never requested. With multiple packs, the
+  strictest (highest) level wins, the same precedence rule the update-check
+  cadence uses.
 - **Local truth is always complete, regardless of the resolved level.**
   `esc status` on the user's own machine always shows full amendment
   content; the resolved reporting level governs only what a publisher
   forwards onward. This is the feature's privacy design, not an
   implementation detail worth trading away for a simpler contract.
+- **Transport (built).** `esc sync` and `esc status` publish the resolved,
+  redacted document to every distinct `reporting.endpoint` a pack declares,
+  as a versioned envelope (schema 1: repo remote, config path, the redacted
+  report) over HTTPS, bearer-authenticated with a token read from
+  `ESC_PORTAL_TOKEN` in the environment, never from config, so it can never
+  be committed. Publishing is strictly non-fatal: it runs only after the
+  lockfile is written and all normal output is printed, and no publish
+  failure ever changes a command's exit code. An unset token is a stderr
+  warning and a skipped publish, not a failed sync. Unsent envelopes queue
+  to a local, gitignored outbox, capped by count and by age, and flush
+  oldest-first on the next successful publish; a queue beyond its cap drops
+  the oldest entries and reports the drop on stderr rather than truncating
+  silently.
+- **Self-hosted only, for now.** The portal server an org points
+  `reporting.endpoint` at is self-hosted infrastructure inside that org's
+  own trust boundary, and the ingest token is a single value the operator
+  sets when starting the server (`esc serve --token`), not a per-repo
+  credential. Per-repo credentials and rotation, and a hosted multi-tenant
+  ingest surface, are follow-on work, not v0.1 scope.
 
 Full data model, JSON contract, and sync semantics:
-`docs/superpowers/specs/2026-08-05-local-amendment-model-design.md`.
+`docs/superpowers/specs/2026-08-05-local-amendment-model-design.md`. Transport
+detail: `docs/superpowers/specs/2026-08-05-telemetry-surface-design.md`.
 
 ### Reconciliation is agent-executed, not a CLI feature (DECIDED)
 
