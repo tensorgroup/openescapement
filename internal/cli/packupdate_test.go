@@ -97,3 +97,68 @@ func TestPackUpdateSkillAllAndUnknown(t *testing.T) {
 		t.Fatal("no names and no --all is a usage error")
 	}
 }
+
+// TestPackUpdateSkillSourcesHashMatchesVendoredDir pins the ordering
+// invariant: once a skill's directory is swapped in, sources.yaml's
+// recorded hash must already agree with what's on disk. Computing the
+// diffstat from the live directory (and saving sources.yaml only
+// afterward) leaves a window where a failure between the swap and the
+// save would strand the new content on disk under the OLD hash — this
+// assertion is what that self-contradicting state would violate.
+func TestPackUpdateSkillSourcesHashMatchesVendoredDir(t *testing.T) {
+	root, up := vendoredAuthorPack(t)
+	publishSkillV2(t, up)
+	runEsc(t, root, "pack", "update-skill", "brainstorming")
+	srcs, err := pack.LoadSources(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := srcs.Skill("brainstorming")
+	if e == nil {
+		t.Fatal("brainstorming not recorded")
+	}
+	got, err := pack.DirHash(filepath.Join(root, "skills", "brainstorming"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != e.Hash {
+		t.Fatalf("sources.yaml hash %q does not match the vendored directory's hash %q", e.Hash, got)
+	}
+}
+
+// TestPackUpdateSkillUnknownNameAbortsBeforeAnyWrite confirms the whole
+// requested name set is validated against sources.yaml before the first
+// re-vendor, so an unknown name in a multi-name invocation cannot leave an
+// earlier, valid skill already re-vendored while the command still fails.
+func TestPackUpdateSkillUnknownNameAbortsBeforeAnyWrite(t *testing.T) {
+	root, up := vendoredAuthorPack(t)
+	publishSkillV2(t, up)
+	before, err := pack.LoadSources(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeContent, err := os.ReadFile(filepath.Join(root, "skills", "brainstorming", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// "brainstorming" sorts before "nope", so a loop that validates names as
+	// it goes would already have re-vendored brainstorming by the time it
+	// hits the unknown name.
+	if _, code := runEscOut(t, root, "pack", "update-skill", "brainstorming", "nope"); code == 0 {
+		t.Fatal("an unknown name among valid ones must still fail")
+	}
+	after, err := pack.LoadSources(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Skill("brainstorming").Commit != before.Skill("brainstorming").Commit {
+		t.Fatal("an unknown name must abort before any earlier valid skill is re-vendored")
+	}
+	afterContent, err := os.ReadFile(filepath.Join(root, "skills", "brainstorming", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(afterContent) != string(beforeContent) {
+		t.Fatal("vendored copy must be untouched when the batch aborts on an unknown name")
+	}
+}

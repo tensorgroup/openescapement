@@ -49,11 +49,18 @@ func cmdPackUpdateSkill(ctx context.Context, root string, args []string, stdout,
 		}
 	}
 	sort.Strings(names)
+	// Validate the whole requested name set against sources.yaml before any
+	// write happens: without this, an unknown name discovered mid-loop would
+	// abort the command after earlier names in the same invocation had
+	// already been re-vendored, leaving a partially-applied --all or
+	// multi-name update behind a non-zero exit.
 	for _, name := range names {
-		entry := srcs.Skill(name)
-		if entry == nil {
+		if srcs.Skill(name) == nil {
 			return fmt.Errorf("%s is not a vendored skill (not in %s)", name, pack.SourcesFile)
 		}
+	}
+	for _, name := range names {
+		entry := srcs.Skill(name)
 		dir := vendoredDir(root, p, name)
 		cur, err := pack.DirHash(dir)
 		if err != nil {
@@ -107,6 +114,15 @@ func cmdPackUpdateSkill(ctx context.Context, root string, args []string, stdout,
 		if err != nil {
 			return err
 		}
+		// Diff against the staged copy, not the live directory: this is the
+		// last read before the swap, so nothing fallible sits between "we
+		// know what's about to land on disk" and the swap itself.
+		newHashes, err := fileHashes(staging)
+		if err != nil {
+			os.RemoveAll(staging)
+			return err
+		}
+		added, removed, changed := diffstat(oldHashes, newHashes)
 		backup := dir + ".update-old"
 		if err := os.RemoveAll(backup); err != nil {
 			os.RemoveAll(staging)
@@ -125,23 +141,30 @@ func cmdPackUpdateSkill(ctx context.Context, root string, args []string, stdout,
 			os.RemoveAll(staging)
 			return fmt.Errorf("replacing %s with the updated copy: %w", dir, err)
 		}
-		if err := os.RemoveAll(backup); err != nil {
-			fmt.Fprintf(stderr, "esc: warning: could not remove backup dir %s: %v\n", backup, err)
-		}
-		newHashes, err := fileHashes(dir)
-		if err != nil {
-			return err
-		}
-		added, removed, changed := diffstat(oldHashes, newHashes)
-		fmt.Fprintf(stdout, "%s: %s -> %s (%s), %d added, %d removed, %d changed\n",
-			name, entry.Ref, recorded, fr.Commit[:12], added, removed, changed)
+		// The swap is done: skills/<name> now holds the new content. The
+		// invariant from here on is that sources.yaml agrees with what's on
+		// disk before any further fallible step runs, so Save happens next,
+		// with nothing else fallible in between — and a failed Save rolls
+		// the swap back rather than stranding the new content under the old
+		// recorded hash (the divergence gate would otherwise misread that as
+		// a hand-edit and skip it forever).
 		srcs.Upsert(pack.SourceSkill{
 			Name: name, Source: entry.Source, Subdir: entry.Subdir,
 			Ref: recorded, Commit: fr.Commit, Hash: hash,
 		})
 		if err := srcs.Save(root); err != nil {
+			if rerr := os.RemoveAll(dir); rerr != nil {
+				fmt.Fprintf(stderr, "esc: restoring %s after a failed sources.yaml save also failed: %v\n", dir, rerr)
+			} else if rerr := os.Rename(backup, dir); rerr != nil {
+				fmt.Fprintf(stderr, "esc: restoring %s after a failed sources.yaml save also failed: %v\n", dir, rerr)
+			}
 			return err
 		}
+		if err := os.RemoveAll(backup); err != nil {
+			fmt.Fprintf(stderr, "esc: warning: could not remove backup dir %s: %v\n", backup, err)
+		}
+		fmt.Fprintf(stdout, "%s: %s -> %s (%s), %d added, %d removed, %d changed\n",
+			name, entry.Ref, recorded, fr.Commit[:12], added, removed, changed)
 	}
 	return nil
 }
