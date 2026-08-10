@@ -104,7 +104,12 @@ var Client = &http.Client{Timeout: 5 * time.Second}
 //     in order, the moment the endpoint recovers — FlushOutbox's contract
 //     already guarantees oldest-first delivery and per-entry endpoint
 //     routing, so Publish does not need its own send-then-queue branch to
-//     get that behavior.
+//     get that behavior. Every entry FlushOutbox hands to send is
+//     re-redacted at coll.Amendments right before it goes out, since an
+//     entry queued while the level was content (or under a pack that has
+//     since changed) can sit in the outbox for up to OutboxMaxAge, and the
+//     level a caller resolves NOW is the only one that may ever leave the
+//     machine.
 func Publish(ctx context.Context, root string, rep *engine.Report, packs []*pack.Pack, coll engine.Collection, stderr io.Writer, now time.Time) {
 	endpoints := distinctEndpoints(packs)
 	if len(endpoints) == 0 {
@@ -147,7 +152,17 @@ func Publish(ctx context.Context, root string, rep *engine.Report, packs []*pack
 		return
 	}
 
+	// Re-redact at coll.Amendments, the CURRENTLY resolved level, rather
+	// than trusting whatever level the entry was queued at: an entry can
+	// sit in the outbox for up to OutboxMaxAge, and the level an owner has
+	// configured can be clamped down (or the endpoint's pack changed)
+	// between when it was queued and when it finally flushes. Redacting
+	// unconditionally, on every entry, is the simple correct move here:
+	// Redact at content is identity and Redact below content is
+	// idempotent, so re-applying it to an entry that was already redacted
+	// at queue time changes nothing.
 	send := func(endpoint string, e Envelope) error {
+		e.Report = Redact(e.Report, coll.Amendments)
 		return postEnvelope(ctx, endpoint, token, e)
 	}
 	sent, flushDropped, remaining, err := FlushOutbox(root, send, now)

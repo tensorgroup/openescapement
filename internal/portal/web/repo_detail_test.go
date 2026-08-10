@@ -372,6 +372,58 @@ func TestFleetRegisterRejectsRemoteNotCurrentlyUnregistered(t *testing.T) {
 	}
 }
 
+// TestFleetRegisterRejectsRemoteAlreadyBoundToAnotherRepo covers the
+// register-integrity gap: events for a bound remote never gain a RepoID
+// retroactively, so the stillUnregistered gate must consult the registry,
+// not just events, or a second bind attempt for the same remote would
+// succeed and leave RepoByRemote picking between two repos arbitrarily.
+func TestFleetRegisterRejectsRemoteAlreadyBoundToAnotherRepo(t *testing.T) {
+	reg := store.Registry{Repos: []store.Repo{
+		{ID: "r1", Name: "ligo-pipeline"},
+		{ID: "r2", Name: "campus-portal"},
+	}}
+	s := newTestServerWithRegistry(t, "", reg)
+	remote := "https://github.com/acme/shadow-repo"
+	if err := s.Store.AppendEvent(store.Event{TS: time.Now(), Kind: "mcp_connect", Remote: remote}); err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+
+	form1 := url.Values{"remote": {remote}, "repo_id": {"r1"}}
+	req1 := httptest.NewRequest("POST", "/fleet/register", strings.NewReader(form1.Encode()))
+	req1.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr1 := httptest.NewRecorder()
+	h.ServeHTTP(rr1, req1)
+	if rr1.Code != http.StatusSeeOther {
+		t.Fatalf("first register code=%d body=%s", rr1.Code, rr1.Body.String())
+	}
+
+	// The bound remote's events still carry no RepoID (ingest resolution is
+	// not retroactive), so only excluding registry-bound remotes keeps it
+	// out of the unregistered bucket.
+	events, err := s.Store.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range store.UnregisteredRemotes(s.Store.Registry(), events) {
+		if u.Remote == remote {
+			t.Fatalf("remote %q still listed as unregistered after binding", remote)
+		}
+	}
+
+	form2 := url.Values{"remote": {remote}, "repo_id": {"r2"}}
+	req2 := httptest.NewRequest("POST", "/fleet/register", strings.NewReader(form2.Encode()))
+	req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr2 := httptest.NewRecorder()
+	h.ServeHTTP(rr2, req2)
+	if rr2.Code != http.StatusBadRequest {
+		t.Fatalf("second register code=%d body=%s, want %d (remote already bound to r1)", rr2.Code, rr2.Body.String(), http.StatusBadRequest)
+	}
+	if got, _ := s.Store.Registry().RepoByRemote(remote); got.ID != "r1" {
+		t.Fatalf("remote must stay bound to r1, got %+v", got)
+	}
+}
+
 // TestFleetRegisterRejectsAlreadyRegisteredRepo covers the conflict path:
 // registering against a repo that already has a Remote must fail with 409
 // and an in-page banner, not silently overwrite the existing binding.

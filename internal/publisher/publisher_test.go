@@ -254,6 +254,96 @@ func TestPublishNextSuccessFlushesOldestFirst(t *testing.T) {
 	}
 }
 
+// TestPublishFlushReRedactsAtCurrentLevel pins the privacy fix: an envelope
+// queued while the resolved level was content (endpoint down) must not
+// leave content-grade bytes on a later flush if the level has since been
+// clamped down to metrics. The outbox stores what was true when the entry
+// was queued; only the send path, which holds the CURRENT Collection, can
+// re-redact it correctly.
+func TestPublishFlushReRedactsAtCurrentLevel(t *testing.T) {
+	down := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	downURL := down.URL
+	down.Close() // closed before use: nothing listens at downURL anymore
+
+	withClient(t, &http.Client{Timeout: 5 * time.Second})
+	root := t.TempDir()
+	t.Setenv("ESC_PORTAL_TOKEN", "test-token")
+	rep := fixtureReport()
+	contentCollection := engine.Collection{Amendments: engine.ReportContent, Source: "repo-override"}
+	packsDown := []*pack.Pack{packWithEndpoint("acme", downURL)}
+	var stderr1 bytes.Buffer
+	older := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Queue at level content against a down endpoint: Redact at content is
+	// identity, so the queued entry carries unredacted content-grade bytes.
+	Publish(context.Background(), root, rep, packsDown, contentCollection, &stderr1, older)
+
+	entries, _, err := loadOutbox(root)
+	if err != nil {
+		t.Fatalf("loadOutbox: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("setup: outbox has %d entries, want 1", len(entries))
+	}
+	if entries[0].Envelope.Report.Findings[0].Amendment.Content == "" {
+		t.Fatalf("setup: queued entry should carry unredacted content, got empty Content")
+	}
+
+	// The owner clamps to metrics and the endpoint recovers: rebind the
+	// queued entry to a live recording server and flush at the new level.
+	rs := &recordingServer{}
+	srv := httptest.NewServer(rs.handler(202))
+	defer srv.Close()
+	entries[0].Endpoint = srv.URL
+	if err := atomicWriteOutbox(root, entries); err != nil {
+		t.Fatalf("atomicWriteOutbox: %v", err)
+	}
+
+	packs := []*pack.Pack{packWithEndpoint("acme", srv.URL)}
+	var stderr2 bytes.Buffer
+	newer := older.Add(time.Minute)
+	Publish(context.Background(), root, rep, packs, metricsCollection(), &stderr2, newer)
+
+	if n := rs.requests(); n != 2 {
+		t.Fatalf("server received %d requests, want 2 (flushed backlog + fresh envelope)", n)
+	}
+	for i, body := range rs.bodies {
+		var env Envelope
+		if err := json.Unmarshal(body, &env); err != nil {
+			t.Fatalf("request %d body did not decode as Envelope: %v\nbody: %s", i, err, body)
+		}
+		for _, f := range env.Report.Findings {
+			if f.Detail != "" {
+				t.Errorf("request %d: Finding.Detail survived flush-time redaction: %q", i, f.Detail)
+			}
+			if f.Amendment != nil && f.Amendment.Content != "" {
+				t.Errorf("request %d: Amendment.Content survived flush-time redaction: %q", i, f.Amendment.Content)
+			}
+			if f.Alteration != nil && f.Alteration.Diff != "" {
+				t.Errorf("request %d: Alteration.Diff survived flush-time redaction: %q", i, f.Alteration.Diff)
+			}
+		}
+		if env.Report.Skipped != nil {
+			for _, sk := range *env.Report.Skipped {
+				if sk.Reason != "" {
+					t.Errorf("request %d: Skipped.Reason survived flush-time redaction: %q", i, sk.Reason)
+				}
+			}
+		}
+		if strings.Contains(string(body), "team added this paragraph") {
+			t.Errorf("request %d: raw content-grade text leaked into the flushed body: %s", i, body)
+		}
+	}
+
+	remaining, _, err := loadOutbox(root)
+	if err != nil {
+		t.Fatalf("loadOutbox: %v", err)
+	}
+	if len(remaining) != 0 {
+		t.Errorf("outbox has %d leftover entries after a successful flush, want 0", len(remaining))
+	}
+}
+
 func TestPublishTwoEndpointsBothReceive(t *testing.T) {
 	rsA := &recordingServer{}
 	srvA := httptest.NewServer(rsA.handler(202))

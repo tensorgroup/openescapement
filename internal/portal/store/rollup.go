@@ -208,8 +208,21 @@ type UnregisteredRemote struct {
 // UnregisteredRemotes groups events with an empty RepoID but a non-empty
 // Remote (envelope-sourced activity that never resolved to a registered
 // repo, i.e. shadow IT: AGENTS.md's "an unregistered remote is retained
-// rather than dropped") by remote, most recently active first.
-func UnregisteredRemotes(events []Event) []UnregisteredRemote {
+// rather than dropped") by remote, most recently active first. r excludes
+// any remote already bound to a repo in the registry: ingest resolves
+// RepoID at ingest time only, never retroactively, so an event recorded
+// before a remote was registered keeps an empty RepoID forever — without
+// this exclusion such a remote would look unregistered forever too, and
+// the fleet-register handler's "still unregistered" gate would let it be
+// bound to a SECOND repo, leaving RepoByRemote to pick between them
+// arbitrarily.
+func UnregisteredRemotes(r Registry, events []Event) []UnregisteredRemote {
+	bound := make(map[string]bool, len(r.Repos))
+	for _, repo := range r.Repos {
+		if repo.Remote != "" {
+			bound[repo.Remote] = true
+		}
+	}
 	type agg struct {
 		events   int
 		lastSeen time.Time
@@ -218,7 +231,7 @@ func UnregisteredRemotes(events []Event) []UnregisteredRemote {
 	byRemote := map[string]*agg{}
 	var order []string
 	for _, e := range events {
-		if e.RepoID != "" || e.Remote == "" {
+		if e.RepoID != "" || e.Remote == "" || bound[e.Remote] {
 			continue
 		}
 		a, ok := byRemote[e.Remote]

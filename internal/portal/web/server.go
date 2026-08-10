@@ -443,7 +443,7 @@ func (s *Server) buildFleetData(r *http.Request) (fleetData, error) {
 		RepoSort:        fleetHeader("repo", status, sortCol, dir),
 		LastSyncSort:    fleetHeader("last-sync", status, sortCol, dir),
 		StatusSort:      fleetHeader("status", status, sortCol, dir),
-		Unregistered:    store.UnregisteredRemotes(events),
+		Unregistered:    store.UnregisteredRemotes(s.Store.Registry(), events),
 		RegisterTargets: s.Store.Registry().UnassignedRepos(),
 	}, nil
 }
@@ -500,7 +500,7 @@ func (s *Server) handleFleetRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	stillUnregistered := false
-	for _, u := range store.UnregisteredRemotes(events) {
+	for _, u := range store.UnregisteredRemotes(s.Store.Registry(), events) {
 		if u.Remote == remote {
 			stillUnregistered = true
 			break

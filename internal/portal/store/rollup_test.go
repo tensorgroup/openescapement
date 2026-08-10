@@ -133,7 +133,7 @@ func TestUnregisteredRemotes(t *testing.T) {
 		// No remote at all (e.g. legacy raw-Event path): excluded too.
 		{TS: day(4), Kind: "provider_usage", TeamID: "t1"},
 	}
-	got := UnregisteredRemotes(events)
+	got := UnregisteredRemotes(Registry{}, events)
 	if len(got) != 2 {
 		t.Fatalf("remotes=%+v", got)
 	}
@@ -146,6 +146,25 @@ func TestUnregisteredRemotes(t *testing.T) {
 	}
 	if got[1].Remote != "github.com/acme/shadow-b" || got[1].Events != 1 {
 		t.Fatalf("remote1=%+v", got[1])
+	}
+}
+
+// TestUnregisteredRemotesExcludesRegistryBoundRemote pins the register-
+// integrity fix: a remote bound to a repo via the register flow keeps its
+// pre-bind events (RepoID is never rewritten retroactively), so relying on
+// events alone would keep listing it as unregistered forever and would let
+// the fleet-register handler bind the same remote to a second repo.
+// UnregisteredRemotes must exclude any remote the registry already has
+// bound, even though every event for it still carries an empty RepoID.
+func TestUnregisteredRemotesExcludesRegistryBoundRemote(t *testing.T) {
+	events := []Event{
+		{TS: day(1), Kind: "mcp_connect", Remote: "github.com/acme/shadow-a", AgentTool: "cursor"},
+		{TS: day(2), Kind: "mcp_connect", Remote: "github.com/acme/shadow-b", AgentTool: "cursor"},
+	}
+	reg := Registry{Repos: []Repo{{ID: "r1", Name: "bound-repo", Remote: "github.com/acme/shadow-a"}}}
+	got := UnregisteredRemotes(reg, events)
+	if len(got) != 1 || got[0].Remote != "github.com/acme/shadow-b" {
+		t.Fatalf("remotes=%+v, want only shadow-b (shadow-a is bound in the registry)", got)
 	}
 }
 
