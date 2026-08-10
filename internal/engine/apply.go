@@ -213,11 +213,18 @@ func handEdited(f Finding, prev *lockfile.LockArtifact) bool {
 // skill name override (pack.SkillEntry.Name) made unsound: a named skill has
 // no prefix, so retirement would refuse forever. Decided on the relative
 // path, never the absolute one, for the reason documented at the removal
-// pass. A hostile lockfile is still confined by construction: removal only
-// ever deletes manifest-listed files, and the DirHashOf gate below declines
-// (SkipOrphanDirEdited) whenever the recorded hash does not match what is on
-// disk — a directory escapement never wrote cannot match a hash escapement
-// recorded when writing it.
+// pass.
+//
+// What actually confines a hostile lockfile here is this check plus
+// manifest-only deletion — removal only ever deletes the paths prev.Files
+// lists — with containment and symlink refusal already run before any of
+// this reads the disk. The DirHashOf gate below (SkipOrphanDirEdited) is
+// not part of that containment chain: the lockfile is attacker-controlled
+// and DirHashOf is deterministic, so a hostile entry can simply carry the
+// correct hash for whatever it names and pass the gate. Its real job is
+// different — catching the case where a *team member* edited a
+// pack-provided file after escapement last wrote it, so that edit isn't
+// silently deleted out from under them on retirement.
 func ownedSkillPath(rel string) bool {
 	return path.Dir(path.Clean(rel)) == ".claude/skills"
 }
