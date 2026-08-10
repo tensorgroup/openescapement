@@ -178,9 +178,22 @@ func cmdPackUpdateSkill(ctx context.Context, root string, args []string, stdout,
 // skills/<name>/ convention add-skill writes, resolved through
 // containedSkillDir so a name that somehow reached here unvalidated still
 // cannot resolve outside the pack repo.
+//
+// This is the path cmdPackUpdateSkill actually takes for every
+// already-vendored skill (add-skill always records an explicit {path,
+// name} entry), so the manifest branch needs its own symlink refusal, not
+// just the fallback's: pack.Load's own manifest validation only os.Stats
+// e.Path (follows symlinks, just confirms something dir-shaped is there),
+// so nothing upstream of this function has refused a symlinked component.
+// refuseSkillSymlinks runs before the path is returned — before
+// cmdPackUpdateSkill's first read (pack.DirHash) — matching containedSkillDir's
+// same ordering guarantee on the fallback branch.
 func vendoredDir(root string, p *pack.Pack, name string) (string, error) {
 	for _, e := range p.Manifest.Skills {
 		if e.DirName(p.Manifest.Name) == name {
+			if err := refuseSkillSymlinks(root, e.Path); err != nil {
+				return "", err
+			}
 			return filepath.Join(root, filepath.FromSlash(e.Path)), nil
 		}
 	}

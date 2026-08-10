@@ -195,6 +195,18 @@ func diffstat(old, new map[string]string) (added, removed, changed int) {
 // class path traversal exploits, so this is the last line of defense, not
 // the first. Refusal is a plain error (exit 4), matching every other
 // containment refusal in this codebase.
+//
+// Lexical containment is not the whole story: filepath.Rel only reasons
+// about the string, and every path-based syscall that follows (Lstat,
+// os.Rename, os.RemoveAll, os.ReadFile) transparently follows a symlink
+// sitting at ANY component of the resolved path, not just the final one.
+// So this also runs refuseSkillSymlinks over "skills/<name>" before
+// returning — covering both a symlink placed directly at skills/<name> and
+// one placed at skills/ itself (or any component in between), the same two
+// cases internal/engine's refuseSymlinks exists to catch for the sync
+// side. This is the single choke point every vendoring write path resolves
+// its destination through, so a future caller cannot bypass the check by
+// deriving the path a different way.
 func containedSkillDir(root, name string) (string, error) {
 	if !pack.ValidName.MatchString(name) {
 		return "", fmt.Errorf("skill name %q must match %s (it becomes a filesystem path component)", name, pack.ValidName)
@@ -204,7 +216,42 @@ func containedSkillDir(root, name string) (string, error) {
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("skill name %q escapes the pack repository", name)
 	}
+	if err := refuseSkillSymlinks(root, rel); err != nil {
+		return "", err
+	}
 	return abs, nil
+}
+
+// refuseSkillSymlinks fails closed if any existing path component of rel
+// under root is a symlink. It mirrors internal/engine's refuseSymlinks
+// (see AGENTS.md: "contain and refuse symlinks over the whole manifest
+// BEFORE anything reads it, since hashing is a read") — the pack-authoring
+// write paths need the identical posture the sync engine already holds,
+// because a lexically-contained path is not a contained path once a
+// component resolves through a symlink. It never follows a symlinked
+// parent or a symlinked target; a component that does not exist yet is not
+// a refusal, since the caller may be about to create it (add-skill's
+// destination). The refusal is a plain error (exit 4), never
+// esc.ErrConstraint: exit 1 is the drift-and-constraint class a CI gate
+// reads as routine and self-healing, and a symlink standing where
+// escapement is about to write, rename, or delete is a containment
+// failure that no amount of syncing resolves.
+func refuseSkillSymlinks(root, rel string) error {
+	cur := root
+	for _, part := range strings.Split(filepath.ToSlash(rel), "/") {
+		cur = filepath.Join(cur, part)
+		fi, err := os.Lstat(cur)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil // this and deeper components do not exist yet
+			}
+			return err
+		}
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("%s: refusing to write through symlink %s", rel, cur)
+		}
+	}
+	return nil
 }
 
 // splitSkillURL splits the CLI's URL[#subdir] form. The spec's authoring

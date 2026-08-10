@@ -87,10 +87,15 @@ func cmdPackAddSkill(ctx context.Context, root string, args []string, stdout, st
 		// "_foo") still gets written to skills/<name>/ and appended to
 		// pack.yaml; only pack.Load's own validation would catch it
 		// afterwards, by which point the write already happened and
-		// succeeded = true. Refuse it here, in the same pre-write loop as
-		// every other "taken name" refusal.
-		if !pack.ValidName.MatchString(d.Name) {
-			return fmt.Errorf("skill name %q must match %s (it becomes a filesystem path component)", d.Name, pack.ValidName)
+		// succeeded = true. containedSkillDir does that name check, the
+		// lexical containment check, AND refuses any symlinked path
+		// component (skills/<name> itself, or skills/ itself) — the same
+		// choke point the write loop below resolves dst through, so this
+		// pre-check and the actual write can never disagree about what's
+		// being refused.
+		dst, err := containedSkillDir(root, d.Name)
+		if err != nil {
+			return err
 		}
 		if taken[d.Name] {
 			return fmt.Errorf("skill name %q is already present in this pack", d.Name)
@@ -98,7 +103,7 @@ func cmdPackAddSkill(ctx context.Context, root string, args []string, stdout, st
 		if srcs.Skill(d.Name) != nil {
 			return fmt.Errorf("skill name %q is already recorded in %s", d.Name, pack.SourcesFile)
 		}
-		if _, serr := os.Lstat(filepath.Join(root, "skills", d.Name)); serr == nil {
+		if _, serr := os.Lstat(dst); serr == nil {
 			return fmt.Errorf("skills/%s already exists in the pack repo", d.Name)
 		}
 	}
@@ -132,7 +137,10 @@ func cmdPackAddSkill(ctx context.Context, root string, args []string, stdout, st
 		}
 	}()
 	for _, d := range skills {
-		dst := filepath.Join(root, "skills", d.Name)
+		dst, err := containedSkillDir(root, d.Name)
+		if err != nil {
+			return err
+		}
 		files, hash, err := vendorCopy(d.Dir, dst)
 		if err != nil {
 			return err
