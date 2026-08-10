@@ -28,7 +28,7 @@ Conflicts are first-class and fail closed:
 
 - Plan fails with a clear error if two entries across all configured packs resolve to the same `.claude/skills/` path.
 - `add-skill` refuses a name already present in the pack.
-- If an unmanaged directory already occupies a target path on a consuming machine, sync skips it with a stderr warning and `esc status` reports it. Never silent adoption. `--force` does not override this case: overwriting a directory escapement never owned is destruction, not convergence. Adoption requires the user to move the directory aside.
+- If an unmanaged directory already occupies a target path on a consuming machine, sync skips it with a stderr warning and `esc status` reports it. Never silent adoption, with one carve-out: if the occupying directory's content hash exactly equals what escapement would have written, there is nothing to destroy, so sync records the lock entry and writes nothing to disk (a stderr notice, not a warning), which also lets a sync interrupted between the directory write and the lock save converge on retry instead of dead-ending forever. Anything short of an exact match is not adopted. `--force` does not override the skip case: overwriting a directory escapement never owned is destruction, not convergence. Adoption requires the user to move the directory aside.
 
 ## 4. Authoring commands
 
@@ -54,7 +54,7 @@ A developer may already have a skill at the user level that the pack now mandate
 
 `esc skill add <url>[#subdir] [--only name,...]`, `esc skill list`, `esc skill update [name|--all]`, `esc skill remove <name>`. These vendor directly into `~/.claude/skills/<name>` with state in `~/.escapement/skills.lock`, the existing lockfile format rooted at the home directory.
 
-The engine's dir-sync and per-file manifest machinery is reused, so the invariants carry over: an existing unmanaged directory is never overwritten, `remove` declines if the user added files inside the skill directory, `update` skips a hand-edited skill. There is no git undo at the user level, so `remove` states that and requires an explicit yes on a TTY or `--yes`, the same posture as `esc init`. Home-dir writes get the same containment rules as everything else: symlink refusal before any read, paths confined under `~/.claude/skills/`.
+The engine's dir-sync and per-file manifest machinery is reused, so the invariants carry over: an existing unmanaged directory is never overwritten except the exact-hash-match adoption carve-out in §3, `remove` declines if the user added files inside the skill directory, `update` skips a hand-edited skill. There is no git undo at the user level, so `remove` states that and requires an explicit yes on a TTY or `--yes`, the same posture as `esc init`. Home-dir writes get the same containment rules as everything else: symlink refusal before any read, paths confined under `~/.claude/skills/`.
 
 ## 8. MCP version discipline
 
