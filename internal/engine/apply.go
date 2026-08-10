@@ -340,7 +340,7 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 					}
 					res.Skipped = append(res.Skipped, Skipped{
 						Subject: a.Path, Kind: a.Kind, Cause: SkipUnmanagedDirAtTarget,
-						Reason:       "an unmanaged directory already occupies this path",
+						Reason:       "an unmanaged file or directory already occupies this path",
 						ExpectedHash: a.Hash,
 					})
 					continue // no lock entry appended: nothing was adopted

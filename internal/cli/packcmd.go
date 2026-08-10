@@ -78,7 +78,7 @@ func resolveSkillRef(ctx context.Context, url, refFlag string, stderr io.Writer)
 	if head == "" {
 		return "", "", fmt.Errorf("%w: %s has no resolvable HEAD", esc.ErrFetch, url)
 	}
-	fmt.Fprintf(stderr, "warning: %s has no semver tags; vendoring the default branch head (%s)\n", url, head[:12])
+	fmt.Fprintf(stderr, "warning: %s has no semver tags; vendoring the default branch head (%s)\n", url, short(head))
 	return "HEAD", head, nil
 }
 

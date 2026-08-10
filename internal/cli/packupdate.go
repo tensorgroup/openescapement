@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/tensorgroup/openescapement/internal/esc"
 	"github.com/tensorgroup/openescapement/internal/pack"
 )
 
@@ -25,10 +26,10 @@ func cmdPackUpdateSkill(ctx context.Context, root string, args []string, stdout,
 	ref := fs.String("ref", "", "ref to vendor (default: highest semver tag, else default branch head)")
 	force := fs.Bool("force", false, "overwrite a vendored copy that was edited after vendoring")
 	if err := fs.Parse(reorderFlags(fs, args)); err != nil {
-		return fmt.Errorf("%w: %v", errUsage, err)
+		return fmt.Errorf("%w: %v", esc.ErrUsage, err)
 	}
 	if fs.NArg() == 0 && !*all {
-		return fmt.Errorf("%w: name at least one skill, or pass --all", errUsage)
+		return fmt.Errorf("%w: name at least one skill, or pass --all", esc.ErrUsage)
 	}
 	p, err := loadAuthorPack(root, stderr)
 	if err != nil {

@@ -24,7 +24,7 @@ func cmdPackOutdated(ctx context.Context, root string, args []string, stdout, st
 	fs.SetOutput(stderr)
 	check := fs.Bool("check", false, "exit 1 when any vendored skill is behind upstream")
 	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("%w: %v", errUsage, err)
+		return fmt.Errorf("%w: %v", esc.ErrUsage, err)
 	}
 	if _, err := loadAuthorPack(root, stderr); err != nil {
 		return err

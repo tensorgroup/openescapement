@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -11,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/tensorgroup/openescapement/internal/esc"
 	"github.com/tensorgroup/openescapement/internal/pack"
 )
 
@@ -34,10 +34,10 @@ func cmdPackAddSkill(ctx context.Context, root string, args []string, stdout, st
 	ref := fs.String("ref", "", "ref to vendor (default: highest semver tag, else default branch head)")
 	only := fs.String("only", "", "comma-separated skill names to vendor from a multi-skill repo")
 	if err := fs.Parse(reorderFlags(fs, args)); err != nil {
-		return fmt.Errorf("%w: %v", errUsage, err)
+		return fmt.Errorf("%w: %v", esc.ErrUsage, err)
 	}
 	if fs.NArg() != 1 {
-		return fmt.Errorf("%w: esc pack add-skill takes exactly one URL[#subdir]", errUsage)
+		return fmt.Errorf("%w: esc pack add-skill takes exactly one URL[#subdir]", esc.ErrUsage)
 	}
 	p, err := loadAuthorPack(root, stderr)
 	if err != nil {
@@ -202,10 +202,6 @@ func relSkillSubdir(subdir, fetchDir, skillDir string) string {
 	}
 	return subdir + "/" + rel
 }
-
-// errUsage marks a flag/arity mistake in the pack command family so
-// exitCode maps it to 2 via esc.ErrConfig-style handling.
-var errUsage = errors.New("usage")
 
 // reorderFlags moves flag tokens (and, for non-boolean flags, the value
 // token immediately following) to the front of args, positional arguments

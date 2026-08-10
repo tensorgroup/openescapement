@@ -109,7 +109,7 @@ func exitCode(err error, stderr io.Writer) int {
 		return 3
 	case errors.Is(err, esc.ErrConstraint):
 		return 1
-	case errors.Is(err, esc.ErrConfig), errors.Is(err, errUsage):
+	case errors.Is(err, esc.ErrConfig), errors.Is(err, esc.ErrUsage):
 		return 2
 	default:
 		return 4
