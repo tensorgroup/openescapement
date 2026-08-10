@@ -96,7 +96,7 @@ func findArtifact(e store.Event, path string) (store.EventArtifact, bool) {
 //
 // Assertions read through the portal's own store (store.Open + Events()),
 // never by intercepting HTTP, so the proof covers ingest's mapping (Kind,
-// Artifacts, Collection, Drift), not just that a request was sent.
+// Artifacts, Collection, Drift, TS), not just that a request was sent.
 func TestTelemetryE2EContentThenClamp(t *testing.T) {
 	insecureClientForSelfSignedTLS(t)
 	const token = "e2e-token"
@@ -155,6 +155,16 @@ func TestTelemetryE2EContentThenClamp(t *testing.T) {
 	if contentEvent.Collection == nil || contentEvent.Collection.Amendments != "content" || contentEvent.Collection.Source != "pack" {
 		t.Errorf("collection = %+v, want content/pack", contentEvent.Collection)
 	}
+	// Every artifact's managed axis is in-sync (the amendment lives outside
+	// the managed block, and nothing else was touched), so
+	// store.DeriveDrift's three-value contract (altered/missing/orphan ->
+	// drifted; else stale -> stale; else in-sync) must land on "in-sync".
+	if contentEvent.Drift != "in-sync" {
+		t.Errorf("drift = %q, want in-sync (an amendment alone is not drift)", contentEvent.Drift)
+	}
+	if contentEvent.TS.IsZero() {
+		t.Error("event TS is zero, want the server-stamped receipt time (handleEnvelope sets it via s.Now())")
+	}
 
 	// Clamp the repo down to metrics.
 	cfg, err := config.Load(repo)
@@ -192,6 +202,14 @@ func TestTelemetryE2EContentThenClamp(t *testing.T) {
 	}
 	if metricsEvent.Collection == nil || metricsEvent.Collection.Amendments != "metrics" || metricsEvent.Collection.Source != "repo-override" {
 		t.Errorf("collection = %+v, want metrics/repo-override", metricsEvent.Collection)
+	}
+	// Same repo state as the content-stage sync (only the collection level
+	// changed), so the clamped event's derived drift must still be in-sync.
+	if metricsEvent.Drift != "in-sync" {
+		t.Errorf("drift = %q, want in-sync", metricsEvent.Drift)
+	}
+	if metricsEvent.TS.IsZero() {
+		t.Error("event TS is zero, want the server-stamped receipt time")
 	}
 }
 
