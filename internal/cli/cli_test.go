@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -100,9 +101,24 @@ packs:
 	return dir
 }
 
-// run invokes the CLI, returning exit code and combined output.
+// homeIsolated tracks which tests have already had run() pin $HOME, so a
+// test that deliberately sets its own $HOME after an earlier run() call
+// (setupDupHome, skilldup_test.go) keeps that value on later calls instead
+// of having it silently overwritten by the defensive default below.
+var homeIsolated sync.Map // *testing.T -> struct{}
+
+// run invokes the CLI, returning exit code and combined output. On a test's
+// first call, HOME is pinned to a fresh temp dir so the cross-level
+// duplicate scan in engine.Status (~/.claude/skills/<name>) never reads the
+// real machine's home directory: without this, a fixture skill name
+// colliding with something under the actual $HOME would make status output
+// flaky.
 func run(t *testing.T, root string, args ...string) (int, string) {
 	t.Helper()
+	if _, already := homeIsolated.LoadOrStore(t, struct{}{}); !already {
+		t.Setenv("HOME", t.TempDir())
+		t.Cleanup(func() { homeIsolated.Delete(t) })
+	}
 	var out bytes.Buffer
 	code := Run(root, args, &out, &out)
 	return code, out.String()

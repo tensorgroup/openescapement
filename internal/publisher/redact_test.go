@@ -80,6 +80,7 @@ func fixtureReport() *engine.Report {
 					ActualHash:   "dir-actual-hash",
 					Diff:         "dir diff placeholder for redaction coverage\n",
 				},
+				Duplicate: &engine.SkillDuplicate{Name: "team-skill", Same: false},
 			},
 			{
 				Subject: ".mcp.json",
@@ -284,6 +285,14 @@ func assertStripsSensitiveFields(t *testing.T, level string) {
 	items1, ok := amendment1["items"].([]any)
 	if !ok || len(items1) != 1 || items1[0] != "team-skill.md" {
 		t.Errorf("level %q: dir amendment items did not survive: got %v", level, amendment1["items"])
+	}
+
+	// duplicate is metrics-grade by design (a name and a bool) and MUST keep
+	// surviving below content; folding it into redaction would trade the
+	// whole cross-level signal away.
+	dup1, ok := f1["duplicate"].(map[string]any)
+	if !ok || dup1["name"] != "team-skill" || dup1["same"] != false {
+		t.Errorf("level %q: duplicate finding did not survive: got %v", level, f1["duplicate"])
 	}
 
 	collection, ok := report["collection"].(map[string]any)

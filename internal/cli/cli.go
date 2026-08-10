@@ -597,6 +597,13 @@ func cmdStatus(ctx context.Context, root string, args []string, stdout, stderr i
 					suffix = fmt.Sprintf("  ·  +%d lines local", f.Amendment.Lines)
 				}
 			}
+			if f.Duplicate != nil {
+				if f.Duplicate.Same {
+					suffix += "  ·  also installed at user level (same content)"
+				} else {
+					suffix += "  ·  also installed at user level (differs)"
+				}
+			}
 			if f.State == engine.InSync {
 				fmt.Fprintf(stdout, "  ✓ %-20s in sync%s\n", f.Subject, suffix)
 				continue

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"time"
@@ -70,13 +71,26 @@ type Finding struct {
 	// there is no on-disk file to name, the finding is about the
 	// subsystem itself. For KindConstraint it is the violated path, which
 	// may or may not coincide with a tracked artifact.
-	Subject    string      `json:"subject"`
-	Kind       string      `json:"kind"`
-	State      State       `json:"managed"`
-	Local      LocalState  `json:"local"`
-	Detail     string      `json:"detail,omitempty"`
-	Amendment  *Amendment  `json:"amendment,omitempty"`
-	Alteration *Alteration `json:"alteration,omitempty"`
+	Subject    string          `json:"subject"`
+	Kind       string          `json:"kind"`
+	State      State           `json:"managed"`
+	Local      LocalState      `json:"local"`
+	Detail     string          `json:"detail,omitempty"`
+	Amendment  *Amendment      `json:"amendment,omitempty"`
+	Alteration *Alteration     `json:"alteration,omitempty"`
+	Duplicate  *SkillDuplicate `json:"duplicate,omitempty"`
+}
+
+// SkillDuplicate reports that a managed project skill's on-disk name also
+// exists under the user-level skills directory (~/.claude/skills). Sync runs
+// per machine, so this only ever describes the home directory of whoever ran
+// it — information, not drift: it never affects any exit code (the same
+// stance as the local axis). Name and Same are deliberately the entire
+// payload — both metrics-grade — and the redaction walk test enforces that
+// no content-shaped field ever grows here.
+type SkillDuplicate struct {
+	Name string `json:"name"`
+	Same bool   `json:"same"`
 }
 
 // StatusResult is the full drift report for a governed repo.
@@ -129,6 +143,45 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 
 	for _, a := range plan.Artifacts {
 		res.Findings = append(res.Findings, classify(root, a, lock))
+	}
+
+	// Cross-level duplicates (spec §5): informational only. Attached to the
+	// existing dir finding rather than emitted as a new finding row because a
+	// new row with any non-InSync state would flip Clean() and change exit
+	// codes, which this signal must never do.
+	if home, herr := os.UserHomeDir(); herr == nil {
+		hashByPath := map[string]string{}
+		for _, a := range plan.Artifacts {
+			if a.Kind == KindDir {
+				hashByPath[a.Path] = a.Hash
+			}
+		}
+		for i := range res.Findings {
+			f := &res.Findings[i]
+			wantHash, ok := hashByPath[f.Subject]
+			if !ok {
+				continue
+			}
+			name := path.Base(f.Subject)
+			userDir := filepath.Join(home, ".claude", "skills", name)
+			info, serr := os.Lstat(userDir) // never follow a symlinked user dir
+			if serr != nil {
+				continue
+			}
+			d := &SkillDuplicate{Name: name}
+			if info.IsDir() {
+				// Same means the user copy is byte-identical to the
+				// pack-provided content: DirHash covers the whole user tree,
+				// DirHashOf(a.Files) is the pack tree, and an identical vendor
+				// copy hashes equal by construction. Any error (a symlink
+				// inside the user dir, unreadable file) reports differs — the
+				// cautious answer, and no error text leaves the machine.
+				if hh, herr2 := pack.DirHash(userDir); herr2 == nil {
+					d.Same = hh == wantHash
+				}
+			}
+			f.Duplicate = d
+		}
 	}
 
 	// Orphan managed blocks: files that carry an esc block for a target no
