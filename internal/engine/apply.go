@@ -147,6 +147,13 @@ const (
 	// SkipOrphanBlockEdited: the target left the effective set and its
 	// managed block was hand-edited, so the block was not removed.
 	SkipOrphanBlockEdited SkipCause = "orphan-block-edited"
+	// SkipUnmanagedDirAtTarget: a directory (or file) escapement never wrote
+	// already occupies a KindDir artifact's target path — there is no prior
+	// lock entry for it. Writing into it would be silent adoption of, and
+	// destruction inside, something the team owns, so sync declines. force
+	// does NOT override this cause: force is consent to overwrite
+	// escapement's own content, and this content never was.
+	SkipUnmanagedDirAtTarget SkipCause = "unmanaged-dir-at-target"
 )
 
 // SyncResult reports what a sync wrote and what it declined to write.
@@ -258,6 +265,20 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 			// because it's altered is still in the effective set and must
 			// not be swept up by the orphaned-dir removal pass further down.
 			desiredDirs[a.Path] = true
+
+			if prevLock.Artifact(a.Path) == nil {
+				// os.Lstat, not Stat: a symlink at the target was already
+				// refused above (refuseSymlinks); this catches a plain dir or
+				// file. Checked outside the force gate deliberately.
+				if _, statErr := os.Lstat(abs); statErr == nil {
+					res.Skipped = append(res.Skipped, Skipped{
+						Subject: a.Path, Kind: a.Kind, Cause: SkipUnmanagedDirAtTarget,
+						Reason:       "an unmanaged directory already occupies this path",
+						ExpectedHash: a.Hash,
+					})
+					continue // no lock entry appended: nothing was adopted
+				}
+			}
 		}
 		if !force {
 			prev := prevLock.Artifact(a.Path)

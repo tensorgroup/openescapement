@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/tensorgroup/openescapement/internal/esc"
+	"github.com/tensorgroup/openescapement/internal/lockfile"
 	"github.com/tensorgroup/openescapement/internal/render"
 )
 
@@ -109,7 +110,16 @@ func TestClassifyAlterationInvariant(t *testing.T) {
 			Path: ".claude/skills/esc-x", Kind: KindDir,
 			Files: []string{"SKILL.md"}, Hash: "sha256:doesnotmatch",
 		}
-		f := classify(root, a, nil)
+		// A prior lock entry is required here, deliberately: with no lock
+		// entry at all, classify's new occupied gate (mirroring Apply's
+		// SkipUnmanagedDirAtTarget) would intercept this pre-existing
+		// directory before ever reaching DirHashOf. That gate is exercised by
+		// TestClassifyOccupied below; this test's job is the genuine-mismatch
+		// branch past it.
+		lock := &lockfile.Lock{Artifacts: []lockfile.LockArtifact{
+			{Path: ".claude/skills/esc-x", Kind: KindDir, Hash: "sha256:previoussync", Files: []string{"SKILL.md"}},
+		}}
+		f := classify(root, a, lock)
 		if f.State != Altered {
 			t.Fatalf("state = %q, want altered", f.State)
 		}
@@ -130,7 +140,13 @@ func TestClassifyAlterationInvariant(t *testing.T) {
 			Path: ".claude/skills/esc-x", Kind: KindDir,
 			Files: []string{"missing.md"}, Hash: "sha256:doesnotmatter",
 		}
-		f := classify(root, a, nil)
+		// Same reasoning as the genuine-mismatch case above: a prior lock
+		// entry is required so classify reaches DirHashOf's error branch
+		// instead of the occupied gate.
+		lock := &lockfile.Lock{Artifacts: []lockfile.LockArtifact{
+			{Path: ".claude/skills/esc-x", Kind: KindDir, Hash: "sha256:previoussync", Files: []string{"missing.md"}},
+		}}
+		f := classify(root, a, lock)
 		if f.State != Altered {
 			t.Fatalf("state = %q, want altered", f.State)
 		}
@@ -170,4 +186,31 @@ func TestClassifyAlterationInvariant(t *testing.T) {
 			t.Errorf("a classification error must not set Alteration, got %+v", f.Alteration)
 		}
 	})
+}
+
+// TestClassifyOccupied covers the gate the two dir subtests above deliberately
+// route around by supplying a prior lock entry: with no lock entry at all and
+// something already on disk at the target, classify must report Occupied
+// rather than reach DirHashOf, mirroring Apply's SkipUnmanagedDirAtTarget
+// (apply.go).
+func TestClassifyOccupied(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".claude", "skills", "esc-x")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("the user's own copy\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a := Artifact{
+		Path: ".claude/skills/esc-x", Kind: KindDir,
+		Files: []string{"SKILL.md"}, Hash: "sha256:doesnotmatter",
+	}
+	f := classify(root, a, nil)
+	if f.State != Occupied {
+		t.Fatalf("state = %q, want occupied", f.State)
+	}
+	if f.Alteration != nil {
+		t.Errorf("occupied must not set Alteration, got %+v", f.Alteration)
+	}
 }

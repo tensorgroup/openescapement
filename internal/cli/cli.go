@@ -514,6 +514,8 @@ func skipHint(s engine.Skipped) string {
 		return "nothing was removed · restore the pack files as synced, or `esc sync --force` to retire the directory"
 	case engine.SkipOrphanBlockEdited:
 		return "the block is still in that file · `esc sync --force` to remove it"
+	case engine.SkipUnmanagedDirAtTarget:
+		return "escapement never owned that directory · move it aside, then `esc sync` (`--force` does not override this)"
 	default:
 		return "`esc diff` to inspect · `esc sync --force` to overwrite"
 	}

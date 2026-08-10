@@ -28,6 +28,7 @@ const (
 	PackStale          State = "pack-stale"
 	CheckOverdue       State = "check-overdue"
 	Orphan             State = "orphan"
+	Occupied           State = "occupied"
 )
 
 // Non-artifact finding kinds. Status reports on things that are not on-disk
@@ -373,6 +374,16 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 		}
 		return f
 	case KindDir:
+		if locked == nil {
+			// Mirror of Apply's SkipUnmanagedDirAtTarget gate, and it must
+			// stay a mirror: status must never promise a sync that Apply then
+			// declines. No prior lock entry + something on disk = a directory
+			// escapement never wrote occupying the target.
+			if _, lerr := os.Lstat(abs); lerr == nil {
+				return Finding{Subject: a.Path, Kind: a.Kind, State: Occupied, Local: LocalNone,
+					Detail: "an unmanaged directory occupies this path; escapement will not adopt or overwrite it — move it aside, then run `esc sync` (`--force` does not override this)"}
+			}
+		}
 		if info, err := os.Stat(abs); err != nil || !info.IsDir() {
 			return Finding{Subject: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "skill directory missing — run `esc sync`"}
 		}
