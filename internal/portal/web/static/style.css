@@ -166,6 +166,15 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--border-strong); backgro
 .pill.stale { background: var(--stale-bg); color: var(--stale-ink); }
 .pill.ungoverned { background: var(--ungov-bg); color: var(--ungov-ink); }
 
+/* Fleet State (local-tampering axis, orthogonal to Status above): augmented
+   is a team writing its own notes, not a problem, so it gets the same
+   neutral-informative treatment as the accent color elsewhere; altered is a
+   hand-edited managed region, so it draws the eye with the same red as
+   stale/drifted content; unadulterated is the plain no-news baseline. */
+.pill.unadulterated { background: var(--ungov-bg); color: var(--ink-2); }
+.pill.augmented { background: var(--accent-weak); color: var(--accent); }
+.pill.altered { background: var(--stale-bg); color: var(--stale-ink); }
+
 /* ---- Chips ---- */
 .chips { list-style: none; display: flex; flex-wrap: wrap; gap: var(--s2); padding: 0; margin: 0; }
 .chips li {

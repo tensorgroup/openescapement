@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tensorgroup/openescapement/internal/engine"
 	"github.com/tensorgroup/openescapement/internal/esc"
 	"github.com/tensorgroup/openescapement/internal/portal/charts"
 	"github.com/tensorgroup/openescapement/internal/portal/publish"
@@ -51,7 +52,7 @@ type Server struct {
 
 // pageNames are the page templates parsed at startup. Each defines the
 // "title", "explainer", and "content" blocks that override the layout.
-var pageNames = []string{"overview", "fleet", "packs", "pack", "pack_edit", "usage", "models", "model_vendor", "model_edit", "model_adopt"}
+var pageNames = []string{"overview", "fleet", "repo_detail", "packs", "pack", "pack_edit", "usage", "models", "model_vendor", "model_edit", "model_adopt"}
 
 // New builds a Server with its templates parsed and ready to serve.
 func New(st *store.Store, packs *publish.Manager, token, version string) *Server {
@@ -207,6 +208,8 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /{$}", s.handleOverview)
 	mux.HandleFunc("GET /fleet", s.handleFleet)
+	mux.HandleFunc("POST /fleet/register", s.handleFleetRegister)
+	mux.HandleFunc("GET /fleet/{repoID}", s.handleRepoDetail)
 	mux.HandleFunc("GET /packs", s.handlePacks)
 	mux.HandleFunc("GET /packs/{name}", s.handlePackDetail)
 	mux.HandleFunc("GET /packs/{name}/edit", s.handlePackEdit)
@@ -376,6 +379,12 @@ type fleetData struct {
 	RepoSort     colSort
 	LastSyncSort colSort
 	StatusSort   colSort
+
+	// Unregistered is envelope-sourced activity whose remote never matched a
+	// registered repo (shadow IT), grouped by remote. RegisterTargets is the
+	// set of repos a remote can be assigned to (those with no Remote yet).
+	Unregistered    []store.UnregisteredRemote
+	RegisterTargets []store.Repo
 }
 
 func (s *Server) handleFleet(w http.ResponseWriter, r *http.Request) {
@@ -416,19 +425,193 @@ func (s *Server) handleFleet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := fleetData{
-		layoutData:   s.baseData("fleet"),
-		Rows:         rows,
-		Status:       status,
-		SortCol:      sortCol,
-		RepoSort:     fleetHeader("repo", status, sortCol, dir),
-		LastSyncSort: fleetHeader("last-sync", status, sortCol, dir),
-		StatusSort:   fleetHeader("status", status, sortCol, dir),
+		layoutData:      s.baseData("fleet"),
+		Rows:            rows,
+		Status:          status,
+		SortCol:         sortCol,
+		RepoSort:        fleetHeader("repo", status, sortCol, dir),
+		LastSyncSort:    fleetHeader("last-sync", status, sortCol, dir),
+		StatusSort:      fleetHeader("status", status, sortCol, dir),
+		Unregistered:    store.UnregisteredRemotes(events),
+		RegisterTargets: s.Store.Registry().UnassignedRepos(),
 	}
 	if isHX(r) {
 		s.renderFragment(w, "fleet", "fleet-table", data)
 		return
 	}
 	s.render(w, "fleet", data)
+}
+
+// handleFleetRegister is the unregistered-remote register affordance: it
+// assigns a remote (seen in envelope-sourced events, matched to no repo) to
+// an existing registry repo that has no Remote yet, persisting through
+// Store.SaveRegistry's atomic write. This is deliberately the minimal v1 —
+// binding a remote to an existing repo — rather than a full repo-creation
+// flow; see the task report for why.
+func (s *Server) handleFleetRegister(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	remote := r.FormValue("remote")
+	repoID := r.FormValue("repo_id")
+	if remote == "" || repoID == "" {
+		http.Error(w, "remote and repo_id are required", http.StatusBadRequest)
+		return
+	}
+	reg := s.Store.Registry()
+	found := false
+	for i := range reg.Repos {
+		if reg.Repos[i].ID != repoID {
+			continue
+		}
+		if reg.Repos[i].Remote != "" {
+			http.Error(w, "repo already has a remote", http.StatusConflict)
+			return
+		}
+		reg.Repos[i].Remote = remote
+		found = true
+		break
+	}
+	if !found {
+		http.NotFound(w, r)
+		return
+	}
+	if err := s.Store.SaveRegistry(reg); err != nil {
+		serverError(w, err)
+		return
+	}
+	http.Redirect(w, r, "/fleet", http.StatusSeeOther)
+}
+
+// artifactDetail is one artifact's rendered state for the repo detail page,
+// carrying both axes (Managed/Local), amendment size, and either the
+// amendment's visible content, its withheld notice, or neither — "no
+// amendments" and "amendments withheld" are computed as mutually exclusive,
+// differently-worded cases so the two can never render identically (spec
+// §6's must).
+type artifactDetail struct {
+	Path, Kind, Managed, Local string
+
+	HasAmendment bool
+	Bytes, Lines int
+	Items        []string
+	Content      string // set only when the amendment's text is visible
+
+	Withheld       bool
+	WithheldSource string // "pack" | "repo-override" (Collection.Source)
+
+	Altered                        bool
+	ExpectedHash, ActualHash, Diff string
+}
+
+// buildArtifactDetail derives one artifact's detail-page view. Withheld
+// detection relies on a structural invariant, not the reporting level: an
+// EventArtifact.Amendment is only ever constructed (engine.newAmendment)
+// when it has visible Content or Items, so a local amendment (Local ==
+// "amended") whose Amendment carries neither means the publisher stripped
+// Content below content level — which is exactly the withheld case.
+func buildArtifactDetail(a store.EventArtifact, coll *engine.Collection) artifactDetail {
+	d := artifactDetail{Path: a.Path, Kind: a.Kind, Managed: a.Managed, Local: a.Local}
+	if a.Amendment != nil {
+		d.HasAmendment = true
+		d.Bytes = a.Amendment.Bytes
+		d.Lines = a.Amendment.Lines
+		d.Items = a.Amendment.Items
+		if a.Amendment.Content != "" {
+			d.Content = a.Amendment.Content
+		} else if a.Local == "amended" {
+			d.Withheld = true
+			d.WithheldSource = "policy"
+			if coll != nil && coll.Source != "" {
+				d.WithheldSource = coll.Source
+			}
+		}
+	}
+	if a.Managed == "altered" && a.Alteration != nil {
+		d.Altered = true
+		d.ExpectedHash = a.Alteration.ExpectedHash
+		d.ActualHash = a.Alteration.ActualHash
+		d.Diff = a.Alteration.Diff
+	}
+	return d
+}
+
+// repoDetailData is the /fleet/{repoID} page's data: the repo's org
+// placement, both governance axes, and its latest event's per-artifact
+// detail (Task 9: the withheld rendering lives in Artifacts).
+type repoDetailData struct {
+	layoutData
+	RepoID, RepoName, DeptName, TeamName string
+	Status, State                        string // "ungoverned" when HasEvent is false
+	HasEvent                             bool
+	LastSync                             time.Time
+	Packs, Tools                         []string
+	CollectionLevel, CollectionSource    string // "" when the event carries no Collection
+	Artifacts                            []artifactDetail
+}
+
+func (s *Server) handleRepoDetail(w http.ResponseWriter, r *http.Request) {
+	repoID := r.PathValue("repoID")
+	reg := s.Store.Registry()
+	var repo store.Repo
+	found := false
+	for _, rp := range reg.Repos {
+		if rp.ID == repoID {
+			repo = rp
+			found = true
+			break
+		}
+	}
+	if !found {
+		http.NotFound(w, r)
+		return
+	}
+	events, err := s.Store.Events()
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	team, deptName := reg.TeamAndDept(repo.TeamID)
+
+	data := repoDetailData{
+		layoutData: s.baseData("fleet"),
+		RepoID:     repo.ID,
+		RepoName:   repo.Name,
+		DeptName:   deptName,
+		TeamName:   team.Name,
+		Status:     "ungoverned",
+		State:      "ungoverned",
+	}
+	if e, ok := store.LatestPostureEvent(events, repoID); ok {
+		data.HasEvent = true
+		data.Status = e.Drift
+		data.State = store.FleetState(e.Artifacts)
+		data.LastSync = e.TS
+		for _, p := range e.Packs {
+			data.Packs = append(data.Packs, fmt.Sprintf("%s@%s", p.Name, p.Version))
+		}
+		sort.Strings(data.Packs)
+		if e.Collection != nil {
+			data.CollectionLevel = e.Collection.Amendments
+			data.CollectionSource = e.Collection.Source
+		}
+		for _, a := range e.Artifacts {
+			data.Artifacts = append(data.Artifacts, buildArtifactDetail(a, e.Collection))
+		}
+	}
+	tools := map[string]bool{}
+	for _, e := range events {
+		if e.RepoID == repoID && e.AgentTool != "" {
+			tools[e.AgentTool] = true
+		}
+	}
+	for t := range tools {
+		data.Tools = append(data.Tools, t)
+	}
+	sort.Strings(data.Tools)
+
+	s.render(w, "repo_detail", data)
 }
 
 // packsData extends layoutData with every configured pack, for the /packs

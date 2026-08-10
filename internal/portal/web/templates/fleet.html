@@ -11,6 +11,49 @@
   </div>
 </div>
 <div id="fleet-table" aria-live="polite">{{template "fleet-table" .}}</div>
+
+<section class="unregistered">
+  <h2>Unregistered</h2>
+  <p class="explainer">Activity from remotes that don't match any registered repo &mdash; AI tools in use with no governance record at all.</p>
+  {{if .Unregistered}}
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Remote</th>
+        <th scope="col">Events</th>
+        <th scope="col">Last seen</th>
+        <th scope="col">Agent tools</th>
+        <th scope="col">Register</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Unregistered}}
+      <tr>
+        <td class="mono">{{.Remote}}</td>
+        <td>{{.Events}}</td>
+        <td>{{fmtTime .LastSeen}}</td>
+        <td>{{range $i, $t := .AgentTools}}{{if $i}}, {{end}}{{$t}}{{end}}</td>
+        <td>
+          {{if $.RegisterTargets}}
+          <form method="post" action="/fleet/register">
+            <input type="hidden" name="remote" value="{{.Remote}}">
+            <select name="repo_id" aria-label="Register {{.Remote}} as">
+              {{range $.RegisterTargets}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+            </select>
+            <button type="submit">Register</button>
+          </form>
+          {{else}}
+          <span class="muted">No unassigned repos to register against.</span>
+          {{end}}
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="muted">No unregistered activity.</p>
+  {{end}}
+</section>
 {{end}}
 
 {{define "fleet-table"}}
@@ -44,6 +87,7 @@
             hx-get="{{.StatusSort.Href}}" hx-target="#fleet-table" hx-swap="innerHTML">Status</button>
         </form>
       </th>
+      <th scope="col">State</th>
       <th scope="col">Agent tools</th>
     </tr>
   </thead>
@@ -52,14 +96,15 @@
     <tr>
       <td>{{.DeptName}}</td>
       <td>{{.TeamName}}</td>
-      <td>{{.RepoName}}</td>
+      <td><a href="/fleet/{{.RepoID}}">{{.RepoName}}</a></td>
       <td>{{range $i, $p := .Packs}}{{if $i}}, {{end}}{{$p}}{{end}}</td>
       <td>{{fmtTime .LastSync}}</td>
       <td><span class="pill {{.Status}}">{{.Status}}</span></td>
+      <td><span class="pill {{.State}}">{{.State}}</span></td>
       <td>{{range $i, $t := .Tools}}{{if $i}}, {{end}}{{$t}}{{end}}</td>
     </tr>
     {{else}}
-    <tr><td colspan="7" class="muted">No repos match this filter.</td></tr>
+    <tr><td colspan="8" class="muted">No repos match this filter.</td></tr>
     {{end}}
   </tbody>
 </table>

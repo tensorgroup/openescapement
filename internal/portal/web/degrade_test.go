@@ -23,6 +23,13 @@ func TestEveryRouteRendersFullPageWithoutHX(t *testing.T) {
 	}
 }
 
+// GET /fleet/{repoID} is not in pageRoutes above because it 404s against
+// the empty store newTestServer uses (it needs a seeded repo); its
+// full-page-without-HX contract is covered by
+// TestRepoDetailRendersFullPageWithoutHX in repo_detail_test.go instead. It
+// implements no fragment at all (handleRepoDetail always calls s.render),
+// so there is nothing an HX-Request header could degrade.
+
 func TestPackDetailAndEditRenderFullPageWithoutHX(t *testing.T) {
 	h := newTestServerWithPacks(t).Handler()
 	for _, p := range []string{"/packs/org-baseline", "/packs/org-baseline/edit?frag=rules/security.md"} {

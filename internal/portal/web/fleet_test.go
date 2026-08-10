@@ -19,13 +19,15 @@ func TestFleetFilters(t *testing.T) {
 	s := New(st, nil, "", "test")
 	h := s.Handler()
 
+	// Each row carries two pills: Status (currency axis) and State (local-
+	// tampering axis), per AGENTS.md's "never collapse the two axes" rule.
 	all := get(t, h, "/fleet", nil).Body.String()
-	if got := strings.Count(all, `class="pill`); got != 40 {
-		t.Fatalf("all rows: %d pills", got)
+	if got := strings.Count(all, `class="pill`); got != 80 {
+		t.Fatalf("all rows: %d pills, want 40 rows * 2", got)
 	}
 	drifted := get(t, h, "/fleet?status=drifted", nil).Body.String()
-	if got := strings.Count(drifted, `class="pill`); got != 4 {
-		t.Fatalf("drifted rows: %d", got)
+	if got := strings.Count(drifted, `class="pill`); got != 8 {
+		t.Fatalf("drifted rows: %d, want 4 rows * 2", got)
 	}
 	if !strings.Contains(drifted, "org-baseline@") {
 		t.Fatal("pack labels missing")

@@ -70,12 +70,82 @@ func TestFleetRows(t *testing.T) {
 	if rows[0].RepoName != "campus-portal" || rows[0].Status != "stale" {
 		t.Fatalf("row0=%+v", rows[0])
 	}
-	if rows[1].RepoName != "shadow-poc" || rows[1].Status != "ungoverned" {
+	// campus-portal's fixture event carries no Artifacts: State must still
+	// resolve (unadulterated), distinct from its stale Status — the two
+	// axes never collapse into each other.
+	if rows[0].State != "unadulterated" {
+		t.Fatalf("row0 state=%+v", rows[0])
+	}
+	if rows[1].RepoName != "shadow-poc" || rows[1].Status != "ungoverned" || rows[1].State != "ungoverned" {
 		t.Fatalf("row1=%+v", rows[1])
 	}
 	if rows[2].RepoName != "ligo-pipeline" || rows[2].Status != "drifted" ||
 		rows[2].Packs[0] != "org-baseline@1.2.0" || rows[2].Tools[0] != "claude-code" {
 		t.Fatalf("row2=%+v", rows[2])
+	}
+}
+
+// TestFleetRowsStateFromArtifacts pins the cross-product AGENTS.md requires:
+// a repo whose managed region is hand-edited is State=altered regardless of
+// Status, and a repo with only a local amendment is State=augmented while
+// Status stays in-sync (augmented is not a drift signal).
+func TestFleetRowsStateFromArtifacts(t *testing.T) {
+	reg := Registry{
+		Repos: []Repo{{ID: "r1", Name: "altered-repo"}, {ID: "r2", Name: "augmented-repo"}},
+	}
+	events := []Event{
+		{TS: day(1), Kind: "status", RepoID: "r1", Drift: "drifted",
+			Artifacts: []EventArtifact{{Path: "CLAUDE.md", Managed: "altered", Local: "none"}}},
+		{TS: day(1), Kind: "status", RepoID: "r2", Drift: "in-sync",
+			Artifacts: []EventArtifact{{Path: "CLAUDE.md", Managed: "in-sync", Local: "amended"}}},
+	}
+	rows := FleetRows(reg, events)
+	byID := map[string]FleetRow{}
+	for _, r := range rows {
+		byID[r.RepoID] = r
+	}
+	if byID["r1"].State != "altered" || byID["r1"].Status != "drifted" {
+		t.Fatalf("r1=%+v", byID["r1"])
+	}
+	if byID["r2"].State != "augmented" || byID["r2"].Status != "in-sync" {
+		t.Fatalf("r2=%+v", byID["r2"])
+	}
+}
+
+func TestLatestPostureEvent(t *testing.T) {
+	events := fixtureEvents()
+	e, ok := LatestPostureEvent(events, "r1")
+	if !ok || e.Drift != "drifted" || !e.TS.Equal(day(10)) {
+		t.Fatalf("r1 latest=%+v ok=%v", e, ok)
+	}
+	if _, ok := LatestPostureEvent(events, "nope"); ok {
+		t.Fatal("unknown repo should not be found")
+	}
+}
+
+func TestUnregisteredRemotes(t *testing.T) {
+	events := []Event{
+		{TS: day(1), Kind: "mcp_connect", Remote: "github.com/acme/shadow-a", AgentTool: "cursor"},
+		{TS: day(3), Kind: "status", Remote: "github.com/acme/shadow-a", AgentTool: "claude-code"},
+		{TS: day(2), Kind: "mcp_connect", Remote: "github.com/acme/shadow-b", AgentTool: "cursor"},
+		// Resolved (RepoID set): must never appear in the unregistered bucket.
+		{TS: day(5), Kind: "status", RepoID: "r1", Remote: "github.com/acme/known"},
+		// No remote at all (e.g. legacy raw-Event path): excluded too.
+		{TS: day(4), Kind: "provider_usage", TeamID: "t1"},
+	}
+	got := UnregisteredRemotes(events)
+	if len(got) != 2 {
+		t.Fatalf("remotes=%+v", got)
+	}
+	// Most recently active first.
+	if got[0].Remote != "github.com/acme/shadow-a" || got[0].Events != 2 || !got[0].LastSeen.Equal(day(3)) {
+		t.Fatalf("remote0=%+v", got[0])
+	}
+	if len(got[0].AgentTools) != 2 || got[0].AgentTools[0] != "claude-code" || got[0].AgentTools[1] != "cursor" {
+		t.Fatalf("remote0 tools=%+v", got[0].AgentTools)
+	}
+	if got[1].Remote != "github.com/acme/shadow-b" || got[1].Events != 1 {
+		t.Fatalf("remote1=%+v", got[1])
 	}
 }
 

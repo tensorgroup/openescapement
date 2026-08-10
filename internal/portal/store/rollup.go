@@ -22,12 +22,19 @@ type AdoptionPoint struct {
 	Governed int
 }
 
-// FleetRow is one repo's governance posture for the fleet table.
+// FleetRow is one repo's governance posture for the fleet table. Status and
+// State are orthogonal axes (AGENTS.md: managed vs. local, never collapsed):
+// Status is the currency axis (in-sync|drifted|stale|ungoverned), State is
+// the local-tampering axis (unadulterated|augmented|altered|ungoverned) —
+// a repo can be State=unadulterated (no hand-edit, no local amendment) yet
+// Status=stale (its pack pin lags a release), and the fleet table must show
+// both rather than letting one imply the other.
 type FleetRow struct {
 	DeptName, TeamName, RepoName, RepoID string
 	Packs                                []string // "name@version", sorted
 	LastSync                             time.Time
 	Status                               string   // in-sync|drifted|stale|ungoverned
+	State                                string   // unadulterated|augmented|altered|ungoverned
 	Tools                                []string // sorted agent tools seen for repo
 }
 
@@ -149,9 +156,11 @@ func FleetRows(r Registry, events []Event) []FleetRow {
 			RepoName: repo.Name,
 			RepoID:   repo.ID,
 			Status:   "ungoverned",
+			State:    "ungoverned",
 		}
 		if e, ok := latest[repo.ID]; ok {
 			row.Status = e.Drift
+			row.State = FleetState(e.Artifacts)
 			row.LastSync = e.TS
 			for _, p := range e.Packs {
 				row.Packs = append(row.Packs, fmt.Sprintf("%s@%s", p.Name, p.Version))
@@ -175,6 +184,72 @@ func FleetRows(r Registry, events []Event) []FleetRow {
 		return a.RepoName < b.RepoName
 	})
 	return rows
+}
+
+// LatestPostureEvent returns the most recent sync/status event for repoID —
+// the same event FleetRows derives a row from — so the repo detail page can
+// render everything that event carries (Collection, Artifacts) that a
+// FleetRow does not.
+func LatestPostureEvent(events []Event, repoID string) (Event, bool) {
+	e, ok := latestPosture(events)[repoID]
+	return e, ok
+}
+
+// UnregisteredRemote is one remote seen in envelope-sourced events that
+// never matched a registered repo, grouped for the fleet page's shadow-IT
+// (unregistered) section.
+type UnregisteredRemote struct {
+	Remote     string
+	Events     int
+	LastSeen   time.Time
+	AgentTools []string // sorted, unique
+}
+
+// UnregisteredRemotes groups events with an empty RepoID but a non-empty
+// Remote (envelope-sourced activity that never resolved to a registered
+// repo, i.e. shadow IT: AGENTS.md's "an unregistered remote is retained
+// rather than dropped") by remote, most recently active first.
+func UnregisteredRemotes(events []Event) []UnregisteredRemote {
+	type agg struct {
+		events   int
+		lastSeen time.Time
+		tools    map[string]bool
+	}
+	byRemote := map[string]*agg{}
+	var order []string
+	for _, e := range events {
+		if e.RepoID != "" || e.Remote == "" {
+			continue
+		}
+		a, ok := byRemote[e.Remote]
+		if !ok {
+			a = &agg{tools: map[string]bool{}}
+			byRemote[e.Remote] = a
+			order = append(order, e.Remote)
+		}
+		a.events++
+		if e.TS.After(a.lastSeen) {
+			a.lastSeen = e.TS
+		}
+		if e.AgentTool != "" {
+			a.tools[e.AgentTool] = true
+		}
+	}
+	sort.Strings(order) // deterministic tie-break for the stable sort below
+	out := make([]UnregisteredRemote, 0, len(order))
+	for _, remote := range order {
+		a := byRemote[remote]
+		var tools []string
+		for t := range a.tools {
+			tools = append(tools, t)
+		}
+		sort.Strings(tools)
+		out = append(out, UnregisteredRemote{
+			Remote: remote, Events: a.events, LastSeen: a.lastSeen, AgentTools: tools,
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].LastSeen.After(out[j].LastSeen) })
+	return out
 }
 
 // UsageDaily aggregates provider_usage events into per-day/model/team cells

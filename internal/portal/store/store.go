@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tensorgroup/openescapement/internal/engine"
@@ -71,6 +73,37 @@ func (r Registry) RepoByRemote(remote string) (Repo, bool) {
 	return Repo{}, false
 }
 
+// TeamAndDept resolves a team ID to its team and department name, for pages
+// that need one repo's org placement outside FleetRows' bulk computation
+// (e.g. the repo detail page). Zero values when teamID matches nothing.
+func (r Registry) TeamAndDept(teamID string) (team Team, deptName string) {
+	deptByID := map[string]string{}
+	for _, d := range r.Departments {
+		deptByID[d.ID] = d.Name
+	}
+	for _, t := range r.Teams {
+		if t.ID == teamID {
+			return t, deptByID[t.DeptID]
+		}
+	}
+	return Team{}, ""
+}
+
+// UnassignedRepos returns registry repos with no Remote bound yet, sorted by
+// name, the candidate list for the unregistered-remote register affordance:
+// a remote can only be assigned to a repo that doesn't already have one, so
+// an accidental reassignment never silently clobbers an existing binding.
+func (r Registry) UnassignedRepos() []Repo {
+	var out []Repo
+	for _, repo := range r.Repos {
+		if repo.Remote == "" {
+			out = append(out, repo)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
 type EventPack struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
@@ -103,6 +136,8 @@ type Event struct {
 
 type Store struct {
 	dir string
+
+	mu  sync.RWMutex
 	reg Registry
 }
 
@@ -124,7 +159,28 @@ func Open(dir string) (*Store, error) {
 	return s, nil
 }
 
-func (s *Store) Registry() Registry { return s.reg }
+func (s *Store) Registry() Registry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.reg
+}
+
+// SaveRegistry persists r via the package-level atomic SaveRegistry and
+// updates the in-memory copy Registry() serves, so a change (e.g. the
+// unregistered-remote register affordance binding a Remote to a Repo) is
+// visible to the very next request without a re-Open. Guarded by mu: unlike
+// AppendEvent, which only ever appends, this is the first path that mutates
+// s.reg after Open, and concurrent HTTP handlers read Registry() while it
+// runs.
+func (s *Store) SaveRegistry(r Registry) error {
+	if err := SaveRegistry(s.dir, r); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.reg = r
+	s.mu.Unlock()
+	return nil
+}
 
 func (s *Store) AppendEvent(e Event) error {
 	line, err := json.Marshal(e)

@@ -39,6 +39,61 @@ func TestRegistryRoundTrip(t *testing.T) {
 	}
 }
 
+func TestStoreSaveRegistryPersistsAndUpdatesInMemory(t *testing.T) {
+	dir := t.TempDir()
+	r := Registry{Repos: []Repo{{ID: "r1", Name: "ligo-pipeline", TeamID: "ligo"}}}
+	if err := SaveRegistry(dir, r); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := s.Registry()
+	updated.Repos[0].Remote = "github.com/acme/ligo-pipeline"
+	if err := s.SaveRegistry(updated); err != nil {
+		t.Fatal(err)
+	}
+	// In-memory copy reflects the change without a re-Open.
+	if got := s.Registry().Repos[0].Remote; got != "github.com/acme/ligo-pipeline" {
+		t.Fatalf("in-memory remote = %q", got)
+	}
+	// On-disk copy reflects it too, across a fresh Open.
+	s2, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := s2.Registry().Repos[0].Remote; got != "github.com/acme/ligo-pipeline" {
+		t.Fatalf("on-disk remote = %q", got)
+	}
+}
+
+func TestRegistryTeamAndDept(t *testing.T) {
+	r := Registry{
+		Departments: []Department{{ID: "phys", Name: "Physics"}},
+		Teams:       []Team{{ID: "ligo", Name: "LIGO Ops", DeptID: "phys"}},
+	}
+	team, dept := r.TeamAndDept("ligo")
+	if team.Name != "LIGO Ops" || dept != "Physics" {
+		t.Fatalf("team=%+v dept=%q", team, dept)
+	}
+	if team, dept := r.TeamAndDept("nope"); team.Name != "" || dept != "" {
+		t.Fatalf("unknown team should be zero: team=%+v dept=%q", team, dept)
+	}
+}
+
+func TestRegistryUnassignedRepos(t *testing.T) {
+	r := Registry{Repos: []Repo{
+		{ID: "r2", Name: "b-repo", Remote: "github.com/acme/b"},
+		{ID: "r1", Name: "a-repo"},
+		{ID: "r3", Name: "c-repo"},
+	}}
+	got := r.UnassignedRepos()
+	if len(got) != 2 || got[0].ID != "r1" || got[1].ID != "r3" {
+		t.Fatalf("unassigned=%+v", got)
+	}
+}
+
 func TestOpenMissingRegistry(t *testing.T) {
 	s, err := Open(t.TempDir())
 	if err != nil {

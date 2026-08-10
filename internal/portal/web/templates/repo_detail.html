@@ -1,0 +1,49 @@
+{{define "title"}}{{.RepoName}}{{end}}
+{{define "explainer"}}Per-artifact governance detail: both axes, amendment size, and content.{{end}}
+{{define "content"}}
+<p><a href="/fleet">&larr; Back to fleet</a></p>
+<h2>{{.RepoName}} <span class="muted">{{.DeptName}} / {{.TeamName}}</span></h2>
+<p>
+  <span class="pill {{.Status}}">{{.Status}}</span>
+  <span class="pill {{.State}}">{{.State}}</span>
+</p>
+{{if .HasEvent}}
+<p class="muted">
+  Last sync: {{fmtTime .LastSync}}
+  {{if .Packs}}&middot; Rule packs: {{range $i, $p := .Packs}}{{if $i}}, {{end}}{{$p}}{{end}}{{end}}
+  {{if .Tools}}&middot; Agent tools: {{range $i, $t := .Tools}}{{if $i}}, {{end}}{{$t}}{{end}}{{end}}
+</p>
+{{if .CollectionLevel}}<p class="muted">Amendment reporting: {{.CollectionLevel}} (source: {{.CollectionSource}})</p>{{end}}
+<section hx-disable>
+  <h3>Artifacts</h3>
+  {{range .Artifacts}}
+  <article class="fragment">
+    <h4>{{.Path}} <span class="muted">{{.Kind}}</span></h4>
+    <p>
+      <span class="pill {{.Managed}}">{{.Managed}}</span>
+      <span class="pill {{.Local}}">{{.Local}}</span>
+    </p>
+    {{if .Altered}}
+    <p class="muted">Hand-edited: expected <span class="mono">{{.ExpectedHash}}</span>, actual <span class="mono">{{.ActualHash}}</span></p>
+    {{if .Diff}}<pre class="diff">{{range diffLines .Diff}}<span class="line {{.Class}}">{{.Text}}</span>{{end}}</pre>{{end}}
+    {{end}}
+    {{if .HasAmendment}}
+    <p class="muted">Amendment: {{.Bytes}} bytes, {{.Lines}} lines{{if .Items}}, {{len .Items}} items{{end}}</p>
+    {{if .Items}}<ul>{{range .Items}}<li class="mono">{{.}}</li>{{end}}</ul>{{end}}
+    {{if .Withheld}}
+    <p class="muted">content withheld by {{.WithheldSource}}</p>
+    {{else if .Content}}
+    <pre>{{.Content}}</pre>
+    {{end}}
+    {{else}}
+    <p class="muted">No amendments.</p>
+    {{end}}
+  </article>
+  {{else}}
+  <p class="muted">No artifacts reported.</p>
+  {{end}}
+</section>
+{{else}}
+<p class="muted">No posture events yet for this repo.</p>
+{{end}}
+{{end}}
