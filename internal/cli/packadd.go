@@ -81,6 +81,17 @@ func cmdPackAddSkill(ctx context.Context, root string, args []string, stdout, st
 		taken[e.DirName(p.Manifest.Name)] = true
 	}
 	for _, d := range skills {
+		// A discovered name is an upstream directory basename (or the URL's
+		// #subdir basename) — never validated up to this point. Without this
+		// check, a name pack.ValidName would reject (".github", "my skill",
+		// "_foo") still gets written to skills/<name>/ and appended to
+		// pack.yaml; only pack.Load's own validation would catch it
+		// afterwards, by which point the write already happened and
+		// succeeded = true. Refuse it here, in the same pre-write loop as
+		// every other "taken name" refusal.
+		if !pack.ValidName.MatchString(d.Name) {
+			return fmt.Errorf("skill name %q must match %s (it becomes a filesystem path component)", d.Name, pack.ValidName)
+		}
 		if taken[d.Name] {
 			return fmt.Errorf("skill name %q is already present in this pack", d.Name)
 		}

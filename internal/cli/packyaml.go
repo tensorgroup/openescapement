@@ -10,14 +10,22 @@ import (
 	"github.com/tensorgroup/openescapement/internal/pack"
 )
 
-// appendSkillEntries appends object-form skills: entries to a pack.yaml,
-// preserving the author's comments and ordering. A structural yaml.Node round
-// trip, not a struct re-marshal: re-marshalling a hand-written manifest
-// through Manifest would reorder keys and drop every comment — modifying far
-// more than the bytes this operation is about. The byte-preservation
-// invariant applies in spirit to authoring files too: touch only the skills
-// sequence. The write is atomic and preserves the file's permission bits
-// (restoreFile, cli.go).
+// appendSkillEntries appends object-form skills: entries to a pack.yaml. A
+// structural yaml.Node round trip, not a struct re-marshal: re-marshalling a
+// hand-written manifest through Manifest would reorder keys and drop every
+// comment. This preserves far more than that — key ordering and every
+// comment survive, and the appended entries are the only content-level
+// change — but it is NOT byte-preserving outside the skills sequence, and
+// the doc comment used to claim it was. yaml.v3's own encoder drops blank
+// lines between top-level keys and reflows a folded (">") scalar onto one
+// line, in both cases changing bytes this operation never intended to
+// touch. None of that changes what the document MEANS: it stays valid
+// pack.yaml, every comment and key stays attached to the same key, and the
+// rewritten file parses back to content identical to the original except
+// for the appended entries. That reparseable-and-semantically-identical
+// guarantee is what packyaml_test.go's file-shape cases assert — not byte
+// identity, which this function does not provide. The write itself is
+// atomic and preserves the file's permission bits (restoreFile, cli.go).
 func appendSkillEntries(path string, entries []pack.SkillEntry) error {
 	raw, err := os.ReadFile(path)
 	if err != nil {
