@@ -48,6 +48,22 @@ func TestSourcesRoundTripSortedAndAbsent(t *testing.T) {
 	}
 }
 
+func TestSourcesSaveLeavesNoTempFile(t *testing.T) {
+	dir := t.TempDir()
+	s := &Sources{Schema: 1}
+	s.Upsert(SourceSkill{Name: "brainstorming", Source: "github.com/obra/superpowers", Subdir: "skills/brainstorming", Ref: "v6.2.0", Commit: "abc123", Hash: "sha256:bb"})
+	if err := s.Save(dir); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != SourcesFile {
+		t.Fatalf("Save left unexpected directory contents: %v", entries)
+	}
+}
+
 func TestLoadSourcesRejectsUnknownKeys(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "sources.yaml"), []byte("schema: 1\nbogus: 1\n"), 0o644); err != nil {

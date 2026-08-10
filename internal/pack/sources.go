@@ -68,7 +68,30 @@ func (s *Sources) Save(dir string) error {
 	if err := enc.Close(); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, SourcesFile), buf.Bytes(), 0o644)
+	return atomicWrite(filepath.Join(dir, SourcesFile), buf.Bytes())
+}
+
+// atomicWrite writes via a temp file + rename in the destination directory,
+// so a process killed mid-write never leaves a truncated sources.yaml behind
+// to poison the pack's signed hash.
+func atomicWrite(path string, content []byte) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".sources-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(content); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
 // Skill returns the entry named name, or nil.
