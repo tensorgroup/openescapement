@@ -224,7 +224,8 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 			})
 		case render.TargetSkills:
 			for _, p := range res.PackObjs {
-				for _, rel := range p.Manifest.Skills {
+				for _, e := range p.Manifest.Skills {
+					rel := e.Path
 					src := filepath.Join(p.Dir, filepath.FromSlash(rel))
 					// One walk (pack.DirFiles) produces the file list that
 					// both the hash and Files are built from, so the two

@@ -131,7 +131,9 @@ func (m *Manager) Get(ctx context.Context, name string) (*PackInfo, error) {
 	}
 	frags := make([]string, 0, len(p.Manifest.Rules)+len(p.Manifest.Skills))
 	frags = append(frags, p.Manifest.Rules...)
-	frags = append(frags, p.Manifest.Skills...)
+	for _, e := range p.Manifest.Skills {
+		frags = append(frags, e.Path)
+	}
 	sort.Strings(frags)
 	tags, err := listTags(ctx, dir)
 	if err != nil {

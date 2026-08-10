@@ -25,7 +25,7 @@ type Manifest struct {
 	Version     string         `yaml:"version"`
 	Description string         `yaml:"description"`
 	Rules       []string       `yaml:"rules"`
-	Skills      []string       `yaml:"skills"`
+	Skills      []SkillEntry   `yaml:"skills"`
 	MCP         MCPSpec        `yaml:"mcp"`
 	Catalog     []CatalogEntry `yaml:"catalog"`
 	Constraints Constraints    `yaml:"constraints"`
@@ -163,7 +163,9 @@ func (m *Manifest) validate(dir string) error {
 			return fail("rule file %s: %v", rel, err)
 		}
 	}
-	for _, rel := range m.Skills {
+	seenSkillDir := map[string]string{}
+	for _, e := range m.Skills {
+		rel := e.Path
 		if err := safeRel(rel); err != nil {
 			return fail("skill %v", err)
 		}
@@ -174,6 +176,17 @@ func (m *Manifest) validate(dir string) error {
 		if !validName.MatchString(filepath.Base(rel)) {
 			return fail("skill %s: directory name must match %s", rel, validName)
 		}
+		if e.Name != "" && !validName.MatchString(e.Name) {
+			return fail("skill %s: name %q must match %s (it becomes a filesystem path component)", rel, e.Name, validName)
+		}
+		// Conflicts are first-class and fail closed (spec §3): two entries in
+		// one pack resolving to the same on-disk directory is a manifest
+		// authoring error, caught before anything is planned or written.
+		dn := e.DirName(m.Name)
+		if prev, ok := seenSkillDir[dn]; ok {
+			return fail("skills %q and %q both resolve to directory %q", prev, rel, dn)
+		}
+		seenSkillDir[dn] = rel
 	}
 	for _, c := range m.Catalog {
 		if c.Name == "" {
