@@ -47,6 +47,11 @@ Usage:
   esc serve [--demo] [--addr ADDR] [--data-dir DIR] [--token TOKEN]
                                  Launch the admin portal server
                                  --token sets the auth token (default: random)
+  esc pack add-skill URL[#subdir] [--ref REF] [--only a,b]
+  esc pack update-skill [name...] [--all] [--ref REF] [--force]
+  esc pack outdated [--check]
+                                 Author commands (run in the pack repo):
+                                 vendor and maintain external skills
   esc version                    Print version
 
 Exit codes: 0 ok · 1 drift/constraint findings · 2 usage · 3 integrity/signature · 4 error
@@ -79,6 +84,8 @@ func Run(root string, args []string, stdout, stderr io.Writer) int {
 		// No ctx: serve runs until SIGINT/SIGTERM, well past the 10-minute
 		// timeout above, and builds its own signal-bound context.
 		return cmdServe(root, args[1:], stdout, stderr)
+	case "pack":
+		return cmdPack(ctx, root, args[1:], stdout, stderr)
 	case "version":
 		fmt.Fprintf(stdout, "esc %s (commit %s, built %s)\n", Version, Commit, Date)
 		return 0
@@ -102,7 +109,7 @@ func exitCode(err error, stderr io.Writer) int {
 		return 3
 	case errors.Is(err, esc.ErrConstraint):
 		return 1
-	case errors.Is(err, esc.ErrConfig):
+	case errors.Is(err, esc.ErrConfig), errors.Is(err, errUsage):
 		return 2
 	default:
 		return 4

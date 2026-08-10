@@ -87,6 +87,7 @@ type Pack struct {
 	Dir       string
 	Manifest  Manifest
 	Fragments []Fragment
+	Warnings  []string // non-fatal authoring lint (populated by Load; printed only by esc pack commands)
 }
 
 var validCatalogStatus = map[string]bool{
