@@ -18,7 +18,16 @@ import (
 // fetch, discover by SKILL.md, copy under skills/<name>/, append object
 // entries to pack.yaml, record provenance in sources.yaml. It prints what
 // was vendored at which commit so the author reviews the diff before
-// committing (spec §4). All refusals happen before anything is written.
+// committing (spec §4). All refusals happen before anything is written, and
+// the command is all-or-nothing after that: a failure partway through a
+// multi-skill batch (a later vendorCopy, the pack.yaml append, or the
+// sources.yaml save) removes every skills/<name>/ directory this invocation
+// created and restores pack.yaml to what it was before this call, rather
+// than stranding a vendored-but-unrecorded directory the next identical
+// invocation would then refuse to retry (vendorCopy's own destination-exists
+// guard). Per-skill success lines are buffered and only reach stdout once
+// every write has actually landed, so a late failure never prints a
+// "vendored" line for a skill whose provenance never made it to disk.
 func cmdPackAddSkill(ctx context.Context, root string, args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("pack add-skill", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -82,24 +91,59 @@ func cmdPackAddSkill(ctx context.Context, root string, args []string, stdout, st
 			return fmt.Errorf("skills/%s already exists in the pack repo", d.Name)
 		}
 	}
+	packYAMLPath := filepath.Join(root, "pack.yaml")
+	origPackYAML, err := os.ReadFile(packYAMLPath)
+	if err != nil {
+		return err
+	}
+
 	var entries []pack.SkillEntry
+	var created []string // skills/<name> dirs this invocation created, for rollback
+	var summaries []string
+	packYAMLWritten := false
+	succeeded := false
+	// Mirrors vendorCopy's own succeeded-flag pattern: on any early return
+	// below, undo every directory this invocation created and, if pack.yaml
+	// was already appended to, restore it — so a caller can retry the exact
+	// same command without first hand-removing a directory or entry it never
+	// chose to leave behind.
+	defer func() {
+		if succeeded {
+			return
+		}
+		for _, d := range created {
+			os.RemoveAll(d)
+		}
+		if packYAMLWritten {
+			if rerr := restoreFile(packYAMLPath, origPackYAML); rerr != nil {
+				fmt.Fprintf(stderr, "esc: restoring %s after a failed vendor also failed: %v\n", packYAMLPath, rerr)
+			}
+		}
+	}()
 	for _, d := range skills {
-		files, hash, err := vendorCopy(d.Dir, filepath.Join(root, "skills", d.Name))
+		dst := filepath.Join(root, "skills", d.Name)
+		files, hash, err := vendorCopy(d.Dir, dst)
 		if err != nil {
 			return err
 		}
+		created = append(created, dst)
 		entries = append(entries, pack.SkillEntry{Path: "skills/" + d.Name, Name: d.Name})
 		srcs.Upsert(pack.SourceSkill{
 			Name: d.Name, Source: url, Subdir: relSkillSubdir(subdir, fr.Dir, d.Dir),
 			Ref: recorded, Commit: fr.Commit, Hash: hash,
 		})
-		fmt.Fprintf(stdout, "vendored %s (%d files) from %s@%s at %s\n", d.Name, len(files), url, recorded, fr.Commit)
+		summaries = append(summaries, fmt.Sprintf("vendored %s (%d files) from %s@%s at %s\n", d.Name, len(files), url, recorded, fr.Commit))
 	}
-	if err := appendSkillEntries(filepath.Join(root, "pack.yaml"), entries); err != nil {
+	if err := appendSkillEntries(packYAMLPath, entries); err != nil {
 		return err
 	}
+	packYAMLWritten = true
 	if err := srcs.Save(root); err != nil {
 		return err
+	}
+	succeeded = true
+	for _, s := range summaries {
+		fmt.Fprint(stdout, s)
 	}
 	fmt.Fprintln(stdout, "review the diff, then commit the pack repo.")
 	return nil

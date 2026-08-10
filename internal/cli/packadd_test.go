@@ -89,6 +89,65 @@ func TestPackAddSkillVendorsSuiteWithProvenance(t *testing.T) {
 	}
 }
 
+// newUpstreamSkillRepoWithBrokenSkill builds a two-skill suite like
+// newUpstreamSkillRepo, but the second skill (writing-plans, second in
+// discoverSkills' sorted order) carries a symlink. discoverSkills never
+// follows symlinks, so it still finds writing-plans as a skill directory —
+// but vendorCopy's pack.DirFiles walk fails closed on the symlink, so
+// vendoring writing-plans fails AFTER brainstorming has already been copied.
+// This exercises the mid-batch failure path without needing a destination
+// that already exists, which the upfront taken-name refusal loop would
+// catch before any write ever happens, never reaching a mid-batch state.
+func newUpstreamSkillRepoWithBrokenSkill(t *testing.T) string {
+	t.Helper()
+	repo := t.TempDir()
+	gitIn(t, repo, "init", "-q")
+	writeFiles(t, repo, map[string]string{
+		"README.md":                     "a skill suite\n",
+		"skills/brainstorming/SKILL.md": "---\nname: brainstorming\n---\n\nExplore first.\n",
+		"skills/writing-plans/SKILL.md": "---\nname: writing-plans\n---\n\nPlan second.\n",
+	})
+	if err := os.Symlink("../nonexistent", filepath.Join(repo, "skills/writing-plans/broken-link")); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, repo, "add", ".")
+	gitIn(t, repo, "commit", "-q", "-m", "v1")
+	gitIn(t, repo, "tag", "v1.0.0")
+	return repo
+}
+
+// TestPackAddSkillFailureLeavesPackRepoUntouched asserts the all-or-nothing
+// property cmdPackAddSkill's doc comment claims: a failure partway through a
+// multi-skill batch must not leave an already-vendored skill directory
+// behind, must not modify pack.yaml or sources.yaml, and must not have
+// printed a "vendored" success line for a skill whose provenance never made
+// it to disk.
+func TestPackAddSkillFailureLeavesPackRepoUntouched(t *testing.T) {
+	t.Setenv("ESC_CACHE_DIR", t.TempDir())
+	up := newUpstreamSkillRepoWithBrokenSkill(t)
+	root := newAuthorPack(t)
+	out, code := runEscOut(t, root, "pack", "add-skill", "file://"+up+"#skills")
+	if code == 0 {
+		t.Fatalf("add-skill with a broken second skill must fail:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "skills", "brainstorming")); !os.IsNotExist(err) {
+		t.Fatalf("partial vendor left behind: skills/brainstorming exists after a mid-batch failure (stat err=%v)", err)
+	}
+	p, err := pack.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Manifest.Skills) != 0 {
+		t.Fatalf("pack.yaml gained entries despite the failure: %+v", p.Manifest.Skills)
+	}
+	if srcs, err := pack.LoadSources(root); err != nil || srcs != nil {
+		t.Fatalf("sources.yaml written despite the failure: %+v, %v", srcs, err)
+	}
+	if strings.Contains(out, "vendored") {
+		t.Fatalf("success line printed before the writes that make it true:\n%s", out)
+	}
+}
+
 func TestPackAddSkillOnlyAndRefusals(t *testing.T) {
 	t.Setenv("ESC_CACHE_DIR", t.TempDir())
 	up := newUpstreamSkillRepo(t)
