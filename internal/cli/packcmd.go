@@ -32,6 +32,8 @@ func cmdPack(ctx context.Context, root string, args []string, stdout, stderr io.
 		return exitCode(cmdPackAddSkill(ctx, root, args[1:], stdout, stderr), stderr)
 	case "update-skill":
 		return exitCode(cmdPackUpdateSkill(ctx, root, args[1:], stdout, stderr), stderr)
+	case "outdated":
+		return exitCode(cmdPackOutdated(ctx, root, args[1:], stdout, stderr), stderr)
 	default:
 		fmt.Fprintf(stderr, "esc pack: unknown subcommand %q\n\n%s", args[0], packUsage)
 		return 2
