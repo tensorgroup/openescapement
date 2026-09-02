@@ -114,6 +114,9 @@ code in `esc` itself.
 
 ### `esc serve` — the admin portal
 
+For what the CLI, the pack repo, and the portal each do, and what a server adds,
+see [docs/cli-and-portal.md](docs/cli-and-portal.md).
+
 ```sh
 esc serve --demo               # one binary, seeded fictional org, no setup
 ```

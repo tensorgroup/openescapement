@@ -34,6 +34,7 @@ These are the canonical instructions for any coding agent working in this repo. 
 ## Deeper context, read on demand
 
 - `ai-governance-product-spec.md` — canonical product spec (Draft v2). Read before any product or design discussion; it also defines the product boundaries (what this is *not*). Open questions are in §11.
+- `docs/cli-and-portal.md` — who does what: CLI in a governed repo, author commands in the pack repo, the portal across the fleet; what a server adds and what it never does
 - `docs/superpowers/specs/` — design docs from the spec → plan → implementation cycle
 - `docs/roadmap/`, `docs/strategy/` — future pillars, licensing and open-core reasoning
 - `docs/ideas/` — uncommitted ideas and feature candidates; see its README for how ideas graduate to the spec or a roadmap doc
