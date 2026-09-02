@@ -67,6 +67,9 @@ jobs:
     with:
       base64-subjects: ${{ needs.goreleaser.outputs.hashes }}
       upload-assets: true
+      # The generator refuses to run on a private repository unless this is
+      # set: keyless signing records the repo name in the public Rekor log.
+      private-repository: true
 
   # Smoke test: verify the just-published signature exactly as VERIFYING.md tells users to.
   verify:

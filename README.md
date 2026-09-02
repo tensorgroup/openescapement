@@ -44,6 +44,13 @@ go install github.com/tensorgroup/openescapement/cmd/esc@latest
 Release binaries are cosign-signed with SLSA build-level-3 provenance — see
 [VERIFYING.md](VERIFYING.md).
 
+While this repository is private, the one-line installer and `go install` cannot
+reach it anonymously. Download a release asset with an authenticated `gh` instead:
+
+```sh
+gh release download --repo tensorgroup/openescapement --pattern 'esc_*_darwin_arm64.tar.gz'
+```
+
 ## Quickstart
 
 ```sh
