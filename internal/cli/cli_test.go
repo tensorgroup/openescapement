@@ -22,6 +22,16 @@ func gitIn(t *testing.T, dir string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// gitIdentity gives a freshly initialized test repo an author identity so
+// commits work on CI runners, which have no global git config to fall back
+// on (macOS git guesses one from the account; Linux git refuses to commit).
+func gitIdentity(t *testing.T, dir string) {
+	t.Helper()
+	gitIn(t, dir, "config", "user.email", "t@e.com")
+	gitIn(t, dir, "config", "user.name", "T")
+	gitIn(t, dir, "config", "commit.gpgsign", "false")
+}
+
 func writeFiles(t *testing.T, dir string, files map[string]string) {
 	t.Helper()
 	for rel, content := range files {

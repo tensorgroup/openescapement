@@ -16,6 +16,7 @@ func newUpstreamSkillRepo(t *testing.T) string {
 	t.Helper()
 	repo := t.TempDir()
 	gitIn(t, repo, "init", "-q")
+	gitIdentity(t, repo)
 	writeFiles(t, repo, map[string]string{
 		"README.md":                       "a skill suite\n",
 		"skills/brainstorming/SKILL.md":   "---\nname: brainstorming\n---\n\nExplore first.\n",
@@ -102,6 +103,7 @@ func newUpstreamSkillRepoWithBrokenSkill(t *testing.T) string {
 	t.Helper()
 	repo := t.TempDir()
 	gitIn(t, repo, "init", "-q")
+	gitIdentity(t, repo)
 	writeFiles(t, repo, map[string]string{
 		"README.md":                     "a skill suite\n",
 		"skills/brainstorming/SKILL.md": "---\nname: brainstorming\n---\n\nExplore first.\n",
@@ -171,6 +173,7 @@ func TestPackAddSkillNoTagsFallsBackToHeadWithWarning(t *testing.T) {
 	t.Setenv("ESC_CACHE_DIR", t.TempDir())
 	up := t.TempDir()
 	gitIn(t, up, "init", "-q")
+	gitIdentity(t, up)
 	writeFiles(t, up, map[string]string{"SKILL.md": "---\nname: solo\n---\n\nOne skill, no tags.\n"})
 	gitIn(t, up, "add", ".")
 	gitIn(t, up, "commit", "-q", "-m", "head only")

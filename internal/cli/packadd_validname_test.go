@@ -22,6 +22,7 @@ func TestPackAddSkillRefusesInvalidName(t *testing.T) {
 	t.Setenv("ESC_CACHE_DIR", t.TempDir())
 	up := t.TempDir()
 	gitIn(t, up, "init", "-q")
+	gitIdentity(t, up)
 	writeFiles(t, up, map[string]string{"my skill/SKILL.md": "---\nname: x\n---\n\nBody.\n"})
 	gitIn(t, up, "add", ".")
 	gitIn(t, up, "commit", "-q", "-m", "v1")
