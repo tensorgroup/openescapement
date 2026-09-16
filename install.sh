@@ -80,6 +80,9 @@ main() {
   install -m 0755 "$tmp/esc" "$install_dir/esc"
 
   echo "Installed $("$install_dir/esc" version) to $install_dir/esc"
+  echo "Next: cd into a repo and run 'esc init', or paste the setup prompt from"
+  echo "      https://github.com/tensorgroup/openescapement#set-up-esc-in-a-repo-with-your-agent"
+  echo "      into your coding agent."
   case ":$PATH:" in
     *":$install_dir:"*) ;;
     *) echo "NOTE: $install_dir is not on your PATH." ;;

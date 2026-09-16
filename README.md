@@ -107,6 +107,49 @@ be wrong often enough to erode trust, and a model call would break `esc`'s
 no-network, single-dependency design, so the guidance ships as a skill instead of
 code in `esc` itself.
 
+### Set up `esc` in a repo with your agent
+
+Installing the binary is the whole install; the judgment is per repo. Paste this into
+the coding agent you already use, from the root of the repo to govern (fill in the
+first line):
+
+```text
+Set up OpenEscapement (esc) in this repo. My rule-pack repo is <git url or "none yet">;
+the esc source checkout, if I have one, is at <path or "none">.
+
+0. Confirm `esc version` works. If it does not, stop and tell me; the install comes
+   first.
+1. Read the instruction files already here (CLAUDE.md, AGENTS.md, GEMINI.md,
+   .claude/skills/, .mcp.json) and tell me, section by section, what a pack would
+   overlap with. esc preserves everything outside its managed block and reports it as
+   a local amendment, so nothing of mine is lost; what I need from you is the list of
+   subjects both will speak to, and a recommendation for each: keep mine, let the
+   pack's rule stand, or take it to the pack as a PR.
+2. Run `esc init --yes`. It scaffolds `.escapement/config.yaml`, pre-fills `targets`
+   with the files it detected, and writes nothing else. If CLAUDE.md imports
+   AGENTS.md, set `targets` to `agents` plus `skills` and `mcp`, so the block lands
+   once and the pack's skills and MCP servers still render.
+3. Point the config at my pack repo: a git source with a `ref` and a trusted signer in
+   `allowed_signers`. If I have none yet, copy `examples/packs/acme-org` from the esc
+   checkout (or `git clone https://github.com/tensorgroup/openescapement`) into a pack
+   repo of my own next to this one, strip it to my rules before the first sync (its
+   rules, paved paths, skill, and MCP entry belong to a fictional org), and point at
+   it as a local path with `trust: unsigned` and no ref, as
+   `examples/governed-service/.escapement/config.yaml` does.
+4. Run `esc render --stdout` and show me what will land before it lands. Then
+   `esc sync`, then `esc status --check`, and show me both outputs.
+5. Add the GitHub Action from the README once the pack is a git source; it installs
+   esc and runs `esc status --check` in a bare checkout, where a local sibling path
+   does not exist. Skip it until then and say so.
+6. Commit `.escapement/`, the rendered files, and the lockfile on a branch and open
+   the PR. Never delete the lockfile to "reset"; it is what lets sync recognize a
+   hand-edited block.
+7. Keep a list of everything these docs did not tell you. I will send it upstream.
+```
+
+If you also run a per-user review panel, the sibling project's README carries the
+matching prompt for a brand-new project; see the next section.
+
 ### Independently, or with Balancewheel
 
 `esc` governs the repo. What configures *your* agent lives in your home directory:
