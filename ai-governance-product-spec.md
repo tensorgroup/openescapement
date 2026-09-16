@@ -248,6 +248,7 @@ judgment lives where an agent, not the CLI, can actually exercise it.
 - Enterprise AI governance suites: different altitude — explicitly not our market or our motion
 - AI gateways (LiteLLM, Portkey, Kong AI): traffic-level; integration partners
 - AI-SPM (Wiz et al.): cloud-side AI resource discovery; partial collector overlap
+- **First-party vendor controls (GitHub Copilot enterprise managed settings, 2026-07-27):** the category's strongest validation so far and its nearest boundary. GitHub ships one enterprise-authored `managed-settings.json` that the Copilot app, cloud agent, CLI, and VS Code all enforce, overriding local developer settings, governing allowed plugins/marketplaces and whether prompts can be bypassed. It confirms the demand and settles central-over-local precedence, but it is single-vendor, governs client settings rather than instruction content, and is closed with no pack format, signing, or drift reporting. A shop running Copilot plus Claude Code plus Cursor still has no one place to say it. Details and watch items: `docs/roadmap/vendor-guidance-tracking.md` (2026-08-11).
 - **Open lane:** nobody owns "policy-as-artifacts for agentic development + unified usage/SDLC dashboard + self-service registry for federated orgs." Verify in research pass — the fast-follow risk (Section 8) makes the open-source-standard play more urgent, not less.
 
 ## 10. Caltech Relationship (see role spec §8)
