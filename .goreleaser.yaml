@@ -62,9 +62,13 @@ homebrew_casks:
     repository:
       owner: tensorgroup
       name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    # Skip (instead of fail) when the tap token secret isn't configured yet.
-    skip_upload: "{{ if .Env.HOMEBREW_TAP_GITHUB_TOKEN }}false{{ else }}true{{ end }}"
+      # Push over SSH with a deploy key scoped to the tap repo (write access),
+      # stored as the HOMEBREW_TAP_DEPLOY_KEY secret; no personal token in CI.
+      git:
+        url: git@github.com:tensorgroup/homebrew-tap.git
+        private_key: '{{ envOrDefault "HOMEBREW_TAP_DEPLOY_KEY" "" }}'
+    # Skip (instead of fail) when the deploy-key secret isn't configured.
+    skip_upload: '{{ if envOrDefault "HOMEBREW_TAP_DEPLOY_KEY" "" }}false{{ else }}true{{ end }}'
     homepage: https://github.com/tensorgroup/openescapement
     description: Deterministic governance for AI usage
     license: Apache-2.0
@@ -72,11 +76,14 @@ homebrew_casks:
       Next: cd into a repo and run `esc init`, or paste the setup prompt from
       https://github.com/tensorgroup/openescapement#set-up-esc-in-a-repo-with-your-agent
       into your coding agent.
-    url:
-      verified: github.com/tensorgroup/openescapement
     hooks:
       post:
         # Binaries are cosign-signed but not Apple-notarized; clear quarantine.
+        # Known: goreleaser <= 2.18 renders this as Homebrew's deprecated
+        # `postflight` stanza, so `brew` prints a deprecation warning on every
+        # command touching the cask (goreleaser/goreleaser#6870, fix slated for
+        # v2.19 as `postflight_steps`). The hook still runs; revisit the syntax
+        # once v2.19 is the resolved `~> v2` in the release workflow.
         install: |
           if OS.mac?
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/esc"]

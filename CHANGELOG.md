@@ -16,6 +16,10 @@ tagged releases begin.
   `feat/model-seats-pack`.
 - Homebrew cask caveats and the installer's closing lines point at the README's
   agent setup prompt.
+- The release workflow pushes the Homebrew cask over SSH with a deploy key
+  scoped to the tap repo (`HOMEBREW_TAP_DEPLOY_KEY`) instead of a personal
+  token; the tap repo exists and the secret is set, so the next tagged release
+  publishes the cask.
 - `TestEveryExamplePackSyncs` governs a temp repo with each pack under
   `examples/packs` in turn, so a pack that fails to parse or render fails CI.
 - `examples/packs/openai-models` (GPT-6 Astra preferred for planning and review;

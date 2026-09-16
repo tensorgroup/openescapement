@@ -60,11 +60,21 @@
   goreleaser's `brews:` is deprecated, so the tap ships a Cask
   (`homebrew_casks:`) with a quarantine-clearing post-install hook.
 - Manual prerequisites before tagging v0.1.0:
-  1. Create the `tensorgroup/homebrew-tap` repo (empty is fine).
-  2. Add a `HOMEBREW_TAP_GITHUB_TOKEN` repo secret (fine-grained PAT,
-     contents: write on the tap). Until it exists, releases succeed but skip
-     the cask upload.
+  1. ~~Create the `tensorgroup/homebrew-tap` repo.~~ Done 2026-09-16 (public,
+     README only; goreleaser writes `Casks/esc.rb`).
+  2. ~~Add a tap token secret.~~ Done 2026-09-16, as a deploy key rather than a
+     PAT: an ed25519 key registered on the tap with write access, its private
+     half stored as the `HOMEBREW_TAP_DEPLOY_KEY` secret on this repo, and the
+     cask pushed over SSH (`repository.git` in `.goreleaser.yaml`). Scoped to
+     one repo, tied to no person. Rotate by adding a new deploy key, updating
+     the secret, then deleting the old key. Until the secret exists, releases
+     succeed but skip the cask upload.
   3. `git tag v0.1.0 && git push origin v0.1.0`.
+- Known at 2026-09-16: goreleaser <= 2.18 renders the cask's post-install hook as
+  Homebrew's deprecated `postflight` stanza, so `brew` warns on every command that
+  touches the cask; the quarantine clear still runs. goreleaser/goreleaser#6870
+  (milestone v2.19) replaces it with `postflight_steps`. Re-check the hook syntax
+  when `~> v2` resolves to 2.19.
 - Acceptance items that can only be checked against a published release
   (cosign verify-blob, slsa-verifier, brew/install.sh end-to-end) are exercised
   by the release workflow's `verify` job and must be confirmed on v0.1.0.

@@ -36,7 +36,7 @@ An [escapement](https://en.wikipedia.org/wiki/Escapement) is the mechanism in a 
 # Verified install (downloads, cosign-verifies, and installs the latest release):
 curl -sSfL https://raw.githubusercontent.com/tensorgroup/openescapement/main/install.sh | bash
 
-# Homebrew (published by a tagged release once the tap's publish token is configured; until then use the installer):
+# Homebrew (published by the next tagged release; until then use the installer):
 # brew install tensorgroup/tap/esc
 
 # Or build from source:
