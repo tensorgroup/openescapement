@@ -15,7 +15,7 @@
 The spec is five weeks old. Three things changed underneath it; the plan absorbs them rather than reopening the design.
 
 1. **Five example packs, not two.** The audit covers `acme-org`, `anthropic-models`, `openai-models`, `zai-models`, and `model-seats`.
-2. **The model registry exists.** `internal/guidance/models/` (a `models.yaml` plus per-vendor notes) and the portal guidance-freshness view shipped after the spec. The sweep's impact step assesses the registry alongside packs and renderer targets, and the monthly deep check covers the vendors the registry and the model packs track. DeepSeek (in the registry) and Z.ai (has an example pack) join the source list as non-render-target rows.
+2. **The model registry exists.** `internal/guidance/models/` (a `models.yaml` plus per-vendor notes), and the portal page that renders it (`internal/portal/web/models.go`), shipped after the spec. The sweep's impact step assesses the registry alongside packs and renderer targets, and the monthly deep check covers the vendors the registry and the model packs track. DeepSeek (in the registry) and Z.ai (has an example pack) join the source list as non-render-target rows.
 3. **The deep check is overdue.** The last full vendor sweep was 2026-08-11. The spec's "run once end to end" verification step is a real month's work; it is its own task, run in the main session, not a smoke test.
 
 Also: nothing under `.claude/` is tracked today and it is not gitignored. The skill becomes the first tracked file there, so `.claude/worktrees/` is ignored in the same change to keep an accidental `git add .claude` from committing a worktree.
@@ -23,13 +23,13 @@ Also: nothing under `.claude/` is tracked today and it is not gitignored. The sk
 ## Global Constraints
 
 - No `esc` CLI or renderer changes. No lint implementation. No CI job or GitHub Action.
-- Single external dependency policy is untouched (no Go changes at all).
-- New docs follow the style guide they introduce: imperative voice, one instruction per sentence, no ALL-CAPS emphasis, no em-dashes.
+- Single external dependency policy is untouched. The only Go edit is one string in `internal/cli/examples_test.go` (Task 2, Step 16): an existing test pins the acme-org pack version that the audit bumps.
+- New docs follow the style guide they introduce: imperative voice, one instruction per sentence, no ALL-CAPS emphasis. New prose in this plan's docs uses no em-dashes; the tracking doc's existing `- **date** — ` entry separator is kept as is.
 - The skill never duplicates the source list; it reads `docs/roadmap/vendor-guidance-tracking.md`.
 - Community signal never triggers action without primary-source verification.
 - Substantive changes the sweep finds still go through spec → design-doc; the skill never patches the renderer ad hoc.
 - No repo-tracked file references the maintainer's private review tooling.
-- `gofmt -w .` and `go vet ./...` are no-ops here but `go test ./...` must pass before the branch is done, because Task 2 changes rendered example artifacts.
+- `gofmt -w .` and `go vet ./...` are effectively no-ops here, but `go test ./...` must pass before the branch is done, because Task 2 changes rendered example artifacts and one test expectation.
 - Never commit unless the step says commit. Never `--no-verify`. No AI co-authorship trailers.
 
 ## File structure
@@ -41,11 +41,13 @@ Also: nothing under `.claude/` is tracked today and it is not gitignored. The sk
 | `examples/README.md` | Pointer to the style guide for pack authors | 1 |
 | `examples/packs/*/rules/*.md`, `examples/packs/acme-org/skills/acme-vault/SKILL.md`, `examples/packs/*/pack.yaml` | Audited rule text, version bumps | 2 |
 | `examples/governed-service/**` | Regenerated rendered artifacts and lockfile | 2 |
+| `internal/cli/examples_test.go` | The pinned acme-org version string | 2 |
 | `docs/roadmap/vendor-guidance-tracking.md` | Two-tier practice, community sources, DeepSeek and Z.ai rows, log discipline | 3 |
 | `.claude/skills/sweep-sources/SKILL.md` | The do-it-now button | 4 |
 | `.gitignore` | Ignore `.claude/worktrees/` | 4 |
 | `docs/ideas/pack-lint.md`, `docs/ideas/README.md` | Lint idea and its table row | 5 |
 | `docs/roadmap/vendor-guidance-tracking.md` (log) | First tagged entries from the end-to-end run | 6 |
+| `CHANGELOG.md` | Unreleased entries for the packs, the skill, and the docs | 7 |
 
 ---
 
@@ -53,8 +55,8 @@ Also: nothing under `.claude/` is tracked today and it is not gitignored. The sk
 
 **Files:**
 - Create: `docs/pack-authoring.md`
-- Modify: `AGENTS.md` (the "Deeper context, read on demand" list, currently lines 34 to 42)
-- Modify: `examples/README.md` (add one bullet after the `governed-service/` bullet block)
+- Modify: `AGENTS.md` (the bullets under "Deeper context, read on demand", currently lines 36 to 42)
+- Modify: `examples/README.md` (add one paragraph at the end of the file, after the "Maintenance note" paragraph)
 
 **Interfaces:**
 - Produces: the checklist at the end of `docs/pack-authoring.md`, which Task 2 applies verbatim and Task 4's skill names as an impact target.
@@ -68,28 +70,28 @@ Create the file with exactly this content:
 
 A rule file is a markdown file under `rules/` in a pack. The renderer places it inside a managed block in every instruction file the pack targets (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`), in every repo that syncs the pack, and an agent loads that block into every session. One wasted line in a rule file is wasted in every session in every repo. Write accordingly.
 
-This guide is the committed rule for every rule file, skill `SKILL.md`, and catalog note in a pack. It applies to this repository's own `AGENTS.md` as well.
+This guide is the committed rule for every rule file, skill `SKILL.md`, and catalog note in a pack. It applies to this repository's own `AGENTS.md` as well; that file predates the guide and is brought into line in its own pass, not silently.
 
 ## Say it so a model acts on it
 
 Four principles borrowed from Simplified Technical English (ASD-STE100). They transfer because they remove the ambiguity a model would otherwise resolve by guessing.
 
-**Use the imperative, active voice.** Tell the agent what to do.
+**Imperative, active voice.** Tell the agent what to do.
 
 - Before: `It is recommended that secrets be fetched from the vault.`
 - After: `Fetch secrets from the vault.`
 
-**Use one term per concept, and use it every time.** A pack picks its names and keeps them. A model treats two names as two things.
+**One term per concept.** A pack picks its names and keeps them, because a model treats two names as two things.
 
 - Before: `Request access in #platform-team.` then later `requires review by the platform team`
 - After: `#platform-team` in both places.
 
-**Put one instruction in each sentence.** A sentence that carries two instructions gets half-followed.
+**One instruction per sentence.** A sentence that carries two instructions gets half-followed.
 
 - Before: `Authorization checks belong at the API layer; use the central policy service where available.`
 - After: `Put authorization checks at the API layer. Use the central policy service where it is available.`
 
-**Give every pronoun an obvious referent.** When `it` or `this` could point at two things, repeat the noun.
+**Obvious referents.** When `it` or `this` could point at two things, repeat the noun.
 
 - Before: `Runs are limited to 50 turns; if a task exceeds this, stop.`
 - After: `Stop an orchestration run at 50 turns per goal.`
@@ -105,13 +107,13 @@ The reason belongs in the same bullet as the rule, in one sentence. A rule that 
 
 ## Earn every line
 
-**Every line changes agent behavior, or it is cut.** Length is the budget. Ask of each line: if this were deleted, what would an agent do differently? If the answer is nothing, delete it.
+**Line budget.** Every line changes agent behavior, or it is cut. Ask of each line: if this were deleted, what would an agent do differently? If the answer is nothing, delete it.
 
-**Point to deeper docs instead of inlining them.** A rule says what to do and links where the detail lives. The agent reads the detail when the task needs it, not in every session.
+**Progressive disclosure.** A rule says what to do and links where the detail lives. The agent reads the detail when the task needs it, not in every session.
 
-**Do not emphasize.** No ALL-CAPS words, no repeated emphasis, no bold on whole sentences. Current vendor guidance (see `docs/roadmap/vendor-guidance-tracking.md`, 2026-07-28 entry) is explicit that the current model generation wants no repeated or ALL-CAPS emphasis. Bold is for a defined term on first use or a bullet's lead-in label, nothing else.
+**No emphasis.** No ALL-CAPS words, no repeated emphasis, no bold on whole sentences. Current vendor guidance (see `docs/roadmap/vendor-guidance-tracking.md`, 2026-07-28 entry) is explicit that the current model generation wants no repeated or ALL-CAPS emphasis. Bold is for a defined term on first use or a short lead-in label on a bullet or paragraph, nothing else.
 
-**Do not restate what the repo already shows.** An agent can read the build file, the test layout, and the directory tree. A rule file records what the agent cannot discover: constraints, policy, the reason behind an unusual choice.
+**Nothing the repo already shows.** An agent can read the build file, the test layout, and the directory tree. A rule file records what the agent cannot discover: constraints, policy, the reason behind an unusual choice.
 
 ## What this guide rejects
 
@@ -139,7 +141,7 @@ The first, third, and eighth items are mechanically checkable and are candidates
 In the "Deeper context, read on demand" list, add this bullet directly after the `docs/cli-and-portal.md` bullet:
 
 ```markdown
-- `docs/pack-authoring.md` — the committed style rule for pack rule files, skills, and catalog notes; this file follows it too
+- `docs/pack-authoring.md` — the committed style rule for pack rule files, skills, and catalog notes; it applies to this file too, which is brought into line in its own pass
 ```
 
 - [ ] **Step 3: Cross-link from `examples/README.md`**
@@ -191,15 +193,27 @@ rejected on the record so it is not relitigated."
 - Modify: `examples/packs/model-seats/rules/panel-protocol.md`
 - Modify: `examples/packs/*/pack.yaml` (version bump, all five)
 - Regenerate: `examples/governed-service/**` (via `esc sync`)
-- Test: `internal/cli/examples_consistency_test.go` (`TestExamplesLockMatchesShippedFiles`, existing)
+- Modify: `internal/cli/examples_test.go:33` (the pinned `acme-org@0.1.0` string)
+- Test: `internal/cli/examples_test.go` (`TestExamplesSync`) and `internal/cli/examples_consistency_test.go` (`TestExamplesLockMatchesShippedFiles`), both existing
 
 **Interfaces:**
 - Consumes: the checklist in `docs/pack-authoring.md` (Task 1).
 - Produces: nothing downstream; Task 6's sweep reads the packs as they stand after this task.
 
-Each edit below is one checklist finding. Replace the "before" text with the "after" text exactly. Where a file is not listed, the audit found nothing to change. Tables, URLs, prices, and model IDs are not touched: this is a style audit, not a content refresh.
+Each edit below is one checklist finding. Replace the "before" text with the "after" text exactly. Where a file is not listed, the audit found nothing to change. Tables, URLs, prices, and model IDs are not touched: this is a style audit, not a content refresh. Catalog notes in the five `pack.yaml` files were audited while planning: none carries ALL-CAPS or repeated emphasis, and the sentence fragments in acme-org's notes are catalog labels, not rules, so no note changes.
+
+One term is settled for acme-org: the reviewer is `#platform-team`, and a rule that needs its review says `review by #platform-team`. The catalog's `Request review in #platform-team` is the same instruction from the requester's side and stays.
 
 - [ ] **Step 1: `acme-org/rules/secrets.md`**
+
+Before (line 4):
+```
+- Secrets live in the org vault: https://vault.acme.example — request access in #platform-team.
+```
+After:
+```
+- Keep secrets in the org vault: https://vault.acme.example. Request access in #platform-team.
+```
 
 Before (line 5):
 ```
@@ -221,6 +235,15 @@ After:
 
 - [ ] **Step 2: `acme-org/rules/authn.md`**
 
+Before (line 4):
+```
+- New services must use the approved OIDC flow with the org identity provider; libraries: `acme-auth-go`, `acme-auth-ts`.
+```
+After:
+```
+- Use the approved OIDC flow with the org identity provider for every new service, through `acme-auth-go` or `acme-auth-ts`.
+```
+
 Before (line 5):
 ```
 - Authorization checks belong at the API layer; use the central policy service where available.
@@ -232,13 +255,22 @@ After:
 
 - [ ] **Step 3: `acme-org/rules/hosting.md`**
 
+Before (line 3):
+```
+- Production workloads run on the paved-road platform (https://platform.acme.example). POCs may use the allowed hosted platforms in the catalog below.
+```
+After:
+```
+- Run production workloads on the paved-road platform (https://platform.acme.example). For a POC, use one of the allowed hosted platforms in the catalog below.
+```
+
 Before (line 4):
 ```
 - Sharing a locally-hosted service: use the org tailnet (Tailscale — preferred) or Headscale for lab clusters. Cloudflare Tunnel requires review by #platform-team.
 ```
 After:
 ```
-- To share a locally hosted service, use the org tailnet (Tailscale). Use Headscale only for lab clusters. Cloudflare Tunnel requires review in #platform-team.
+- To share a locally hosted service, use the org tailnet (Tailscale). Use Headscale only for lab clusters. Cloudflare Tunnel requires review by #platform-team.
 ```
 
 Before (line 6):
@@ -247,7 +279,7 @@ Before (line 6):
 ```
 After:
 ```
-- Any newly opened port on a deployed service requires review in #platform-team before it ships.
+- Any newly opened port on a deployed service requires review by #platform-team before it ships.
 ```
 
 - [ ] **Step 4: `acme-org/rules/sdlc.md`**
@@ -287,7 +319,7 @@ Before (line 3):
 ```
 After:
 ```
-- Stop an orchestration run at 50 turns per goal and summarize progress for a human. The cap exists so a run that is not converging is caught by a person, not by a budget alarm.
+- Stop an orchestration run at 50 turns per goal. Leave a progress summary for a human, because the cap exists so a run that is not converging is caught by a person, not by a budget alarm.
 ```
 
 Before (line 4):
@@ -333,6 +365,15 @@ After:
 Pick the model by the task, not by habit. Start at the top for anything that needs judgment. Step down for volume and speed. Treat every departure from the vendor's own default as a decision with a reason and a reversal condition.
 ```
 
+Before (the end of the "Opus 5 is review-required" bullet):
+```
+Meet it, record it, and flip the status.
+```
+After:
+```
+When the condition is met, record the evidence and flip the status.
+```
+
 - [ ] **Step 9: `openai-models/rules/model-selection.md`**
 
 Before (the "Sol is not retired" bullet):
@@ -357,7 +398,7 @@ After:
 
 - [ ] **Step 11: `model-seats/rules/seat-policy.md`**
 
-Before (line 5, the italics):
+Before (line 6, the italics):
 ```
 Seats are granted and revoked from *logged evidence*, dispute win shares and
 ```
@@ -413,11 +454,11 @@ Rule text changed in all five packs, and a pack version is what tells a consumer
 - [ ] **Step 14: Run the mechanical checks**
 
 ```sh
-grep -rnoE '\b[A-Z]{4,}\b' examples/packs/*/rules/*.md examples/packs/*/skills/*/SKILL.md | grep -vE ':(HTTP|JSON|YAML|SDLC|CLAUDE|AGENTS|GEMINI|OIDC|SAST|API_KEY|VAULT_ADDR|VAULT_ROLE|POCS|GLM|MIT)$'
+grep -rnoE '\b[A-Z]{4,}\b' examples/packs/*/rules/*.md examples/packs/*/skills/*/SKILL.md | grep -vE ':(HTTP|SDLC|OIDC|SAST|AGENTS)$'
 grep -rn '—' examples/packs/*/rules/*.md examples/packs/*/skills/*/SKILL.md
 ```
 
-Expected: the first grep prints nothing (every remaining upper-case run is an acronym or identifier). The second grep may still print em-dashes in tables and prose that the audit left alone; that is acceptable, the guide bans emphasis, not punctuation. The audit edits above remove the ones that joined two instructions.
+Expected: the first grep prints nothing. Before the edits its only non-acronym hit is `WITHOUT` in `panel-protocol.md`, which Step 12 removes; the allowlist names exactly the acronyms that remain. The second grep may still print em-dashes in tables, headings, and frontmatter that the audit left alone; that is acceptable, the guide bans emphasis, not punctuation. The audit edits above remove every em-dash that joined two instructions.
 
 - [ ] **Step 15: Regenerate `examples/governed-service/`**
 
@@ -425,30 +466,47 @@ The acme-org rule and skill changes alter the rendered artifacts and every hash 
 
 ```sh
 (cd examples/governed-service && go run ../../cmd/esc sync)
+(cd examples/governed-service && go run ../../cmd/esc status --check); echo "status exit=$?"
 git status --short examples/governed-service
 ```
 
-Expected: `sync` exits 0. A stderr line about a missing `ESC_PORTAL_TOKEN` is normal (telemetry is unconfigured, not failing). `git status` lists `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `GOVERNANCE.md`, `.claude/skills/esc-acme-org-acme-vault/SKILL.md`, and `.escapement/escapement.lock` as modified, nothing else.
+Expected: `sync` exits 0. A stderr line about a missing `ESC_PORTAL_TOKEN` is normal (telemetry is unconfigured, not failing). `status --check` prints `status exit=0`: that is the proof the regeneration converged, since the tests in Step 17 compare the lock to the shipped files and would also pass if this step were skipped. `git status` lists `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `GOVERNANCE.md`, `.claude/skills/esc-acme-org-acme-vault/SKILL.md`, and `.escapement/escapement.lock` as modified, nothing else (`.mcp.json` and `.escapement/config.yaml` are untouched by rule edits).
 
-- [ ] **Step 16: Run the consistency guard and the full suite**
+- [ ] **Step 16: Update the pinned version in `TestExamplesSync`**
+
+`internal/cli/examples_test.go:33` asserts the rendered example `CLAUDE.md` contains `escapement:begin packs=acme-org@0.1.0`. Change that one string:
+
+Before:
+```go
+	for _, want := range []string{"pnpm install", "vault.acme.example", "Tailscale", "escapement:begin packs=acme-org@0.1.0"} {
+```
+After:
+```go
+	for _, want := range []string{"pnpm install", "vault.acme.example", "Tailscale", "escapement:begin packs=acme-org@0.1.1"} {
+```
+
+The other three strings still appear in the audited rules (`Tailscale` in hosting.md, `vault.acme.example` in secrets.md, `pnpm install` in the catalog), so nothing else in the test moves.
+
+- [ ] **Step 17: Run the two example tests and the full suite**
 
 ```sh
-go test ./internal/cli -run TestExamplesLockMatchesShippedFiles
+go test ./internal/cli -run 'TestExamplesSync|TestExamplesLockMatchesShippedFiles'
 go test ./...
 ```
 
-Expected: both pass. If `TestExamplesLockMatchesShippedFiles` fails, the sync in Step 15 did not run from inside `examples/governed-service/`, or a pack file was edited after the sync; rerun Step 15.
+Expected: both pass. If `TestExamplesSync` fails on the version string, Step 16 was skipped. If `TestExamplesLockMatchesShippedFiles` fails, a pack or governed-service file was edited after the sync in Step 15; rerun Step 15.
 
-- [ ] **Step 17: Commit**
+- [ ] **Step 18: Commit**
 
 ```sh
-git add examples/packs examples/governed-service
+git add examples/packs examples/governed-service internal/cli/examples_test.go
 git commit -m "examples: audit every pack against the pack-authoring checklist
 
 One instruction per sentence, one name per concept (#platform-team),
 a stated reason on the rules an agent would route around (--no-verify,
 the turn cap, personal API keys), and no ALL-CAPS or italic emphasis.
-Every pack version bumps; governed-service is regenerated to match."
+Every pack version bumps; governed-service is regenerated to match, and
+TestExamplesSync's pinned acme-org version moves with it."
 ```
 
 ---
@@ -476,13 +534,23 @@ Two tiers, both run by the `/sweep-sources` skill in this repo (`.claude/skills/
 - **Monthly, deep vendor check.** Read the primary sources for every vendor below, and again at every major model-generation release. Quarterly was judged too slow for the current pace of change (decision 2026-08-08).
 ```
 
-- [ ] **Step 2: Add the non-render-target vendors to the core set**
+- [ ] **Step 2: Add the non-render-target vendors next to Copilot, not in the core set**
 
-After the `- **Moonshot** — Kimi Code docs` line, add:
+The core vendor set promises a top-level row in the portal's guidance-freshness view, so it is not the place for vendors that are not render targets. The existing "Also watched, not a render target" paragraph (about Copilot) is. Directly after that paragraph, add a new paragraph:
 
 ```
-- **DeepSeek** and **Z.ai** — not render targets. Tracked because the model registry (`internal/guidance/models/`) and the example model packs (`examples/packs/*-models/`) carry their lineups and prices.
+**Also tracked for the model registry, not a render target:** DeepSeek and Z.ai. The model registry (`internal/guidance/models/`) and the example model packs (`examples/packs/*-models/`) carry their lineups and prices, so the deep check reads their primary sources for model releases, retirements, and price changes only.
 ```
+
+- [ ] **Step 2b: Put the log in newest-first order**
+
+The `## Log` section is oldest-first from 2026-07-28 through 2026-07-31, then the 2026-09-16 entry sits above the 2026-08-11 entry. Reorder the entries (each is one `- **date** — ...` bullet plus, for 2026-08-11, its three indented sub-bullets) so the section reads 2026-09-16, 2026-08-11, 2026-07-31, 2026-07-30 (four entries, keep their existing relative order), 2026-07-28. Move whole entries; change no text. Verify:
+
+```sh
+grep -oE '^- \*\*2026-[0-9-]+' docs/roadmap/vendor-guidance-tracking.md | tr '\n' ' '
+```
+
+Expected: `- **2026-09-16 - **2026-08-11 - **2026-07-31 - **2026-07-30 - **2026-07-30 - **2026-07-30 - **2026-07-30 - **2026-07-28`.
 
 - [ ] **Step 3: Replace the log-discipline paragraph**
 
@@ -581,12 +649,12 @@ Create `.claude/skills/sweep-sources/SKILL.md` with exactly this content:
 ````markdown
 ---
 name: sweep-sources
-description: Sweep the sources that shape instruction-file conventions and model guidance, verify every candidate against a primary source, log the result in docs/roadmap/vendor-guidance-tracking.md, and end with a packs-need-updating verdict. Use when asked to sweep sources, check vendor guidance, or when a weekly or monthly sweep is due. Argument: weekly, deep, or all; none runs what is due.
+description: Sweep the sources that shape instruction-file conventions and model guidance, verify every candidate against a primary source, log the result in docs/roadmap/vendor-guidance-tracking.md, and end with a packs-need-updating verdict. Use when asked to sweep sources, check vendor guidance, or when a weekly or monthly sweep is due. Takes weekly, deep, or all as its argument; with none it runs what is due.
 ---
 
 # Sweep sources
 
-The tracking doc `docs/roadmap/vendor-guidance-tracking.md` owns the source list, the cadence, and the log. This skill reads that file and never repeats its contents. When the two disagree, the tracking doc wins; fix the skill.
+The tracking doc `docs/roadmap/vendor-guidance-tracking.md` owns the source list, the cadence, and the log. This skill reads that file and never repeats its contents. When the two disagree, the tracking doc wins: follow it, and report the mismatch in your output so the skill gets fixed in its own change.
 
 ## 1. Decide which tier to run
 
@@ -597,7 +665,7 @@ Argument `$ARGUMENTS` is one of `weekly`, `deep`, `all`, or empty.
 - `all`: same as `deep`.
 - empty: compute what is due from the log.
 
-Due-date rule. Read the `## Log` section. Find the newest entry tagged `[weekly]` or `[deep]`; if it is 7 or more days old, or there is none, the weekly tier is due. Find the newest entry tagged `[deep]`; if it is 30 or more days old, or there is none, the deep tier is due. Entries with no tag are historical and do not count. If the deep tier is due, run `deep`. Else if the weekly tier is due, run `weekly`. Else say which dates were found, state that nothing is due, and stop.
+Due-date rule. Take today's date from `date +%F`. Read the `## Log` section. Find the newest entry tagged `[weekly]` or `[deep]`; if it is 7 or more days old, or there is none, the weekly tier is due. Find the newest entry tagged `[deep]`; if it is 30 or more days old, or there is none, the deep tier is due. Entries with no tag are historical and do not count. If the deep tier is due, run `deep`. Else if the weekly tier is due, run `weekly`. Else say which dates were found, state that nothing is due, and stop.
 
 Print one line before sweeping: the tier, today's date, and the last-run date per tier.
 
@@ -617,7 +685,7 @@ Ignore hype, benchmarks, pricing rumors, and product drama.
 Weekly scan, per community source:
 
 - Subreddits: fetch `https://old.reddit.com/r/<name>/top/?t=week`. If the fetch is blocked, use web search restricted to `site:reddit.com/r/<name>` for the past week. A subreddit that returns "not found" or "banned" is a source-list correction, not a finding.
-- Hacker News: query `https://hn.algolia.com/api/v1/search_by_date?tags=story&numericFilters=created_at_i>UNIX_7_DAYS_AGO&query=TERM` once per term: `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `context engineering`, `Claude Code`, `Codex CLI`, `Gemini CLI`, `Kimi Code`, `Grok Build`.
+- Hacker News: query `https://hn.algolia.com/api/v1/search_by_date?tags=story&numericFilters=created_at_i>EPOCH&query=TERM`, where `EPOCH` is the Unix time seven days ago (`date -v-7d +%s` on macOS, `date -d '7 days ago' +%s` on Linux), once per term: `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `context engineering`, `Claude Code`, `Codex CLI`, `Gemini CLI`, `Kimi Code`, `Grok Build`.
 
 Deep check, per primary source: fetch each URL listed under `### Primary sources per vendor` and read for changes since the newest `[deep]` entry (or since the newest entry for that vendor when there is no `[deep]` entry yet). For vendors whose URL is a docs index, follow the instruction-file or customization page one level down.
 
@@ -637,10 +705,11 @@ Append one entry at the top of `## Log` in this shape, newest first:
 - **YYYY-MM-DD** — [weekly|deep] <source(s)>. <What changed, with the primary-source URL.> Action: <what was done, or "none">.
 ```
 
-With nothing to report:
+With nothing to report, tag the tier that actually ran, so its last-run date still advances:
 
 ```
 - **YYYY-MM-DD** — [weekly] no signal.
+- **YYYY-MM-DD** — [deep] no signal.
 ```
 
 Then assess impact against, in order:
@@ -671,9 +740,10 @@ git check-ignore -q .claude/worktrees/x && echo ignored
 git check-ignore -q .claude/skills/sweep-sources/SKILL.md || echo tracked
 grep -c '### Primary sources per vendor' .claude/skills/sweep-sources/SKILL.md
 grep -c '### Community signal (weekly tier)' .claude/skills/sweep-sources/SKILL.md
+sed -n '2,3p' .claude/skills/sweep-sources/SKILL.md | ruby -ryaml -e 'YAML.safe_load(STDIN.read); puts "frontmatter ok"'
 ```
 
-Expected: the frontmatter opens with `---` and `name: sweep-sources`; `ignored`; `tracked`; both heading greps print a count of 1 or more (the skill names the exact headings it parses, matching Task 3).
+Expected: the frontmatter opens with `---` and `name: sweep-sources`; `ignored`; `tracked`; both heading greps print a count of 1 or more (the skill names the exact headings it parses, matching Task 3); `frontmatter ok`. The YAML parse matters: an unquoted `: ` inside the description makes the frontmatter invalid, and Claude Code then loses the description that drives skill discovery.
 
 - [ ] **Step 4: Commit**
 
@@ -707,7 +777,7 @@ Create `docs/ideas/pack-lint.md` with exactly this content:
 # `esc pack lint`
 
 **Status:** Raw idea, unscoped. No commitment to build.
-**Touches:** spec §3 (Pillar A, the pack format and CLI), §6 (the `esc pack` author commands).
+**Touches:** spec §3 (Pillar A, the pack format and CLI); the `esc pack` author commands defined in `docs/superpowers/specs/2026-08-09-skill-distribution-design.md`.
 **Boundary (§4):** an author-side check that runs in the pack repo, like `esc pack outdated`. It never runs during `sync` or `status`, never reads a governed repo, and never sends content anywhere. Style is the pack author's problem; a consumer cannot fix it and must not be nagged about it.
 
 ## The problem
@@ -742,7 +812,7 @@ These stay a review, and the lint's output must say so, so nobody mistakes a cle
 In `docs/ideas/README.md`, after the existing agent-credential row, add:
 
 ```markdown
-| [`esc pack lint`](pack-lint.md) | Raw idea, unscoped | §3 Pillar A, §6 author commands |
+| [`esc pack lint`](pack-lint.md) | Raw idea, unscoped | §3 Pillar A; `esc pack` author commands |
 ```
 
 - [ ] **Step 3: Verify**
@@ -778,7 +848,7 @@ This task runs in the main session, not in a subagent: it needs web search and f
 
 - [ ] **Step 1: Invoke the skill**
 
-Run `/sweep-sources all` in the session. Confirm the first printed line names the tier `deep`, today's date, and "none" for both last-run dates (no tagged entries exist yet).
+Run `/sweep-sources all` in the session. `.claude/skills/` did not exist when this session started, and Claude Code discovers a new skills directory at startup, so if `/sweep-sources` is not offered, restart the session in this worktree and run it again. Confirm the first printed line names the tier `deep`, today's date, and "none" for both last-run dates (no tagged entries exist yet).
 
 - [ ] **Step 2: Review the appended entry**
 
@@ -808,12 +878,52 @@ If the verdict is `yes`, do not patch anything in this branch. Record the reason
 
 ---
 
-## Handoff after Task 6
+### Task 7: Changelog
 
-Two items for the maintainer, neither executed by this plan:
+**Files:**
+- Modify: `CHANGELOG.md` (the `## [Unreleased]` section, which already has `### Added` and pack entries)
+
+- [ ] **Step 1: Add the entries**
+
+Under `## [Unreleased]`, add to `### Added` (after its existing bullets):
+
+```markdown
+- `docs/pack-authoring.md`: the committed style rule for pack rule files, skills,
+  and catalog notes, with an author checklist. `docs/ideas/pack-lint.md` files the
+  mechanically checkable third of it as a future `esc pack lint`.
+- `.claude/skills/sweep-sources`: a repo skill that runs the two-tier source sweep
+  (weekly community signal, monthly deep vendor check) and logs a tagged entry in
+  `docs/roadmap/vendor-guidance-tracking.md`.
+```
+
+Add a `### Changed` heading if the section has none, and under it:
+
+```markdown
+- Example packs audited against `docs/pack-authoring.md`: one instruction per
+  sentence, one name per concept, a stated reason on rules an agent would route
+  around, no ALL-CAPS or italic emphasis. acme-org 0.1.1, anthropic-models 0.2.1,
+  openai-models 0.1.1, zai-models 0.1.1, model-seats 0.1.1.
+- Vendor guidance sweep cadence: weekly community scan plus a monthly deep check,
+  replacing the quarterly check. DeepSeek and Z.ai join the source list for the
+  model registry and model packs, not as render targets.
+```
+
+- [ ] **Step 2: Commit**
+
+```sh
+git add CHANGELOG.md
+git commit -m "docs(changelog): pack style guide, audited packs, two-tier sweep skill"
+```
+
+---
+
+## Handoff after Task 7
+
+Three items for the maintainer, none executed by this plan:
 
 1. **Optional weekly cron.** The spec offers a scheduled invocation so the cadence does not depend on memory. The natural shape is a scheduled cloud routine that runs `/sweep-sources` weekly and opens a PR with the tracking-doc change (the skill already leaves the change uncommitted for review). Set it up only on an explicit yes.
 2. **Delete `CONTINUE.md`** from the main checkout once this branch merges. It is the pre-crash resume note for this cycle and is untracked.
+3. **Bring `AGENTS.md` into line with the style guide** in its own change. The guide says it applies to that file, and today it does not comply (ALL-CAPS emphasis, bold sentences, multi-instruction sentences). That is a content edit to the repo's canonical instructions and deserves its own review, not a ride-along here.
 
 Then `superpowers:finishing-a-development-branch`.
 
@@ -824,5 +934,6 @@ Then `superpowers:finishing-a-development-branch`.
 - Deliverable 3 (skill, optional arg, reads the doc, sweep, verify, log, verdict, cron offer): Task 4 and the handoff.
 - Deliverable 4 (idea file, what is and is not checkable, README row): Task 5.
 - Verification (all four files exist and links resolve; packs pass the checklist; skill runs once end to end): Tasks 1, 2, 5, 6.
-- Out of scope respected: no Go changes, no CI job, no lint.
+- Out of scope respected: no CLI or renderer change (the single Go edit is a test's pinned example version), no CI job, no lint.
+- Panel review 2026-09-16 (three seats) folded in: the pinned `acme-org@0.1.0` in `TestExamplesSync`, a colon that made the skill frontmatter invalid YAML, the `[weekly]`-only no-signal template, three more multi-instruction bullets in acme-org, the "review by" wording, the style guide's own bold sentences, DeepSeek and Z.ai placed outside the core vendor set, the log's mixed ordering, the AGENTS.md compliance claim, the changelog, and the `status --check` proof of regeneration.
 - Names used across tasks: `[weekly]`/`[deep]` tags, `### Primary sources per vendor`, `### Community signal (weekly tier)`, and the verdict line `packs need updating:` are identical in Tasks 3, 4, and 6.
