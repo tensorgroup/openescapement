@@ -18,6 +18,11 @@ tagged releases begin.
   the pack cache and `esc serve` data) and the three install paths.
 
 ### Changed
+- Portal model guidance refreshed to match the packs: Claude Fable 5.1 and Opus
+  4.8 added, Fable 5 moved to legacy, Sonnet 5 at its permanent $2/$10, GPT-6
+  Astra added with Sol narrowed to review; starters and routing fragments follow.
+  Files you have edited by hand are never overwritten; delete one to take the
+  refreshed copy.
 - `examples/packs/anthropic-models` 0.2.0: Fable 5.1 preferred; Opus 4.8 the
   Opus-tier choice; Sonnet 5 at its now-permanent $2/$10; Opus 5 moved to
   review-required with the reason and a measurable reversal condition; Fable 5 to

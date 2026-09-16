@@ -2,29 +2,44 @@ vendors:
   - key: anthropic
     name: Anthropic
     models:
+      - id: claude-fable-5-1
+        name: Claude Fable 5.1
+        tier: frontier
+        roles: [planning, plan-check, review]
+        status: current
+        docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/about-claude/models/choosing-a-model]
+        verified: 2026-09-16
+        starter: examples/anthropic/starter-claude-fable-5-1.md
+      - id: claude-opus-4-8
+        name: Claude Opus 4.8
+        tier: frontier
+        roles: [planning, plan-check, review, coding]
+        status: current
+        docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/about-claude/models/choosing-a-model]
+        verified: 2026-09-16
+        starter: examples/anthropic/starter-claude-opus-4-8.md
       - id: claude-opus-5
         name: Claude Opus 5
         tier: frontier
         roles: [planning, plan-check, review]
         status: current
         docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/about-claude/models/choosing-a-model]
-        verified: 2026-08-02
+        verified: 2026-09-16
         starter: examples/anthropic/starter-claude-opus-5.md
       - id: claude-fable-5
         name: Claude Fable 5
         tier: frontier
         roles: [planning, plan-check, review]
-        status: current
-        docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/about-claude/models/choosing-a-model]
-        verified: 2026-08-02
-        starter: examples/anthropic/starter-claude-fable-5.md
+        status: legacy
+        docs: [https://platform.claude.com/docs/en/about-claude/models/overview]
+        verified: 2026-09-16
       - id: claude-sonnet-5
         name: Claude Sonnet 5
         tier: mid
         roles: [coding, review]
         status: current
-        docs: [https://platform.claude.com/docs/en/about-claude/models/overview]
-        verified: 2026-08-02
+        docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://www.anthropic.com/news/claude-sonnet-5]
+        verified: 2026-09-16
         starter: examples/anthropic/starter-claude-sonnet-5.md
       - id: claude-haiku-4-5
         name: Claude Haiku 4.5
@@ -37,13 +52,21 @@ vendors:
   - key: openai
     name: OpenAI
     models:
-      - id: gpt-5.6-sol
-        name: GPT-5.6 Sol
+      - id: gpt-6-astra
+        name: GPT-6 Astra
         tier: frontier
         roles: [planning, plan-check, review]
         status: current
+        docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-6-astra, https://developers.openai.com/codex/models]
+        verified: 2026-09-16
+        starter: examples/openai/starter-gpt-6-astra.md
+      - id: gpt-5.6-sol
+        name: GPT-5.6 Sol
+        tier: frontier
+        roles: [review]
+        status: current
         docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-5.6-sol]
-        verified: 2026-08-02
+        verified: 2026-09-16
         starter: examples/openai/starter-gpt-5.6-sol.md
       - id: gpt-5.6-terra
         name: GPT-5.6 Terra
