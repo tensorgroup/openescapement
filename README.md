@@ -112,6 +112,41 @@ be wrong often enough to erode trust, and a model call would break `esc`'s
 no-network, single-dependency design, so the guidance ships as a skill instead of
 code in `esc` itself.
 
+### Independently, or with Balancewheel
+
+`esc` governs the repo. What configures *your* agent lives in your home directory:
+the user-level `~/.claude/CLAUDE.md`, `~/.claude/skills/`, per-user wrappers and
+credentials. `esc` never writes any of that. What it keeps under your home directory
+is its own: a pack cache in the OS cache directory (`ESC_CACHE_DIR` overrides it) and,
+for `esc serve`, its data under `~/.escapement/server`. Its one look at your agent's
+configuration is a read: `esc status` notices a pack-provided skill whose name also exists under
+`~/.claude/skills` and reports it as an informational `duplicate`, which never changes
+an exit code. Your agent reads both the user-level file and the repo's file, so a
+pack rule and a personal rule can disagree on the same subject. In a governed repo
+the pack's rule is the org's call; adjust your own rule or open a PR against the pack
+rather than editing the managed block: the edit reports as drift, `esc status --check`
+fails, and `esc sync` declines to overwrite it until someone runs `--force`.
+
+The sibling project [Balancewheel](https://github.com/tensorgroup/balancewheel) is
+that per-user layer done deliberately: a moderated multi-model review panel, with
+other vendors' CLI agents as read-only peer seats and a scoreboard that logs every
+dispute. Each works without the other; together they close a loop.
+
+- **`esc` only.** An org wants its rules in every repo's instruction files, signed and
+  drift-checked. Nothing here needs a panel. The model packs under `examples/packs/`
+  (`anthropic-models`, `openai-models`, `zai-models`) carry per-vendor model guidance
+  with prices, the reason behind each status, and the condition that would reverse it;
+  copy one into your pack repo and pin it.
+- **Balancewheel only.** You want a review panel and a scoreboard for your own agent,
+  and there is no org policy to ship. It installs once per machine, under the home
+  directory only, and nothing in it needs `esc`.
+- **Both.** The panel's log is where a seat policy earns its numbers (which model holds
+  which seat, on what evidence), and a rule pack is what that policy becomes once it
+  applies to more than one person. Install balancewheel once per machine, then `esc` in
+  each repo; that order is a recommendation, not a dependency, since neither reads the
+  other's state. A `model-seats` pack in the shape of the model packs above is
+  balancewheel's planned export; it is not shipped yet.
+
 ### `esc serve` — the admin portal
 
 For what the CLI, the pack repo, and the portal each do, and what a server adds,
@@ -156,6 +191,12 @@ constraints:
   max_file_bytes: 32768                         # protect the agent's context budget
   forbidden_patterns: ["ignore (the )?governance"]
 ```
+
+Shipped examples: `examples/packs/acme-org` is a complete org pack (rules, paved paths,
+a catalog, a skill, an MCP server, constraints); `anthropic-models`, `openai-models`,
+and `zai-models` are per-vendor model packs, each catalog entry carrying its price, the
+reason for its status, and, where the status departs from the vendor's own default, the
+condition that would reverse it.
 
 `esc sync` renders packs into a **managed block** inside your existing files — everything outside the block stays yours:
 

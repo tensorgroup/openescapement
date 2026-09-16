@@ -38,6 +38,7 @@ These are the canonical instructions for any coding agent working in this repo. 
 - `docs/superpowers/specs/` — design docs from the spec → plan → implementation cycle
 - `docs/roadmap/`, `docs/strategy/` — future pillars, licensing and open-core reasoning
 - `docs/ideas/` — uncommitted ideas and feature candidates; see its README for how ideas graduate to the spec or a roadmap doc
+- Sibling project [Balancewheel](https://github.com/tensorgroup/balancewheel): the per-user layer (a moderated multi-model review panel with a scoreboard) whose numbers justify a seat policy that `esc` would ship as a pack. It writes only under the home directory (the user's agent configuration); `esc` writes agent-readable files only in the repo and keeps just its pack cache and `esc serve` data under the home directory. The README's "Independently, or with Balancewheel" owns that boundary. A `model-seats` example pack is planned, not on main: a draft from 2026-08-25 sits on `feat/model-seats-pack` with a catalog naming since-retired stealth model ids, so it needs re-pinning to seat names before it lands; do not describe it as shipped.
 - `docs/roadmap/vendor-guidance-tracking.md` — cadence for checking model vendors' instruction-file and context guidance (the format of this very file is a moving target)
 
 ## Working conventions

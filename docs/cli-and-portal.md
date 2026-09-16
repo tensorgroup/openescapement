@@ -22,6 +22,8 @@ OpenEscapement has one binary, `esc`, and it wears three hats. This page says wh
 
 Two arrows, two directions. Policy goes left to right through git. Telemetry goes right to bottom-right over HTTP, and only if the pack declares a reporting endpoint and the repo has a token.
 
+Not in the picture: the developer's own agent configuration under the home directory (user-level `CLAUDE.md`, skills, per-user tooling such as [Balancewheel](https://github.com/tensorgroup/balancewheel)). `esc` never writes agent configuration there (its pack cache and `esc serve` data are the only home-directory state it keeps); the README's "Independently, or with Balancewheel" says how the two layers meet.
+
 ## By role
 
 | | Developer in a governed repo | Pack author in the pack repo | Admin across the fleet |
