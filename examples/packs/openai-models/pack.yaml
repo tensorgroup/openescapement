@@ -1,0 +1,29 @@
+schema: 1
+name: openai-models
+version: 0.1.0
+description: Model selection guidance for OpenAI. Which model, when, and why. GPT-6 Astra is the frontier seat; the GPT-5.6 tiers cover day-to-day and bulk work.
+
+rules:
+  - rules/model-selection.md
+
+catalog:
+  - name: GPT-6 Astra (gpt-6-astra)
+    category: model
+    status: preferred
+    notes: OpenAI's flagship since 2026-09-03. Planning, plan-check, design, and review; the first model to reach for when the work is a plan or a design. 1.05M context, 128K output. $10/$50 per 1M tokens standard; batch and flex $5/$25; fast mode $20/$100; requests over 272K input tokens $20/$75. Also runs in Codex CLI under a ChatGPT sign-in, where a Pro plan is what heavy use needs.
+  - name: GPT-5.6 Terra (gpt-5.6-terra)
+    category: model
+    status: allowed
+    notes: Day-to-day coding and lower-stakes review. 1.05M context, 128K output. $2/$12 per 1M tokens.
+  - name: GPT-5.6 Luna (gpt-5.6-luna)
+    category: model
+    status: allowed
+    notes: Bulk and mechanical work at scale (classification, extraction, simple agentic subtasks). $0.20/$1.20 per 1M tokens.
+  - name: GPT-5.6 Sol (gpt-5.6-sol)
+    category: model
+    status: allowed
+    notes: The previous frontier model, still a capable review seat. Superseded by Astra for planning and design. Promotional pricing of $4/$20 per 1M tokens is published through 2026-11-21; list is $5/$30.
+  - name: GPT-5.2 (gpt-5.2)
+    category: model
+    status: banned
+    notes: Retired for new work. Codex sessions signed in through ChatGPT already reject it; a direct API key still serves it, which is why a stale pin does not fail loudly. Migrate saved configurations and scheduled tasks to Terra, or Luna for the cheapest tier.

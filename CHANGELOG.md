@@ -7,7 +7,21 @@ tagged releases begin.
 
 ## [Unreleased]
 
+### Added
+- `examples/packs/openai-models` (GPT-6 Astra preferred for planning and review;
+  the GPT-5.6 tiers for day-to-day and bulk work; GPT-5.2 banned as retired) and
+  `examples/packs/zai-models` (GLM 5.3 Flash via OpenRouter as the near-free seat,
+  with its retired stealth preview id banned by name). Every catalog status carries
+  its reason and, where it departs from the vendor's default, its reversal condition.
+- README: "Independently, or with Balancewheel" states the boundary with the
+  per-user layer (esc never writes agent configuration; its home-directory state is
+  the pack cache and `esc serve` data) and the three install paths.
+
 ### Changed
+- `examples/packs/anthropic-models` 0.2.0: Fable 5.1 preferred; Opus 4.8 the
+  Opus-tier choice; Sonnet 5 at its now-permanent $2/$10; Opus 5 moved to
+  review-required with the reason and a measurable reversal condition; Fable 5 to
+  review-required as superseded.
 - **BREAKING for CI gating on `esc sync`.** Exit 0 from `esc sync` no longer
   asserts that the repo matches policy. It now asserts only that everything
   escapement was willing to apply was applied: an artifact whose managed

@@ -1,25 +1,33 @@
 schema: 1
 name: anthropic-models
-version: 0.1.0
-description: Model selection guidance for Anthropic Claude. Which model, when, and why.
+version: 0.2.0
+description: Model selection guidance for Anthropic Claude. Which model, when, and why. Every status carries the reason and, where it departs from the vendor's default, the condition that would reverse it.
 
 rules:
   - rules/model-selection.md
 
 catalog:
-  - name: Claude Opus 5 (claude-opus-5)
+  - name: Claude Fable 5.1 (claude-fable-5-1)
     category: model
     status: preferred
-    notes: The recommended starting point. Strong on most work, from everyday coding to complex agentic tasks. $5/$25 per 1M tokens.
+    notes: The default for planning, design, review, debugging, and any problem that is not simple. Anthropic's most capable widely released model; thinking is always on. $10/$50 per 1M tokens; requires 30-day data retention; its safety classifiers may refuse security-adjacent work, so keep a fallback.
+  - name: Claude Opus 4.8 (claude-opus-4-8)
+    category: model
+    status: allowed
+    notes: The Opus-tier choice when Fable's price or retention requirement is the constraint. Everyday coding, agentic runs, planning behind a reviewed spec. $5/$25 per 1M tokens.
   - name: Claude Sonnet 5 (claude-sonnet-5)
     category: model
     status: allowed
-    notes: Cost and latency saver. Near Opus quality on routine coding, high-volume pipelines, and subagents. $3/$15 per 1M tokens.
+    notes: Cost and latency saver. Routine coding, high-volume pipelines, subagents, and executors working from a written plan with tests. $2/$10 per 1M tokens (the launch rate, made permanent by Anthropic in 2026-08; the $3/$15 list price announced for September was withdrawn).
   - name: Claude Haiku 4.5 (claude-haiku-4-5)
     category: model
     status: allowed
-    notes: High-volume simple tasks such as classification and extraction. $1/$5 per 1M tokens.
+    notes: High-volume simple tasks such as classification and extraction. $1/$5 per 1M tokens; 200K context.
+  - name: Claude Opus 5 (claude-opus-5)
+    category: model
+    status: review-required
+    notes: Anthropic's recommended starting point, and a deliberate departure here. In the maintainers' logged agentic use (2026-09) it proved weaker than Opus 4.8 at the same price, so do not pin it as a default or pass it as an override without logged evidence. Reversal condition, so the departure does not outlive its evidence, is at least 10 logged reviews over 30 days in which Opus 5's confirmed-finding rate meets or beats Opus 4.8's.
   - name: Claude Fable 5 (claude-fable-5)
     category: model
-    status: allowed
-    notes: Reserve for the deepest reasoning, reviews, and problems that have failed elsewhere or are not simple or obvious. $10/$50 per 1M tokens; requires 30-day data retention.
+    status: review-required
+    notes: Superseded by Fable 5.1 in the same tier at the same price. Still served; migrate existing pins rather than starting new work on it.

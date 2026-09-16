@@ -1,7 +1,8 @@
 # Examples
 
 - `packs/acme-org/` — a complete example rule pack: build/SDLC/hosting/agent-behavior rules, a paved-path pointer table, a tool catalog (preferred/allowed/review-required/banned), a skill, an MCP server entry, and merge constraints. Copy it into your own `policy-packs` repo and adapt.
-- `governed-service/` — a repo governed by that pack via a local-path source. Try it:
+- `packs/anthropic-models/`, `packs/openai-models/`, `packs/zai-models/` — per-vendor model packs: a catalog of models with price, role, and status (preferred / allowed / review-required / banned), each status carrying its reason and, where it departs from the vendor's own default, the condition that would reverse it. Rendered as a status-labelled policy list in the managed block and a readable table in `GOVERNANCE.md`. Prices and lineups move; bump the pack version when they do.
+- `governed-service/` — a repo governed by the acme-org pack via a local-path source. Try it:
 
 ```sh
 cd examples/governed-service
