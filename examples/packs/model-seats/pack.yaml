@@ -1,0 +1,38 @@
+schema: 1
+name: model-seats
+version: 0.1.0
+description: Governance for multi-model agent collaboration. Which seat holds which duty, with what oversight, decided from logged dispute outcomes rather than vibes. Seats are named by role; the model behind each is a config detail that changes. Copy and adapt. The catalog's reference roster is a dated example, not a recommendation; replace it with yours.
+
+rules:
+  - rules/seat-policy.md
+  - rules/panel-protocol.md
+
+catalog:
+  - name: Moderator seat (the primary agent session)
+    category: model-seat
+    status: preferred
+    notes: Frames the brief, runs the seats, cross-examines disputes, verifies every surviving finding against the code, and writes the record. The only seat that ever changes the checkout. Never outsources the ruling.
+  - name: Planning lead seat (reference roster, 2026-09, gpt-6-astra via a read-only Codex CLI profile)
+    category: model-seat
+    status: preferred
+    notes: Lead voice on plan, design, and decision targets; equal peer on code review. Full peer status from a fresh scoreboard on 2026-09-11 when the seat changed model generation. The previous occupant's demotion (wording disputes, conceded substance) was that model's trait and did not carry over; re-demote only on logged dispute evidence.
+  - name: Metered peer seat (reference roster, 2026-09, glm-5.3-flash via OpenRouter behind a read-only agent)
+    category: model-seat
+    status: preferred
+    notes: Peer on every target kind at cents per review, so cost is never the reason to skip it. Its previous stealth preview id was retired by the provider within weeks, which is why policy names the seat and config names the model.
+  - name: Blind same-vendor seat (reference roster, 2026-09, claude-fable-5-1 in a fresh headless session)
+    category: model-seat
+    status: preferred
+    notes: The moderator's own model family, run with none of the moderator's conversation, so its round-1 agreement is an independent signal. Scored as a peer; the moderator must not favor it.
+  - name: On-demand second same-vendor seat (reference roster, 2026-09, claude-opus-4-8)
+    category: model-seat
+    status: review-required
+    notes: Dropped from the reference roster's default panel on scoreboard evidence (one unique catch in its first thirteen findings, and a refuted finding). Convene it when a high-stakes target warrants a second blind read from the same family. Re-promotion criterion, five consecutive panels in which it lands at least one confirmed unique catch. The pattern is the point; substitute your own numbers.
+  - name: Unmoderated multi-model debate (no logging, no substance bar)
+    category: model-seat
+    status: banned
+    notes: Panels without an accountable moderator and outcome logging produce rhetoric, not signal. Every panel is logged or it did not happen.
+  - name: A seat with write access to the checkout
+    category: model-seat
+    status: banned
+    notes: External seats are enforced read-only and verified by attack, on fresh and resumed sessions, after every harness upgrade. A seat that can write is a driver, governed separately; when a driver's work is reviewed, its vendor's seat is excluded from the panel, since a vendor reviewing its own output is self-assessment.

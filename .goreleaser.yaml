@@ -68,6 +68,10 @@ homebrew_casks:
     homepage: https://github.com/tensorgroup/openescapement
     description: Deterministic governance for AI usage
     license: Apache-2.0
+    caveats: |
+      Next: cd into a repo and run `esc init`, or paste the setup prompt from
+      https://github.com/tensorgroup/openescapement#set-up-esc-in-a-repo-with-your-agent
+      into your coding agent.
     url:
       verified: github.com/tensorgroup/openescapement
     hooks:

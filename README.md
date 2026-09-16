@@ -36,8 +36,8 @@ An [escapement](https://en.wikipedia.org/wiki/Escapement) is the mechanism in a 
 # Verified install (downloads, cosign-verifies, and installs the latest release):
 curl -sSfL https://raw.githubusercontent.com/tensorgroup/openescapement/main/install.sh | bash
 
-# Homebrew:
-brew install tensorgroup/tap/esc
+# Homebrew (published by a tagged release once the tap's publish token is configured; until then use the installer):
+# brew install tensorgroup/tap/esc
 
 # Or build from source:
 go install github.com/tensorgroup/openescapement/cmd/esc@latest
@@ -182,8 +182,9 @@ dispute. Each works without the other; together they close a loop.
   which seat, on what evidence), and a rule pack is what that policy becomes once it
   applies to more than one person. Install balancewheel once per machine, then `esc` in
   each repo; that order is a recommendation, not a dependency, since neither reads the
-  other's state. A `model-seats` pack in the shape of the model packs above is
-  balancewheel's planned export; it is not shipped yet.
+  other's state. `examples/packs/model-seats` is that policy in pack form: seats named
+  by role, the substance bar, mandatory logging, and evidence-cited demotion with
+  re-promotion criteria, with the models behind the seats a dated config detail.
 
 ### `esc serve` — the admin portal
 
@@ -234,7 +235,8 @@ Shipped examples: `examples/packs/acme-org` is a complete org pack (rules, paved
 a catalog, a skill, an MCP server, constraints); `anthropic-models`, `openai-models`,
 and `zai-models` are per-vendor model packs, each catalog entry carrying its price, the
 reason for its status, and, where the status departs from the vendor's own default, the
-condition that would reverse it.
+condition that would reverse it; `model-seats` governs how several models collaborate,
+by seat rather than by model.
 
 `esc sync` renders packs into a **managed block** inside your existing files — everything outside the block stays yours:
 

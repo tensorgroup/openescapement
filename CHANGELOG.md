@@ -8,6 +8,16 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- `examples/packs/model-seats`: governance for multi-model agent collaboration.
+  Seats are named by role (moderator, planning lead, peers, on-demand) with the
+  models behind them a dated reference roster in the catalog; a dispute substance
+  bar, wall-clock caps, mandatory panel-outcome logging, and evidence-cited
+  demotion with an explicit re-promotion criterion for the demoted seat. Supersedes the stale draft on
+  `feat/model-seats-pack`.
+- Homebrew cask caveats and the installer's closing lines point at the README's
+  agent setup prompt.
+- `TestEveryExamplePackSyncs` governs a temp repo with each pack under
+  `examples/packs` in turn, so a pack that fails to parse or render fails CI.
 - `examples/packs/openai-models` (GPT-6 Astra preferred for planning and review;
   the GPT-5.6 tiers for day-to-day and bulk work; GPT-5.2 banned as retired) and
   `examples/packs/zai-models` (GLM 5.3 Flash via OpenRouter as the near-free seat,
