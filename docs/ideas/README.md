@@ -18,6 +18,7 @@ Every file starts with a status line, the spec sections it touches, and an expli
 | Idea | Status | Touches |
 |---|---|---|
 | [Agent credential use, attribution & audit](agent-credential-attribution.md) | Raw idea, unscoped | §3 Pillar A/B/C, §4 boundaries, §11 Q4/Q6/Q9 |
+| [`esc pack lint`](pack-lint.md) | Raw idea, unscoped | §3 Pillar A; `esc pack` author commands |
 
 ## Unfiled thoughts
 
