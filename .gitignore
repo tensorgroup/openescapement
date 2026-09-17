@@ -8,3 +8,6 @@
 
 # Editor / OS
 .DS_Store
+
+# Claude Code worktrees (local isolation, never committed)
+.claude/worktrees/
