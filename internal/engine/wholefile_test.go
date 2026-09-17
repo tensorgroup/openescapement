@@ -144,6 +144,7 @@ func TestKindFileOrphanRefusesUncanonicalOrUnownedPaths(t *testing.T) {
 		".claude/rules/sub/esc-x.md",          // nested
 		"governance.md",                       // wrong case
 		"docs/GOVERNANCE.md",                  // wrong dir
+		"/GOVERNANCE.md",                      // leading slash
 	}
 	for _, p := range cases {
 		t.Run(p, func(t *testing.T) {
@@ -172,7 +173,7 @@ func TestOwnedFilePathExactGovernanceOnly(t *testing.T) {
 	if !ownedRulePath(".claude/rules/esc-x.md") {
 		t.Error("prefixed single-element rule path must be owned")
 	}
-	for _, p := range []string{".claude/rules/team.md", ".claude/rules/sub/esc-x.md", ".claude/rules/./esc-x.md", `.claude/rules/esc-x\y.md`} {
+	for _, p := range []string{".claude/rules/team.md", ".claude/rules/sub/esc-x.md", ".claude/rules/./esc-x.md", `.claude/rules/esc-x\y.md`, ".claude/rules/esc-"} {
 		if ownedRulePath(p) {
 			t.Errorf("%q must not be owned", p)
 		}

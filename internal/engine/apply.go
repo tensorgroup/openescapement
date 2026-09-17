@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -171,14 +172,15 @@ const (
 // SyncResult reports what a sync wrote and what it declined to write.
 type SyncResult struct {
 	Applied []string `json:"applied"`
-	// Adopted lists the repo-relative paths of KindDir artifacts where a
-	// pre-existing, unmanaged target directory turned out to be
-	// byte-for-byte identical to what the pack would have written
-	// (identicalDirContent). Apply records the lock entry and writes nothing
-	// to disk. Kept separate from Applied (nothing was actually written) and
-	// from Skipped (nothing was declined — the sync succeeded): a consumer
-	// asking "did this artifact converge" needs adoption to read as success,
-	// not as a decline that happens to carry no warning.
+	// Adopted lists the repo-relative paths of KindDir or KindFile artifacts
+	// where a pre-existing, unmanaged target (directory or whole file) turned
+	// out to be byte-for-byte identical to what the pack would have written
+	// (identicalDirContent, identicalFileContent). Apply records the lock
+	// entry and writes nothing to disk. Kept separate from Applied (nothing
+	// was actually written) and from Skipped (nothing was declined — the
+	// sync succeeded): a consumer asking "did this artifact converge" needs
+	// adoption to read as success, not as a decline that happens to carry no
+	// warning.
 	Adopted []string  `json:"adopted,omitempty"`
 	Skipped []Skipped `json:"skipped,omitempty"`
 }
@@ -333,7 +335,11 @@ func ownedRulePath(rel string) bool {
 	if !canonicalRel(rel) {
 		return false
 	}
-	return path.Dir(rel) == ".claude/rules" && strings.HasPrefix(path.Base(rel), "esc-")
+	base := path.Base(rel)
+	// Longer than the bare prefix: "esc-" alone names nothing after the
+	// reserved marker, so it is not a namespaced file escapement could have
+	// written.
+	return path.Dir(rel) == ".claude/rules" && strings.HasPrefix(base, "esc-") && len(base) > len("esc-")
 }
 
 // identicalFileContent reports whether the file at abs, endings-normalized,
@@ -352,6 +358,51 @@ func identicalFileContent(abs, wantHash string) bool {
 		return false
 	}
 	return esc.HashBytes(render.NormalizeEndings(got)) == wantHash
+}
+
+// errUnownedOrphanFile marks inspectOrphanFile's "lockfile names a file
+// escapement does not own" outcome, distinguishing it from a containment or
+// symlink failure on the same call. The two orphan-file passes react to it
+// differently: Apply propagates it as a hard error (refusing to touch a path
+// it cannot prove it owns, same as any other error from this helper), while
+// Status downgrades it to a finding instead of failing the whole report —
+// exactly the asymmetry the two passes had before this helper existed.
+var errUnownedOrphanFile = errors.New("not an escapement-owned file")
+
+// inspectOrphanFile resolves and inspects one lockfile KindFile entry the
+// effective set no longer contains — the read-only work shared by Apply's
+// orphan-file removal pass and Status's orphan-file finding pass. It refuses
+// a non-canonical or unowned path (errUnownedOrphanFile, checked before any
+// read), resolves containment, refuses a symlink anywhere along the path,
+// and reads the file's current endings-normalized hash.
+//
+// gone reports the file having already been removed (os.IsNotExist): abs and
+// actualHash are unset and err is nil, matching what both passes previously
+// did with their own "continue // already gone" line. Any other error
+// (containment, symlink, or an unreadable file) is returned as-is; neither
+// caller may report anything after it, per the containment-refusal ruling in
+// AGENTS.md.
+func inspectOrphanFile(root string, prev lockfile.LockArtifact) (abs, actualHash string, gone bool, err error) {
+	// ownedFilePath already rejects any non-canonical path before it is
+	// compared or read.
+	if !ownedFilePath(prev.Path) {
+		return "", "", false, fmt.Errorf("%w: %q", errUnownedOrphanFile, prev.Path)
+	}
+	abs, err = containedPath(root, prev.Path)
+	if err != nil {
+		return "", "", false, err
+	}
+	if err := refuseSymlinks(root, prev.Path); err != nil {
+		return "", "", false, err
+	}
+	content, err := os.ReadFile(abs)
+	if os.IsNotExist(err) {
+		return "", "", true, nil
+	}
+	if err != nil {
+		return "", "", false, err
+	}
+	return abs, esc.HashBytes(render.NormalizeEndings(content)), false, nil
 }
 
 func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
@@ -744,35 +795,21 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 			if prev.Kind != KindFile || desiredFiles[prev.Path] {
 				continue
 			}
-			// ownedFilePath already rejects any non-canonical or unowned path
-			// before it is compared or read.
-			if !ownedFilePath(prev.Path) {
-				return nil, fmt.Errorf("refusing to remove %q: not an escapement-owned file", prev.Path)
-			}
-			abs, err := containedPath(root, prev.Path)
+			abs, actual, gone, err := inspectOrphanFile(root, prev)
 			if err != nil {
 				return nil, err
 			}
-			if err := refuseSymlinks(root, prev.Path); err != nil {
-				return nil, err
+			if gone {
+				continue
 			}
-			content, err := os.ReadFile(abs)
-			if os.IsNotExist(err) {
-				continue // already gone
-			}
-			if err != nil {
-				return nil, err
-			}
-			if !force {
-				if actual := esc.HashBytes(render.NormalizeEndings(content)); actual != prev.Hash {
-					res.Skipped = append(res.Skipped, Skipped{
-						Subject: prev.Path, Kind: prev.Kind, Cause: SkipOrphanFileEdited,
-						Reason:       "no longer provided by any pack but hand-edited since the last sync; left in place instead of being removed",
-						ExpectedHash: prev.Hash, ActualHash: actual,
-					})
-					arts = append(arts, prev) // carry forward, like the orphan-block pass
-					continue
-				}
+			if !force && actual != prev.Hash {
+				res.Skipped = append(res.Skipped, Skipped{
+					Subject: prev.Path, Kind: prev.Kind, Cause: SkipOrphanFileEdited,
+					Reason:       "no longer provided by any pack but hand-edited since the last sync; left in place instead of being removed",
+					ExpectedHash: prev.Hash, ActualHash: actual,
+				})
+				arts = append(arts, prev) // carry forward, like the orphan-block pass
+				continue
 			}
 			if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
 				return nil, err

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -335,32 +336,25 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 			if la.Kind != KindFile || desiredFilesStatus[la.Path] {
 				continue
 			}
-			if !ownedFilePath(la.Path) {
-				res.Findings = append(res.Findings, Finding{
-					Subject: la.Path, Kind: la.Kind, State: Orphan, Local: LocalNone,
-					Detail: "lockfile records a file escapement does not own; `esc sync` refuses to remove it. Delete the stale lockfile entry by hand",
-				})
-				continue
-			}
-			abs, cerr := containedPath(root, la.Path)
-			if cerr != nil {
-				return nil, cerr
-			}
-			if serr := refuseSymlinks(root, la.Path); serr != nil {
-				return nil, serr
-			}
-			content, err := os.ReadFile(abs)
-			if os.IsNotExist(err) {
-				continue // already gone
-			}
+			_, actual, gone, err := inspectOrphanFile(root, la)
 			if err != nil {
+				if errors.Is(err, errUnownedOrphanFile) {
+					res.Findings = append(res.Findings, Finding{
+						Subject: la.Path, Kind: la.Kind, State: Orphan, Local: LocalNone,
+						Detail: "lockfile records a file escapement does not own; `esc sync` refuses to remove it. Delete the stale lockfile entry by hand",
+					})
+					continue
+				}
 				return nil, err
+			}
+			if gone {
+				continue // already gone
 			}
 			f := Finding{
 				Subject: la.Path, Kind: la.Kind, State: Orphan, Local: LocalNone,
 				Detail: "a file escapement rendered for a target no longer in the effective set — run `esc sync` to remove it",
 			}
-			if actual := esc.HashBytes(render.NormalizeEndings(content)); actual != la.Hash {
+			if actual != la.Hash {
 				f.Alteration = &Alteration{ExpectedHash: la.Hash, ActualHash: actual}
 				f.Detail = "a hand-edited file escapement rendered for a target no longer in the effective set; `esc sync` leaves it in place, `esc sync --force` removes it"
 			}
