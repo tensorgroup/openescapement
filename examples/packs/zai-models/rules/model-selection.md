@@ -4,9 +4,9 @@ GLM 5.3 Flash is the near-free model: cheap enough to run on every review and ev
 
 | Model | ID (OpenRouter) | $/1M tokens (in/out) | Use for |
 |---|---|---|---|
-| GLM 5.3 Flash | `z-ai/glm-5.3-flash` | $0.15 / $0.50 list (the $0.075 / $0.25 launch promotion ended 2026-09-09) | Second opinions, code review, long-context reads, bulk work. 1.31M context on paper; 262K to 1.31M by provider. MIT weights. |
+| GLM 5.3 Flash | `z-ai/glm-5.3-flash` | $0.15 / $0.50 list at Z.ai; OpenRouter providers post $0.075 to $0.15 in and $0.25 to $0.50 out (2026-09-16), the cheapest a per-provider discount that can end without notice | Second opinions, code review, long-context reads, bulk work. 1.31M context on paper; 262K to 1.31M by provider. MIT weights. |
 | GLM 5.3 Flash, dated | `z-ai/glm-5.3-flash-20260826` | same | The same model behind a stable id, for configs that must not move. |
-| GLM 5.3 | `z-ai/glm-5.3` | $0.8775 / $2.97 (OpenRouter's listed rate, 2026-09; varies by provider) | The full-size sibling when Flash's answers run thin. |
+| GLM 5.3 | `z-ai/glm-5.3` | $1.40 / $4.40 list at Z.ai; OpenRouter providers posted $0.8775 / $2.97 in 2026-09 | The full-size sibling when Flash's answers run thin. |
 | stealth/ox-alpha | retired | none | The preview id Flash was served under before release. Retired 2026-09-02; move any config to the released id. |
 
 Rules of thumb:

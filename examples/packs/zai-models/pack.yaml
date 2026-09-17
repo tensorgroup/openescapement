@@ -10,7 +10,7 @@ catalog:
   - name: GLM 5.3 Flash (z-ai/glm-5.3-flash on OpenRouter)
     category: model
     status: preferred
-    notes: The cheap metered model for second opinions, code review, long-context reads, and bulk work. Released 2026-08-26 with MIT-licensed weights; 320B parameters, 18B active; text, image, and video in; tools and structured outputs. 1.31M context on paper, 262K to 1.31M depending on which provider OpenRouter routes to, so pin a provider when the window matters. List price $0.15/$0.50 per 1M tokens; the $0.075/$0.25 launch promotion ended 2026-09-09. The dated snapshot z-ai/glm-5.3-flash-20260826 is the same model with a stable id.
+    notes: The cheap metered model for second opinions, code review, long-context reads, and bulk work. Released 2026-08-26 with MIT-licensed weights; 320B parameters, 18B active; text, image, and video in; tools and structured outputs. 1.31M context on paper, 262K to 1.31M depending on which provider OpenRouter routes to, so pin a provider when the window matters. List price $0.15/$0.50 per 1M tokens at Z.ai; OpenRouter providers post $0.075 to $0.15 in and $0.25 to $0.50 out (2026-09-16), the cheapest a per-provider discount that can end without notice. The dated snapshot z-ai/glm-5.3-flash-20260826 is the same model with a stable id.
   - name: GLM 5.3 Flash, dated snapshot (z-ai/glm-5.3-flash-20260826)
     category: model
     status: allowed
@@ -18,7 +18,7 @@ catalog:
   - name: GLM 5.3 (z-ai/glm-5.3)
     category: model
     status: allowed
-    notes: The full-size sibling for when Flash's answers run thin. OpenRouter's listed rate in 2026-09 was $0.8775/$2.97 per 1M tokens; it varies by provider. 1.31M context.
+    notes: The full-size sibling for when Flash's answers run thin. Z.ai lists $1.4/$4.4 per 1M tokens; OpenRouter providers posted $0.8775/$2.97 in 2026-09. 1.31M context.
   - name: stealth/ox-alpha (OpenRouter preview id)
     category: model
     status: banned
