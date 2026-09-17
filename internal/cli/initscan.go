@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/tensorgroup/openescapement/internal/render"
+	"github.com/tensorgroup/openescapement/internal/targets"
 )
 
 // Detected is one instruction file or directory already present in a repo
@@ -62,20 +63,20 @@ func detectExisting(root string) ([]Detected, error) {
 	return out, nil
 }
 
-// targetOrder is the fixed presentation order for detected targets: the
-// file-based targets in the order render.TargetClaude/Agents/Gemini/Governance
-// are declared (map iteration over render.TargetFile has no order of its
-// own), then mcp, then skills. detectExisting's own result is sorted by Path
-// for stable lookups; this order is what the user actually reads and what
-// configTemplate's targets list is built from.
-//
-// Must stay in sync with render.TargetFile plus render.TargetMCP/TargetSkills
-// — see TestTargetOrderCoversAllTargets — or a newly added target silently
-// drops out of both the generated targets: list and the explanation even
-// though detectExisting still finds it.
-var targetOrder = []string{
-	render.TargetClaude, render.TargetAgents, render.TargetGemini, render.TargetGovernance,
-	render.TargetMCP, render.TargetSkills,
+// targetOrder is the fixed presentation order for detected targets: exactly
+// the built-in table order (see targets.BuiltIns), so there is one source of
+// truth and a newly added built-in can never silently drop out of the
+// generated targets: list or the explanation — TestTargetOrderCoversAllTargets
+// pins the equality.
+var targetOrder = builtInTargetOrder()
+
+func builtInTargetOrder() []string {
+	ins := targets.BuiltIns()
+	out := make([]string, len(ins))
+	for i, in := range ins {
+		out[i] = in.Name
+	}
+	return out
 }
 
 // orderDetected returns detected re-ordered per targetOrder. detectExisting

@@ -115,31 +115,18 @@ func TestDetectExistingFindsCorruptBlock(t *testing.T) {
 	}
 }
 
-// TestTargetOrderCoversAllTargets guards against a target being added to
-// render.TargetFile (or a new non-file target constant) without updating
-// targetOrder: without this, orderDetected and detectedTargets would
-// silently drop it from both the generated targets: list and the
-// explanation even though detectExisting still finds it.
+// TestTargetOrderCoversAllTargets pins targetOrder to exactly the built-in
+// table order (targets.BuiltIns): one source of truth, so a target added to
+// the table appears here without a second edit, and a stray or duplicate entry
+// fails.
 func TestTargetOrderCoversAllTargets(t *testing.T) {
-	want := map[string]bool{render.TargetMCP: true, render.TargetSkills: true}
-	for target := range render.TargetFile {
-		want[target] = true
+	want := builtInTargetOrder()
+	if len(targetOrder) != len(want) {
+		t.Fatalf("targetOrder length %d, want %d (%v vs %v)", len(targetOrder), len(want), targetOrder, want)
 	}
-	seen := map[string]bool{}
-	for _, target := range targetOrder {
-		if seen[target] {
-			t.Errorf("targetOrder has duplicate entry %q", target)
-		}
-		seen[target] = true
-	}
-	for target := range want {
-		if !seen[target] {
-			t.Errorf("targetOrder missing %q (present in render.TargetFile/TargetMCP/TargetSkills)", target)
-		}
-	}
-	for target := range seen {
-		if !want[target] {
-			t.Errorf("targetOrder has unknown entry %q not in render.TargetFile/TargetMCP/TargetSkills", target)
+	for i := range want {
+		if targetOrder[i] != want[i] {
+			t.Errorf("targetOrder[%d] = %q, want %q", i, targetOrder[i], want[i])
 		}
 	}
 }

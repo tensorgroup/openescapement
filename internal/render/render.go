@@ -7,15 +7,18 @@ import (
 	"strings"
 
 	"github.com/tensorgroup/openescapement/internal/pack"
+	"github.com/tensorgroup/openescapement/internal/targets"
 )
 
 const (
-	TargetClaude     = "claude"
-	TargetAgents     = "agents"
-	TargetGemini     = "gemini"
-	TargetGovernance = "governance"
-	TargetSkills     = "skills"
-	TargetMCP        = "mcp"
+	TargetClaude       = targets.NameClaude
+	TargetAgents       = targets.NameAgents
+	TargetGemini       = targets.NameGemini
+	TargetGovernance   = targets.NameGovernance
+	TargetSkills       = targets.NameSkills
+	TargetMCP          = targets.NameMCP
+	TargetRules        = targets.NameRules
+	TargetAgentsSkills = targets.NameAgentsSkills
 )
 
 // TargetFile maps agent-file targets to the file they render into.
@@ -103,6 +106,12 @@ func fragmentNamesTarget(f pack.Fragment, target string) bool {
 		}
 	}
 	return false
+}
+
+// FragmentNamesTarget reports whether f explicitly names target. An empty
+// target list never matches: rule and custom targets require explicit opt-in.
+func FragmentNamesTarget(f pack.Fragment, target string) bool {
+	return fragmentNamesTarget(f, target)
 }
 
 // composeCatalog renders all packs' catalog entries as concise directive

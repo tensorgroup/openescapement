@@ -410,12 +410,7 @@ func collectCustomTargets(packs []*pack.Pack) (map[string]custom, map[string]boo
 }
 
 func isBuiltInTarget(name string) bool {
-	for _, t := range allTargets {
-		if t == name {
-			return true
-		}
-	}
-	return false
+	return targets.IsBuiltInName(name)
 }
 
 // sortedNames returns the map keys sorted, for deterministic target ordering.

@@ -11,6 +11,7 @@ import (
 
 	"github.com/tensorgroup/openescapement/internal/config"
 	"github.com/tensorgroup/openescapement/internal/render"
+	targetsPkg "github.com/tensorgroup/openescapement/internal/targets"
 )
 
 // DriftDiff returns a unified diff of expected vs actual for every planned
@@ -61,7 +62,7 @@ func PolicyDiff(ctx context.Context, cur, next *PlanResult) (string, error) {
 	var out strings.Builder
 	targets := cur.Config.Targets
 	if len(targets) == 0 {
-		targets = []string{render.TargetClaude, render.TargetAgents, render.TargetGemini, render.TargetGovernance}
+		targets = targetsPkg.Defaults()
 	}
 	for _, t := range targets {
 		if render.TargetFile[t] == "" {
