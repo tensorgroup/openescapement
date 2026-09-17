@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 // TestExamplesSync runs the shipped examples end-to-end in a temp copy.
@@ -30,7 +32,7 @@ func TestExamplesSync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"pnpm install", "vault.acme.example", "Tailscale", "escapement:begin packs=acme-org@0.1.1"} {
+	for _, want := range []string{"pnpm install", "vault.acme.example", "Tailscale", "escapement:begin packs=acme-org@0.1.2"} {
 		if !strings.Contains(string(claude), want) {
 			t.Errorf("example CLAUDE.md missing %q", want)
 		}
@@ -97,6 +99,29 @@ func TestEveryExamplePackSyncs(t *testing.T) {
 			}
 			if _, err := os.Stat(filepath.Join(root, "GOVERNANCE.md")); err != nil {
 				t.Errorf("%s: GOVERNANCE.md not rendered: %v", name, err)
+			}
+			if name == "acme-org" {
+				content, err := os.ReadFile(filepath.Join(root, ".claude", "rules", "esc-acme-org-api-handlers.md"))
+				if err != nil {
+					t.Fatalf("acme-org rule file missing: %v", err)
+				}
+				s := string(content)
+				if !strings.HasPrefix(s, "---\n") {
+					t.Fatalf("rule file has no frontmatter:\n%s", s)
+				}
+				end := strings.Index(s[4:], "\n---\n")
+				if end < 0 {
+					t.Fatalf("rule frontmatter unterminated:\n%s", s)
+				}
+				var meta struct {
+					Paths []string `yaml:"paths"`
+				}
+				if err := yaml.Unmarshal([]byte(s[4:4+end]), &meta); err != nil {
+					t.Fatalf("rule frontmatter parse: %v", err)
+				}
+				if len(meta.Paths) != 1 || meta.Paths[0] != "src/api/**" {
+					t.Errorf("rule paths = %v, want [src/api/**]", meta.Paths)
+				}
 			}
 		})
 	}

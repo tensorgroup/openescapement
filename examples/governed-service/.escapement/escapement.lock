@@ -4,10 +4,15 @@
     {
       "source": "../packs/acme-org",
       "ref": "",
-      "hash": "sha256:830bc9c4ba1064a17624da05a1621da55087642bdf8cf73e5aaffc25d15dea5d"
+      "hash": "sha256:6fc173ac21e51428fb57bcfac66b7e19f195e569365219af4233c3ad5825b8a6"
     }
   ],
   "artifacts": [
+    {
+      "path": ".claude/rules/esc-acme-org-api-handlers.md",
+      "kind": "file",
+      "hash": "sha256:e78b41bac1958fa27ce5ab722cffe89a1c51f43c8929bfc50cc5bd4b80a7bafa"
+    },
     {
       "path": ".claude/skills/esc-acme-org-acme-vault",
       "kind": "dir",
@@ -42,7 +47,7 @@
     {
       "path": "GOVERNANCE.md",
       "kind": "file",
-      "hash": "sha256:be25b7862178e2c8ba809338d77ce4103de9598345c006ebdda343ef3805d67d"
+      "hash": "sha256:a3e932e4e0c351e1c462a9ab5c92d2b15eef73c449bf5c2c635c3b5f8befd51c"
     }
   ]
 }

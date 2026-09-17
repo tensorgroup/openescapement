@@ -4,7 +4,7 @@ This document is rendered by [escapement](https://github.com/tensorgroup/openesc
 
 Active policy packs:
 
-- **acme-org** 0.1.1 — Example org-wide AI governance baseline (copy and adapt)
+- **acme-org** 0.1.2 — Example org-wide AI governance baseline (copy and adapt)
 
 ## Tool & service catalog
 
@@ -21,7 +21,7 @@ Active policy packs:
 | Self-hosted open-weights models | model | review-required | Talk to #ml-platform about GPU pool and eval requirements | acme-org |
 | Raw port forwarding | hosting-exposure | banned | No direct exposure of local services to the internet | acme-org |
 
-## Policy: acme-org 0.1.1
+## Policy: acme-org 0.1.2
 
 ## Secrets & keys
 
@@ -69,3 +69,13 @@ Before building infrastructure, check this table. These services exist, are main
 | Docs | Engineering handbook | https://handbook.acme.example |
 
 If none of these fit, ask in #platform-team before rolling your own.
+
+## Rule files: acme-org 0.1.2
+
+**esc-acme-org-api-handlers.md** — paths: src/api/**
+
+# API handler rules
+
+- Validate every request body at the trust boundary before use.
+- Never log secrets, tokens, or full request bodies.
+- Return typed errors; do not leak internal messages to clients.
