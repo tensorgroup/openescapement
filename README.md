@@ -461,4 +461,4 @@ Instructions for coding agents working on this repo live in [`AGENTS.md`](AGENTS
 
 ## License
 
-[Apache-2.0](LICENSE). The rule-pack format, renderer, CLI, and examples are open source and always will be — we want the format to become *the* way organizations express AI policy-as-artifacts. See `docs/strategy/licensing-and-open-core.md` for the reasoning. Copyright 2026 Tensor Group and William Zajac; the `NOTICE` file carries the attribution that downstream copies must keep.
+[Apache-2.0](LICENSE). The rule-pack format, renderer, CLI, and examples are open source and always will be — we want the format to become *the* way organizations express AI policy-as-artifacts. See `docs/strategy/licensing-and-open-core.md` for the reasoning. Copyright 2026 Tensor Group, LLC and William Zajac; the `NOTICE` file carries the attribution that downstream copies must keep.
