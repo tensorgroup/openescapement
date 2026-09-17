@@ -30,6 +30,12 @@ tagged releases begin.
 - README: "Independently, or with Balancewheel" states the boundary with the
   per-user layer (esc never writes agent configuration; its home-directory state is
   the pack cache and `esc serve` data) and the three install paths.
+- `docs/pack-authoring.md`: the committed style rule for pack rule files, skills,
+  and catalog notes, with an author checklist. `docs/ideas/pack-lint.md` files the
+  mechanically checkable third of it as a future `esc pack lint`.
+- `.claude/skills/sweep-sources`: a repo skill that runs the two-tier source sweep
+  (weekly community signal, monthly deep vendor check) and logs a tagged entry in
+  `docs/roadmap/vendor-guidance-tracking.md`.
 
 ### Changed
 - Portal model guidance refreshed to match the packs: Claude Fable 5.1 and Opus
@@ -90,6 +96,13 @@ tagged releases begin.
 - `esc init` confirms each marker write ("CLAUDE.md: wrote <!-- escapement:block -->")
   and says so when a position answer is not recognized, instead of writing
   or declining silently.
+- Example packs audited against `docs/pack-authoring.md`: one instruction per
+  sentence, one name per concept, a stated reason on rules an agent would route
+  around, no ALL-CAPS or italic emphasis. acme-org 0.1.1, anthropic-models 0.2.1,
+  openai-models 0.1.1, zai-models 0.1.1, model-seats 0.1.1.
+- Vendor guidance sweep cadence: weekly community scan plus a monthly deep check,
+  replacing the quarterly check. DeepSeek and Z.ai join the source list for the
+  model registry and model packs, not as render targets.
 
 ### Added
 - `esc init` detects instruction files a repo already has, pre-fills `targets` from them, explains what the first sync will do, and offers once, on a TTY, to place the managed-block marker. The offer defaults to no; one answer covers every detected file. It never writes rendered policy, never writes over a file with uncommitted changes, and outside a git repository says there is no undo before asking. `esc init` now rejects positional arguments instead of silently scaffolding the current directory.
