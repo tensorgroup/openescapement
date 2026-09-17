@@ -54,7 +54,8 @@ type Artifact struct {
 }
 
 // PlanResult is the desired state computed from config + packs, plus any
-// constraint violations that must block Apply.
+// constraint violations that must block Apply and any non-fatal Notices to
+// surface to the operator.
 type PlanResult struct {
 	Config     *config.Config
 	Packs      []lockfile.LockPack
@@ -194,14 +195,7 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 	// exhaustive filter (§3), so a pack that targets rules while the repo's
 	// filter excludes it is not a violation — just worth a stderr line. Never
 	// a Violation and never changes the exit code.
-	rulesSelected := false
-	for _, t := range targets {
-		if strings.ToLower(t) == render.TargetRules {
-			rulesSelected = true
-			break
-		}
-	}
-	if !rulesSelected {
+	if !selected(targets, render.TargetRules) {
 		for _, p := range res.PackObjs {
 			for _, f := range p.Fragments {
 				if render.FragmentNamesTarget(f, render.TargetRules) {
@@ -299,7 +293,16 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 					relPath := render.RuleFilePath(p.Manifest.Name, f)
 					lc := strings.ToLower(relPath)
 					if owner, ok := ruleOwner[lc]; ok && owner != i {
-						return nil, fmt.Errorf("%w: rule file %s is produced by packs %s and %s; rename one fragment", esc.ErrConfig, relPath, res.PackObjs[owner].Manifest.Name, p.Manifest.Name)
+						// res.Packs and res.PackObjs are appended in lockstep in
+						// the fetch loop above, so index i names the same pack
+						// in both; include each pack's source (not just its
+						// manifest name) since two different sources can share
+						// a manifest name — that is exactly what makes this
+						// check cross-pack rather than in-pack.
+						return nil, fmt.Errorf("%w: rule file %s is produced by packs %s (%s) and %s (%s); rename one fragment",
+							esc.ErrConfig, relPath,
+							res.PackObjs[owner].Manifest.Name, res.Packs[owner].Source,
+							p.Manifest.Name, res.Packs[i].Source)
 					}
 					ruleOwner[lc] = i
 					content := render.RenderRule(f, p.Manifest.Name)
@@ -461,6 +464,21 @@ func collectCustomTargets(packs []*pack.Pack) (map[string]custom, map[string]boo
 
 func isBuiltInTarget(name string) bool {
 	return targets.IsBuiltInName(name)
+}
+
+// selected reports whether name (already canonical lowercase — every
+// built-in and custom target name is) appears in targetsList case-foldedly.
+// targetsList comes straight from config.Config.Targets, user-typed and not
+// guaranteed canonical case, so every "is this one built-in in the resolved
+// targets list" check compares the same way — the same idiom the render
+// loop below applies per-element via its own strings.ToLower(t).
+func selected(targetsList []string, name string) bool {
+	for _, t := range targetsList {
+		if strings.ToLower(t) == name {
+			return true
+		}
+	}
+	return false
 }
 
 // sortedNames returns the map keys sorted, for deterministic target ordering.

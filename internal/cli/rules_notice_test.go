@@ -40,6 +40,11 @@ func TestSyncPrintsRulesFilterNotice(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("sync: %d\n%s", code, out)
 	}
+	// Exactly one notice line, not merely "the phrase appears somewhere" —
+	// the CLI prints one "  notice: " line per plan.Notices entry.
+	if n := strings.Count(out, "  notice: "); n != 1 {
+		t.Errorf("want exactly one notice line, got %d:\n%s", n, out)
+	}
 	if !strings.Contains(out, "targets rules") {
 		t.Errorf("sync must warn that the filter excludes rules:\n%s", out)
 	}
@@ -54,11 +59,20 @@ func TestRuleFileHandEditSkipAndForce(t *testing.T) {
 	if err := os.WriteFile(rule, []byte("hand edited\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if code, out := run(t, root, "sync"); code != 0 || !strings.Contains(out, "skipped") {
+	// "skipped" alone is vacuous — the summary line's own header always
+	// contains that word ("%d artifact(s) applied, %d skipped:") regardless
+	// of the count. Require the artifact's own path in a skip line instead.
+	if code, out := run(t, root, "sync"); code != 0 || !strings.Contains(out, "skipped .claude/rules/") {
 		t.Fatalf("hand-edited rule file must be skipped (code=%d):\n%s", code, out)
 	}
 	if got, _ := os.ReadFile(rule); string(got) != "hand edited\n" {
 		t.Errorf("skip must not overwrite: %q", got)
+	}
+	// The skipped sync must not silently converge the lockfile hash — the
+	// lock entry is carried forward unchanged, so the alteration keeps
+	// reporting until someone resolves it (esc sync's hand-edit invariant).
+	if code, out := run(t, root, "status"); code != 0 || !strings.Contains(out, "altered") {
+		t.Fatalf("status after a skipped sync must still report the rule file altered (code=%d):\n%s", code, out)
 	}
 	if code, out := run(t, root, "sync", "--force"); code != 0 {
 		t.Fatalf("sync --force: %d\n%s", code, out)
@@ -76,8 +90,28 @@ func TestRuleFileCRLFRoundTrip(t *testing.T) {
 	if code, out := run(t, root, "status", "--check"); code != 0 {
 		t.Fatalf("status --check must be clean after a CRLF fragment sync: %d\n%s", code, out)
 	}
+	rule := filepath.Join(root, ".claude", "rules", "esc-acme-api.md")
+	first, err := os.ReadFile(rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Not a no-op in the write sense: apply's KindFile case rewrites every
+	// whole file on every sync today (no hash-equal short-circuit) and
+	// counts it as Applied, not skipped. What must hold is that nothing is
+	// skipped and the rewritten bytes are identical to what the first sync
+	// produced.
 	if code, out := run(t, root, "sync"); code != 0 || !strings.Contains(out, "0 skipped") {
-		t.Fatalf("second sync should be a clean no-op: %d\n%s", code, out)
+		t.Fatalf("second sync must apply with 0 skipped: %d\n%s", code, out)
+	}
+	if code, out := run(t, root, "status", "--check"); code != 0 {
+		t.Fatalf("status --check must still be clean after the second sync: %d\n%s", code, out)
+	}
+	second, err := os.ReadFile(rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(second) != string(first) {
+		t.Errorf("rule file bytes changed across an unmodified second sync:\nfirst:  %q\nsecond: %q", first, second)
 	}
 }
 
