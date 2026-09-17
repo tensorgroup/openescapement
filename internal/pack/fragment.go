@@ -44,6 +44,11 @@ func loadFragment(packDir, packName, rel string, customNames map[string]bool) (*
 	// because pack must not import render (cycle).
 	content := strings.ReplaceAll(string(raw), "\r\n", "\n")
 	if fm, body, ok := splitFrontmatter(content); ok {
+		// The frontmatter is parsed twice — once into a typed struct for
+		// targets, once into a yaml.Node (in parsePaths) for the strict
+		// paths: shape check a struct decode can't express. Frontmatter is a
+		// few lines, so the extra parse is not worth the coupling a single
+		// shared decode would add between two independently-varying checks.
 		var meta struct {
 			Targets []string `yaml:"targets"`
 		}

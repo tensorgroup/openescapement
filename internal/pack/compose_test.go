@@ -88,3 +88,36 @@ func TestComposeFragmentsRejectsSinglePathScopedPart(t *testing.T) {
 		t.Fatalf("single path-scoped part must be rejected, got %v", err)
 	}
 }
+
+// Malformed paths: shapes (scalar, empty list, null) must be rejected the
+// same as a well-formed paths: list: any of these composing silently would
+// have the rebuilt frontmatter drop the scope without complaint. Each is
+// exercised both as the sole part and as the second of two parts, since the
+// single-part path used to bypass parsing entirely.
+func TestComposeFragmentsRejectsMalformedPaths(t *testing.T) {
+	cases := []struct {
+		name string
+		part string
+	}{
+		{"scalar", "---\ntargets: [rules]\npaths: \"src/**\"\n---\nbody\n"},
+		{"empty list", "---\ntargets: [rules]\npaths: []\n---\nbody\n"},
+		{"null", "---\ntargets: [rules]\npaths:\n---\nbody\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name+"/single", func(t *testing.T) {
+			one := [][]byte{[]byte(tc.part)}
+			if _, err := ComposeFragments(one); !errors.Is(err, esc.ErrManifest) {
+				t.Fatalf("single malformed-paths part must be rejected, got %v", err)
+			}
+		})
+		t.Run(tc.name+"/second-of-two", func(t *testing.T) {
+			parts := [][]byte{
+				[]byte("---\ntargets: [rules]\n---\nbody a\n"),
+				[]byte(tc.part),
+			}
+			if _, err := ComposeFragments(parts); !errors.Is(err, esc.ErrManifest) {
+				t.Fatalf("malformed-paths part must be rejected, got %v", err)
+			}
+		})
+	}
+}
