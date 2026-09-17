@@ -102,14 +102,29 @@ vendors:
         docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview]
         verified: 2026-08-02
         starter: examples/google/starter-gemini-3.1-pro-preview.md
+      - id: gemini-3.8-flash
+        name: Gemini 3.8 Flash
+        tier: mid
+        roles: [coding, review]
+        status: current
+        docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash, https://ai.google.dev/gemini-api/docs/pricing]
+        verified: 2026-09-16
+        starter: examples/google/starter-gemini-3.8-flash.md
+      - id: gemini-3.7-flash
+        name: Gemini 3.7 Flash
+        tier: mid
+        roles: [coding]
+        status: current
+        docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash, https://ai.google.dev/gemini-api/docs/pricing]
+        verified: 2026-09-16
+        starter: examples/google/starter-gemini-3.7-flash.md
       - id: gemini-3.6-flash
         name: Gemini 3.6 Flash
         tier: mid
         roles: [coding, review]
-        status: current
+        status: legacy
         docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash]
-        verified: 2026-08-02
-        starter: examples/google/starter-gemini-3.6-flash.md
+        verified: 2026-09-16
       - id: gemini-3.5-flash-lite
         name: Gemini 3.5 Flash-Lite
         tier: fast
@@ -172,24 +187,38 @@ vendors:
         roles: [planning, plan-check, review]
         status: current
         docs: [https://api-docs.deepseek.com/quick_start/pricing, https://api-docs.deepseek.com/api/list-models/]
-        verified: 2026-08-02
+        verified: 2026-09-16
+      - id: deepseek-flash
+        name: DeepSeek V4.1 Flash
+        tier: mid
+        roles: [coding, bulk]
+        status: current
+        docs: [https://api-docs.deepseek.com/quick_start/pricing, https://api-docs.deepseek.com/news/news260910/]
+        verified: 2026-09-16
       - id: deepseek-v4-flash
         name: DeepSeek V4 Flash
         tier: mid
         roles: [coding, bulk]
-        status: current
-        docs: [https://api-docs.deepseek.com/quick_start/pricing, https://api-docs.deepseek.com/api/list-models/]
-        verified: 2026-08-02
+        status: legacy
+        docs: [https://api-docs.deepseek.com/quick_start/pricing, https://api-docs.deepseek.com/news/news260910/]
+        verified: 2026-09-16
   - key: grok
     name: Grok
     models:
+      - id: grok-4.6
+        name: Grok 4.6
+        tier: frontier
+        roles: [planning, plan-check, review, coding]
+        status: current
+        docs: [https://docs.x.ai/developers/models, https://docs.x.ai/developers/models/grok-4.6, https://x.ai/news/grok-4-6]
+        verified: 2026-09-16
       - id: grok-4.5
         name: Grok 4.5
         tier: frontier
         roles: [planning, plan-check, review, coding]
-        status: current
+        status: legacy
         docs: [https://docs.x.ai/developers/models, https://docs.x.ai/developers/models/grok-4.5]
-        verified: 2026-08-02
+        verified: 2026-09-16
       - id: grok-4.3
         name: Grok 4.3
         tier: frontier
