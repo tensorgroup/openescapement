@@ -167,8 +167,9 @@ tagged releases begin.
   refreshed copy.
 - Portal model guidance for Google, xAI, and DeepSeek refreshed from the first
   source sweep: Gemini 3.8 Flash (the coding default) and 3.7 Flash added at
-  their introductory price, 3.6 Flash to legacy; Grok 4.6 added as the flagship,
-  4.5 to legacy; DeepSeek V4.1 Flash added as `deepseek-flash`, V4 Flash to
+  their introductory price, 3.6 Flash to legacy; Grok 4.6 added as the flagship
+  and Grok Build 0.1 as the fast coding tier, 4.5 to legacy; DeepSeek V4.1
+  Flash added as `deepseek-flash`, V4 Flash to
   legacy as a routed alias, V4 Pro's reversed retirement and peak/off-peak
   pricing recorded.
 - `examples/packs/zai-models` price notes state Z.ai's list price and the

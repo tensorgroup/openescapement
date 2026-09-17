@@ -2,7 +2,7 @@
 
 A rule file is a markdown file under `rules/` in a pack. The renderer places it inside a managed block in every instruction file the pack targets (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`), in every repo that syncs the pack, and an agent loads that block into every session. One wasted line in a rule file is wasted in every session in every repo. Write accordingly.
 
-This guide is the committed rule for every rule file, skill `SKILL.md`, and catalog note in a pack. It applies to this repository's own `AGENTS.md` as well. That file predates the guide and is brought into line in its own pass, not silently.
+This guide is the committed rule for every rule file, skill `SKILL.md`, and catalog note in a pack. It applies to this repository's own `AGENTS.md` as well.
 
 ## Say it so a model acts on it
 

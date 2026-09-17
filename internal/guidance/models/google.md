@@ -1,6 +1,6 @@
 # Google
 
-Google's current lineup centers on the Gemini 3 family: Gemini 3.1 Pro Preview at the frontier, Gemini 3.8 Flash in the middle, and Gemini 3.5 Flash-Lite for fast, high-volume work. Gemini 3.7 Flash, released three weeks before 3.8 at the same price, stays current for configurations that pinned it; Gemini 3.6 Flash and the original Gemini 3 Pro Preview are held in this registry as legacy ids. The tiers fit an agentic SDLC cleanly: plan and review on 3.1 Pro Preview, implement day-to-day on 3.8 Flash, and run bulk work on Flash-Lite.
+Google's current lineup centers on the Gemini 3 family: Gemini 3.1 Pro Preview at the frontier, Gemini 3.8 Flash in the middle, and Gemini 3.5 Flash-Lite for fast, high-volume work. Gemini 3.7 Flash, released three weeks before 3.8 at the same price, stays current for configurations that pinned it; Gemini 3.6 Flash and the original Gemini 3 Pro Preview are held in this registry as legacy ids. The tiers fit an agentic SDLC cleanly: plan and review on 3.1 Pro Preview, implement day-to-day on 3.8 Flash, and run bulk work on Flash-Lite. Prices below are the Standard tier; Batch and Flex run at half.
 
 ## Models
 
@@ -10,19 +10,19 @@ Google's most advanced reasoning model, built to refine the Gemini 3 Pro series 
 
 ### Gemini 3.8 Flash (gemini-3.8-flash) - mid
 
-Google's most intelligent Flash model, generally available since 2026-09-02 and engineered for long-horizon software engineering, autonomous agents, and complex enterprise workflows at Flash speed and cost. Text, image, video, audio, and PDF in; thinking at low, medium, or high effort (`minimal` is rejected). 1,048,576-token input context, 65,536-token max output. Priced at $0.375 / $1.875 per million input/output tokens through 2026-12-31, then $0.75 / $3.75 from 2027-01-01. Recommended roles: coding and review. This is the default day-to-day coding model, and it also covers review on lower-stakes diffs where a full Pro Preview pass is not warranted.
+Google's most intelligent Flash model, generally available since 2026-09-02 and engineered for long-horizon software engineering, autonomous agents, and complex enterprise workflows at Flash speed and cost. Text, image, video, audio, and PDF in; thinking at low, medium, or high effort (`minimal` is rejected). 1,048,576-token input context, 65,536-token max output. Priced at $0.75 / $3.75 per million input/output tokens through 2026-12-31, then $1.50 / $7.50 from 2027-01-01. Recommended roles: coding and review. This is the default day-to-day coding model, and it also covers review on lower-stakes diffs where a full Pro Preview pass is not warranted.
 
 ### Gemini 3.7 Flash (gemini-3.7-flash) - mid
 
-Released 2026-08-13 as Google's workhorse model for coding and agents, then superseded by 3.8 Flash on 2026-09-02 at the same limits and the same price schedule ($0.375 / $1.875 per million tokens through 2026-12-31, $0.75 / $3.75 after). Recommended role: coding, only where a configuration already pins it; there is no price or capability reason to start new work on it rather than 3.8 Flash.
+Released 2026-08-13 as Google's workhorse model for coding and agents, then superseded by 3.8 Flash on 2026-09-02 at the same limits and the same price schedule ($0.75 / $3.75 per million tokens through 2026-12-31, $1.50 / $7.50 after). Recommended role: coding, only where a configuration already pins it; there is no price or capability reason to start new work on it rather than 3.8 Flash.
 
 ### Gemini 3.5 Flash-Lite (gemini-3.5-flash-lite) - fast
 
-Google's fastest and most cost-effective current model, optimized for high-throughput, low-cost work: sub-agent tasks, document parsing, and simple data extraction where latency and API cost are the binding constraints. Same 1,048,576-token input context and 65,536-token max output as the larger Gemini 3 models, priced at $0.30 / $2.50 per million tokens. Recommended role: bulk. Use it for classification, extraction, mechanical edits, and high-volume agentic subtasks run at scale. Note the price overlap with 3.8 Flash during its introductory period (see Governance).
+Google's fastest and most cost-effective current model, optimized for high-throughput, low-cost work: sub-agent tasks, document parsing, and simple data extraction where latency and API cost are the binding constraints. Same 1,048,576-token input context and 65,536-token max output as the larger Gemini 3 models, priced at $0.30 / $2.50 per million tokens with no introductory period. Recommended role: bulk. Use it for classification, extraction, mechanical edits, and high-volume agentic subtasks run at scale.
 
 ### Gemini 3.6 Flash (gemini-3.6-flash) - legacy
 
-The previous Flash generation, $1.50 / $7.50 per million tokens, still served by Google. Both 3.7 and 3.8 Flash are more capable and cost a fraction of it, so migrate any saved configuration to `gemini-3.8-flash`.
+The previous Flash generation, still served by Google on the same price schedule as 3.7 and 3.8 Flash ($0.75 / $3.75 per million tokens through 2026-12-31, $1.50 / $7.50 after). Both successors are more capable at the same price, so migrate any saved configuration to `gemini-3.8-flash`.
 
 ### Gemini 3 Pro Preview (gemini-3-pro) - legacy
 
@@ -31,8 +31,8 @@ Previously Google's frontier reasoning model, Gemini 3 Pro Preview (`gemini-3-pr
 ## Governance
 
 - Require a human review gate before merging any change Gemini 3.1 Pro Preview produced with high autonomy (broad file access, destructive commands, or unsupervised multi-step runs); its reasoning depth is strong but it still carries a preview label, and the blast radius of an autonomous frontier session is larger than a supervised one.
-- Route bulk, mechanical, and high-volume work to Gemini 3.5 Flash-Lite for latency, not for price alone: through 2026-12-31, 3.8 Flash costs less per output token than Flash-Lite ($1.875 vs $2.50 per million) and only slightly more per input token ($0.375 vs $0.30). From 2027-01-01, 3.8 Flash rises to $0.75 / $3.75 and Flash-Lite regains a clear price edge. Revisit this split when the introductory period ends.
-- Treat Gemini 3.6 Flash as legacy: 3.8 Flash is more capable at a quarter of its output price, so there is no configuration that should still prefer 3.6.
+- Route bulk, mechanical, and high-volume work to Gemini 3.5 Flash-Lite to hold spend down. Through 2026-12-31 it is 2.5x cheaper than 3.8 Flash on input and 1.5x cheaper on output ($2.50 vs $3.75 per million); from 2027-01-01, when Flash's introductory price ends, the gap widens to 5x and 3x. Against 3.1 Pro Preview it is roughly 5x cheaper on output ($2.50 vs $12 per million, prompts up to 200K tokens).
+- Treat Gemini 3.6 Flash as legacy: 3.8 Flash is more capable at the same price, so there is no configuration that should still prefer 3.6.
 - Treat Gemini 3 Pro Preview (`gemini-3-pro`) as retired: Google shut it down on 2026-03-09 and its recommended replacement is `gemini-3.1-pro-preview`, so point new configuration there directly.
 - Routing policy: plan, plan-check, and review on Gemini 3.1 Pro Preview; code day-to-day on Gemini 3.8 Flash; run bulk and mechanical edits on Gemini 3.5 Flash-Lite.
 

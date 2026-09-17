@@ -100,7 +100,7 @@ vendors:
         roles: [planning, plan-check, review]
         status: current
         docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview]
-        verified: 2026-08-02
+        verified: 2026-09-16
         starter: examples/google/starter-gemini-3.1-pro-preview.md
       - id: gemini-3.8-flash
         name: Gemini 3.8 Flash
@@ -131,7 +131,7 @@ vendors:
         roles: [bulk]
         status: current
         docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite]
-        verified: 2026-08-02
+        verified: 2026-09-16
         starter: examples/google/starter-gemini-3.5-flash-lite.md
       - id: gemini-3-pro
         name: Gemini 3 Pro Preview
@@ -211,6 +211,13 @@ vendors:
         roles: [planning, plan-check, review, coding]
         status: current
         docs: [https://docs.x.ai/developers/models, https://docs.x.ai/developers/models/grok-4.6, https://x.ai/news/grok-4-6]
+        verified: 2026-09-16
+      - id: grok-build-0.1
+        name: Grok Build 0.1
+        tier: fast
+        roles: [coding, bulk]
+        status: current
+        docs: [https://docs.x.ai/developers/models, https://docs.x.ai/developers/models/grok-build-0.1, https://docs.x.ai/developers/pricing]
         verified: 2026-09-16
       - id: grok-4.5
         name: Grok 4.5

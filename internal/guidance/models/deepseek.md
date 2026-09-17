@@ -10,7 +10,7 @@ Deepseek's frontier reasoning model (served as DeepSeek-V4-Pro-0813): a 1.6T-par
 
 ### DeepSeek V4.1 Flash (deepseek-flash) - mid
 
-The smallest model in Deepseek's new architecture family: a 552B-parameter mixture-of-experts model with a causal encoder-decoder design (8B active parameters for input, 16B for output), native vision, and a KV cache a quarter the size of the previous generation. Deepseek's own tests put it ahead of V4 Pro on performance, cost, and speed. $0.30 / $1.20 per million input/output tokens at peak, $0.15 / $0.60 off-peak (cache hits far cheaper). Recommended roles: coding and bulk.
+The smallest model in Deepseek's new architecture family: a 552B-parameter mixture-of-experts model with a causal encoder-decoder design (8B active parameters for input, 16B for output), native vision, and a KV cache a quarter the size of the previous generation. Tests by multiple parties, per Deepseek's launch note, put it ahead of V4 Pro on performance, cost, and speed. $0.30 / $1.20 per million input/output tokens at peak, $0.15 / $0.60 off-peak (cache hits far cheaper). Recommended roles: coding and bulk.
 
 ### DeepSeek V4 Flash (deepseek-v4-flash) - legacy
 
@@ -19,7 +19,7 @@ Retired on 2026-09-10 together with `deepseek-v4-flash-vision-exp`. Both names a
 ## Governance
 
 - Require human review before merging Pro-produced changes made with high autonomy; it is the more expensive model, and a bad frontier-tier decision has the largest blast radius.
-- Route bulk and high-volume pipeline work to V4.1 Flash to hold spend down; it is priced at under a quarter of Pro on input and under a third on output, and Deepseek's own benchmarks put it ahead of Pro, so the default for new work is Flash unless a task needs Pro's Think Max mode.
+- Route day-to-day coding and bulk work to V4.1 Flash to hold spend down; it is priced at under a quarter of Pro on input and under a third on output, and the launch benchmarks put it ahead of Pro on general work. Planning, plan-check, and review stay on Pro for its Think Max mode until a V4.1 Pro lands.
 - Schedule flexible workloads off-peak; the rate is half of peak on every model.
 - Routing policy: plan, plan-check, and review on Pro; day-to-day coding and bulk work on V4.1 Flash.
 - Retired ids: `deepseek-chat` and `deepseek-reasoner` (2026-07-24), `deepseek-v4-flash` and `deepseek-v4-flash-vision-exp` (2026-09-10, still routed). Update any pack or config still referencing them to `deepseek-flash` or `deepseek-v4-pro` directly.
