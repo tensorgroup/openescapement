@@ -89,6 +89,12 @@ func PolicyDiff(ctx context.Context, cur, next *PlanResult) (string, error) {
 		return "", err
 	}
 	out.WriteString(d)
+
+	r, err := rulePolicyDiff(ctx, cur, next)
+	if err != nil {
+		return "", err
+	}
+	out.WriteString(r)
 	return out.String(), nil
 }
 
@@ -155,6 +161,51 @@ func customArtifactBodies(artifacts []Artifact) map[string]string {
 		bodies[a.Path] = a.Body
 	}
 	return bodies
+}
+
+// ruleArtifactBodies returns the body of every rule-file artifact (KindFile
+// under .claude/rules), keyed by path.
+func ruleArtifactBodies(artifacts []Artifact) map[string]string {
+	bodies := map[string]string{}
+	for _, a := range artifacts {
+		if a.Kind == KindFile && strings.HasPrefix(a.Path, ".claude/rules/") {
+			bodies[a.Path] = a.Body
+		}
+	}
+	return bodies
+}
+
+// rulePolicyDiff diffs rule files present in either plan, matched by path:
+// added, removed, body changed, or paths changed (a frontmatter change is a
+// body change). Mirrors customPolicyDiff.
+func rulePolicyDiff(ctx context.Context, cur, next *PlanResult) (string, error) {
+	curRules := ruleArtifactBodies(cur.Artifacts)
+	nextRules := ruleArtifactBodies(next.Artifacts)
+	paths := map[string]bool{}
+	for p := range curRules {
+		paths[p] = true
+	}
+	for p := range nextRules {
+		paths[p] = true
+	}
+	sorted := make([]string, 0, len(paths))
+	for p := range paths {
+		sorted = append(sorted, p)
+	}
+	sort.Strings(sorted)
+	var out strings.Builder
+	for _, p := range sorted {
+		a, b := curRules[p], nextRules[p]
+		if a == b {
+			continue
+		}
+		d, err := gitDiff(ctx, []byte(a), []byte(b), p)
+		if err != nil {
+			return "", err
+		}
+		out.WriteString(d)
+	}
+	return out.String(), nil
 }
 
 // PlanWithRef re-plans with one source pinned to a different ref.
