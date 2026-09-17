@@ -241,43 +241,12 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 				Hash: esc.HashBytes(render.NormalizeEndings([]byte(content))), Body: content,
 			})
 		case render.TargetSkills:
-			// Conflicts are first-class and fail closed (spec §3): two entries
-			// across all configured packs resolving to the same on-disk path is
-			// a config-combination problem — no single manifest is invalid, so
-			// this is ErrConfig (exit 2), not ErrManifest, and certainly not
-			// exit 1: a CI gate reads exit 1 as routine and self-healing, and
-			// no amount of syncing resolves a name collision.
-			skillOwner := map[string]string{} // target path -> pack name
-			for _, p := range res.PackObjs {
-				for _, e := range p.Manifest.Skills {
-					src := filepath.Join(p.Dir, filepath.FromSlash(e.Path))
-					// One walk (pack.DirFiles) produces the file list that
-					// both the hash and Files are built from, so the two
-					// cannot disagree by construction — a second, ad hoc
-					// walk here previously skipped neither .git nor
-					// symlinks the way DirFiles does, which let Hash and
-					// Files diverge on a tree containing a nested .git
-					// directory and made a pristine sync report altered.
-					files, err := pack.DirFiles(src)
-					if err != nil {
-						return nil, err
-					}
-					h, err := pack.DirHashOf(src, files)
-					if err != nil {
-						return nil, err
-					}
-					name := e.DirName(p.Manifest.Name)
-					target := path.Join(".claude", "skills", name)
-					if owner, ok := skillOwner[target]; ok {
-						return nil, fmt.Errorf("%w: skill directory %s is declared by packs %s and %s; rename one entry (skills: {path, name}) so they do not collide",
-							esc.ErrConfig, target, owner, p.Manifest.Name)
-					}
-					skillOwner[target] = p.Manifest.Name
-					res.Artifacts = append(res.Artifacts, Artifact{
-						Path: target,
-						Kind: KindDir, Hash: h, SrcDir: src, Files: files,
-					})
-				}
+			if err := planSkillDirs(res, ".claude"); err != nil {
+				return nil, err
+			}
+		case render.TargetAgentsSkills:
+			if err := planSkillDirs(res, ".agents"); err != nil {
+				return nil, err
 			}
 		case render.TargetRules:
 			// In-pack collisions are caught in pack.Load. Here the map is
@@ -464,6 +433,53 @@ func collectCustomTargets(packs []*pack.Pack) (map[string]custom, map[string]boo
 
 func isBuiltInTarget(name string) bool {
 	return targets.IsBuiltInName(name)
+}
+
+// planSkillDirs appends a KindDir artifact per pack skill entry under
+// rootDir/skills (rootDir is ".claude" or ".agents"). Each call keeps its own
+// collision map, so a name may exist once per root — the two roots are
+// planned independently by two calls (render.TargetSkills and
+// render.TargetAgentsSkills), so a name colliding within one root is
+// ErrConfig but the same name existing in both roots is expected and fine.
+// Keys are lowercased because macOS/Windows fold case.
+//
+// Conflicts are first-class and fail closed (spec §3): two entries across all
+// configured packs resolving to the same on-disk path is a config-combination
+// problem — no single manifest is invalid, so this is ErrConfig (exit 2), not
+// ErrManifest, and certainly not exit 1: a CI gate reads exit 1 as routine and
+// self-healing, and no amount of syncing resolves a name collision.
+func planSkillDirs(res *PlanResult, rootDir string) error {
+	skillOwner := map[string]string{} // lowercased target path -> pack name
+	for _, p := range res.PackObjs {
+		for _, e := range p.Manifest.Skills {
+			src := filepath.Join(p.Dir, filepath.FromSlash(e.Path))
+			// One walk (pack.DirFiles) produces the file list that both the
+			// hash and Files are built from, so the two cannot disagree by
+			// construction — a second, ad hoc walk here previously skipped
+			// neither .git nor symlinks the way DirFiles does, which let Hash
+			// and Files diverge on a tree containing a nested .git directory
+			// and made a pristine sync report altered.
+			files, err := pack.DirFiles(src)
+			if err != nil {
+				return err
+			}
+			h, err := pack.DirHashOf(src, files)
+			if err != nil {
+				return err
+			}
+			target := path.Join(rootDir, "skills", e.DirName(p.Manifest.Name))
+			lc := strings.ToLower(target)
+			if owner, ok := skillOwner[lc]; ok {
+				return fmt.Errorf("%w: skill directory %s is declared by packs %s and %s; rename one entry (skills: {path, name}) so they do not collide",
+					esc.ErrConfig, target, owner, p.Manifest.Name)
+			}
+			skillOwner[lc] = p.Manifest.Name
+			res.Artifacts = append(res.Artifacts, Artifact{
+				Path: target, Kind: KindDir, Hash: h, SrcDir: src, Files: files,
+			})
+		}
+	}
+	return nil
 }
 
 // selected reports whether name (already canonical lowercase — every

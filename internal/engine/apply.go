@@ -282,11 +282,12 @@ func handEdited(f Finding, prev *lockfile.LockArtifact) bool {
 // skip gate above them).
 // ownedSkillPath reports whether a lockfile dir entry's repo-relative path is
 // one escapement could have written: exactly one path element below
-// .claude/skills. This replaces the old "esc-" name-prefix marker, which the
-// skill name override (pack.SkillEntry.Name) made unsound: a named skill has
-// no prefix, so retirement would refuse forever. Decided on the relative
-// path, never the absolute one, for the reason documented at the removal
-// pass.
+// .claude/skills or .agents/skills (the opt-in agents-skills target renders
+// pack skill directories a second time under the second root). This replaces
+// the old "esc-" name-prefix marker, which the skill name override
+// (pack.SkillEntry.Name) made unsound: a named skill has no prefix, so
+// retirement would refuse forever. Decided on the relative path, never the
+// absolute one, for the reason documented at the removal pass.
 //
 // What actually confines a hostile lockfile here is this check plus
 // manifest-only deletion — removal only ever deletes the paths prev.Files
@@ -299,7 +300,8 @@ func handEdited(f Finding, prev *lockfile.LockArtifact) bool {
 // pack-provided file after escapement last wrote it, so that edit isn't
 // silently deleted out from under them on retirement.
 func ownedSkillPath(rel string) bool {
-	return path.Dir(path.Clean(rel)) == ".claude/skills"
+	d := path.Dir(path.Clean(rel))
+	return d == ".claude/skills" || d == ".agents/skills"
 }
 
 // canonicalRel reports whether rel is a plain, canonical, slash-separated
@@ -570,8 +572,8 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 			// ".claude/skills" satisfies it for every lockfile entry, so a
 			// hostile lockfile could aim these removals at any in-repo path.
 			// Skill dirs always sit exactly one path element below
-			// .claude/skills (engine.go's TargetSkills case, via
-			// pack.SkillEntry.DirName) — checked by ownedSkillPath, so a
+			// .claude/skills or .agents/skills (engine.go's planSkillDirs,
+			// via pack.SkillEntry.DirName) — checked by ownedSkillPath, so a
 			// team-owned dir nested under an owned one
 			// (".claude/skills/brainstorming/team-notes") can never match
 			// either.

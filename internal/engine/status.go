@@ -153,7 +153,10 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 	if home, herr := os.UserHomeDir(); herr == nil {
 		hashByPath := map[string]string{}
 		for _, a := range plan.Artifacts {
-			if a.Kind == KindDir {
+			// Duplicate detection only compares against ~/.claude/skills, so
+			// an .agents/skills copy must never report a duplicate. Scope by
+			// parent.
+			if a.Kind == KindDir && path.Dir(a.Path) == ".claude/skills" {
 				hashByPath[a.Path] = a.Hash
 			}
 		}
