@@ -10,6 +10,7 @@ import (
 
 	"github.com/tensorgroup/openescapement/internal/config"
 	"github.com/tensorgroup/openescapement/internal/render"
+	"github.com/tensorgroup/openescapement/internal/targets"
 )
 
 func TestDetectExisting(t *testing.T) {
@@ -116,17 +117,48 @@ func TestDetectExistingFindsCorruptBlock(t *testing.T) {
 }
 
 // TestTargetOrderCoversAllTargets pins targetOrder to exactly the built-in
-// table order (targets.BuiltIns): one source of truth, so a target added to
-// the table appears here without a second edit, and a stray or duplicate entry
-// fails.
+// table order. It reads targets.BuiltIns() directly rather than through
+// builtInTargetOrder() — the very expression that initializes targetOrder —
+// so the assertion is not tautological: a stray or dropped entry in either
+// targetOrder or builtInTargetOrder would fail it. It also checks that
+// orderDetected preserves every target detectExisting can actually emit
+// (rules is never detected from disk, so it is intentionally excluded from
+// that half of the check).
 func TestTargetOrderCoversAllTargets(t *testing.T) {
-	want := builtInTargetOrder()
+	ins := targets.BuiltIns()
+	want := make([]string, len(ins))
+	for i, in := range ins {
+		want[i] = in.Name
+	}
 	if len(targetOrder) != len(want) {
 		t.Fatalf("targetOrder length %d, want %d (%v vs %v)", len(targetOrder), len(want), targetOrder, want)
 	}
 	for i := range want {
 		if targetOrder[i] != want[i] {
 			t.Errorf("targetOrder[%d] = %q, want %q", i, targetOrder[i], want[i])
+		}
+	}
+
+	emittable := []string{
+		render.TargetClaude, render.TargetAgents, render.TargetGemini,
+		render.TargetGovernance, render.TargetMCP, render.TargetSkills,
+		render.TargetAgentsSkills,
+	}
+	detected := make([]Detected, len(emittable))
+	for i, target := range emittable {
+		detected[i] = Detected{Target: target}
+	}
+	ordered := orderDetected(detected)
+	if len(ordered) != len(emittable) {
+		t.Fatalf("orderDetected dropped entries: got %d want %d (%+v)", len(ordered), len(emittable), ordered)
+	}
+	seen := map[string]bool{}
+	for _, d := range ordered {
+		seen[d.Target] = true
+	}
+	for _, target := range emittable {
+		if !seen[target] {
+			t.Errorf("orderDetected dropped target %q emitted by detectExisting", target)
 		}
 	}
 }

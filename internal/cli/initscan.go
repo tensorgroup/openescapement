@@ -59,6 +59,14 @@ func detectExisting(root string) ([]Detected, error) {
 	if entries, err := os.ReadDir(filepath.Join(root, ".claude", "skills")); err == nil && len(entries) > 0 {
 		out = append(out, Detected{Target: render.TargetSkills, Path: ".claude/skills"})
 	}
+	if info, err := os.Lstat(filepath.Join(root, ".agents", "skills")); err == nil && info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
+		// Lstat + IsDir + non-symlink: a `.agents/skills -> ../.claude/skills`
+		// layout must not be pre-filled, or the first sync would fail sync's
+		// symlink refusal at exit 4.
+		if entries, err := os.ReadDir(filepath.Join(root, ".agents", "skills")); err == nil && len(entries) > 0 {
+			out = append(out, Detected{Target: render.TargetAgentsSkills, Path: ".agents/skills"})
+		}
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out, nil
 }
@@ -105,11 +113,20 @@ func orderDetected(detected []Detected) []Detected {
 func detectedTargets(detected []Detected) []string {
 	ordered := orderDetected(detected)
 	if len(ordered) == 0 {
-		return nil
+		return nil // greenfield: empty means all default targets (rules included)
 	}
-	out := make([]string, len(ordered))
-	for i, d := range ordered {
-		out[i] = d.Target
+	present := map[string]bool{}
+	for _, d := range ordered {
+		present[d.Target] = true
+	}
+	// A newly governed repo with an explicit list should still receive rule
+	// files by default; agents-skills only when it was actually detected.
+	present[render.TargetRules] = true
+	out := []string{}
+	for _, t := range targetOrder {
+		if present[t] {
+			out = append(out, t)
+		}
 	}
 	return out
 }
@@ -143,6 +160,8 @@ func detectedSyncClause(d Detected) string {
 		return "add pack MCP servers alongside your existing ones"
 	case render.TargetSkills:
 		return "add pack skills alongside yours in .claude/skills"
+	case render.TargetAgentsSkills:
+		return "add pack skills alongside yours in .agents/skills"
 	case render.TargetGovernance:
 		return "report GOVERNANCE.md as occupied and not overwrite it — move or delete it so escapement can own it"
 	default:
