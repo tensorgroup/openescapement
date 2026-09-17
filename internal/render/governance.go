@@ -8,8 +8,13 @@ import (
 )
 
 // Governance renders the human-readable GOVERNANCE.md: provenance, per-pack
-// rules prose (untargeted + governance-targeted fragments), and the tool
-// catalog as a table.
+// rules prose (untargeted + governance-targeted fragments), the tool catalog
+// as a table, and — in their own "Rule files" section per pack — every
+// fragment that targets TargetRules, listed by rendered filename and, when
+// path-scoped, its paths. A fragment that names both governance and rules
+// targets appears in both sections; that duplication is deliberate, not a
+// bug, since the two sections answer different questions (what governance
+// prose applies vs. what file a rules fragment renders to).
 func Governance(packs []*pack.Pack) string {
 	var b strings.Builder
 	b.WriteString("# Governance\n\n")
@@ -57,7 +62,7 @@ func Governance(packs []*pack.Pack) string {
 		}
 		b.WriteString(fmt.Sprintf("\n## Rule files: %s %s\n", p.Manifest.Name, p.Manifest.Version))
 		for _, f := range rules {
-			b.WriteString(fmt.Sprintf("\n**%s**", "esc-"+p.Manifest.Name+"-"+RuleFileStem(f)+".md"))
+			b.WriteString(fmt.Sprintf("\n**%s**", RuleFileName(p.Manifest.Name, f)))
 			if len(f.Paths) > 0 {
 				b.WriteString(" — paths: " + strings.Join(f.Paths, ", "))
 			}

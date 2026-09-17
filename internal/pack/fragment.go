@@ -64,7 +64,7 @@ func loadFragment(packDir, packName, rel string, customNames map[string]bool) (*
 		if perr != nil {
 			return nil, perr
 		}
-		if err := validateRulePaths(packName, rel, meta.Targets, hasPaths); err != nil {
+		if err := validateRulePaths(packName, rel, meta.Targets, hasPaths, body); err != nil {
 			return nil, err
 		}
 		frag.Targets = meta.Targets
@@ -120,9 +120,13 @@ func parsePaths(fm []byte, packName, rel string) (paths []string, present bool, 
 	return nil, false, nil
 }
 
-// validateRulePaths enforces the targets-relationship and stem rules; paths
-// content itself was already validated by parsePaths.
-func validateRulePaths(packName, rel string, tgts []string, hasPaths bool) error {
+// validateRulePaths enforces the targets-relationship, stem, and non-empty
+// body rules for a rules-targeting fragment; paths content itself was
+// already validated by parsePaths. Rejecting an empty body here (rather than
+// in the renderer) keeps RenderRule's output formula simple: it can assume a
+// non-empty body instead of special-casing the notice-only file that an
+// empty body would otherwise produce.
+func validateRulePaths(packName, rel string, tgts []string, hasPaths bool, body string) error {
 	namesRules := false
 	for _, t := range tgts {
 		if t == targets.NameRules {
@@ -134,6 +138,9 @@ func validateRulePaths(packName, rel string, tgts []string, hasPaths bool) error
 			return fmt.Errorf("%w: pack %q: rule %s: paths: is only allowed on a fragment whose targets include %q", esc.ErrManifest, packName, rel, targets.NameRules)
 		}
 		return nil
+	}
+	if strings.TrimSpace(body) == "" {
+		return fmt.Errorf("%w: pack %q: rule %s: rules fragment has no body", esc.ErrManifest, packName, rel)
 	}
 	stem := strings.TrimSuffix(filepath.Base(rel), ".md")
 	if !ruleStem.MatchString(stem) {

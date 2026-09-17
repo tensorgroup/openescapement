@@ -26,10 +26,11 @@ func TestRenderRulePathsFrontmatterDeterministicAndAtByte0(t *testing.T) {
 	if !strings.HasPrefix(got, "---\n") {
 		t.Fatalf("frontmatter must be at byte 0:\n%q", got)
 	}
-	fm, _ := yaml.Marshal(struct {
-		Paths []string `yaml:"paths"`
-	}{paths})
-	want := "---\n" + string(fm) + "---\n<!-- Managed by escapement (pack acme). Do not edit. -->\n\nbody\n"
+	// want is pinned as literal bytes (not built from the same yaml.Marshal
+	// call the implementation uses) so this test catches a yaml.v3 style
+	// change (e.g. a different sequence indent) instead of tautologically
+	// re-deriving whatever the library currently emits.
+	want := "---\npaths:\n    - src/api/**\n    - cmd/*.go\n---\n<!-- Managed by escapement (pack acme). Do not edit. -->\n\nbody\n"
 	if got != want {
 		t.Errorf("paths render:\n got %q\nwant %q", got, want)
 	}
@@ -43,6 +44,9 @@ func TestRenderRuleQuotesRoundTrip(t *testing.T) {
 	f := pack.Fragment{Path: "rules/x.md", Targets: []string{"rules"}, Paths: paths, Body: "b\n"}
 	got := render.RenderRule(f, "acme")
 	fmEnd := strings.Index(got[4:], "\n---\n")
+	if fmEnd == -1 {
+		t.Fatalf("frontmatter closing fence not found: %q", got)
+	}
 	var parsed struct {
 		Paths []string `yaml:"paths"`
 	}
@@ -66,6 +70,18 @@ func TestRenderRuleNoTrailingNewlineBodyGetsOne(t *testing.T) {
 	f := pack.Fragment{Path: "rules/x.md", Targets: []string{"rules"}, Body: "no newline"}
 	if got := render.RenderRule(f, "acme"); !strings.HasSuffix(got, "no newline\n") {
 		t.Errorf("must end with exactly one newline: %q", got)
+	}
+}
+
+// TestRenderRuleLeadingIndentTrimmed pins a deliberate, plan-accepted
+// consequence of using strings.TrimSpace (not just a trailing trim): a body
+// whose first line is indented loses that leading indentation too.
+func TestRenderRuleLeadingIndentTrimmed(t *testing.T) {
+	f := pack.Fragment{Path: "rules/x.md", Targets: []string{"rules"}, Body: "  indented\nsecond\n"}
+	got := render.RenderRule(f, "acme")
+	want := "<!-- Managed by escapement (pack acme). Do not edit. -->\n\nindented\nsecond\n"
+	if got != want {
+		t.Errorf("leading indent on the first line should be trimmed:\n got %q\nwant %q", got, want)
 	}
 }
 

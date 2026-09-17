@@ -71,6 +71,12 @@ func TestMappingPathsIsError(t *testing.T) {
 func TestBadRuleStemIsError(t *testing.T) {
 	mustFail(t, "API_Handlers.md", "---\ntargets: [rules]\n---\nbody\n")
 }
+func TestEmptyRulesBodyIsError(t *testing.T) {
+	mustFail(t, "api.md", "---\ntargets: [rules]\n---\n\n")
+}
+func TestWhitespaceOnlyRulesBodyIsError(t *testing.T) {
+	mustFail(t, "api.md", "---\ntargets: [rules]\n---\n   \n\t\n")
+}
 
 func TestRulesAndClaudeTogetherIsValid(t *testing.T) {
 	f, err := loadOneFragment(t, "api.md", "---\ntargets: [rules, claude]\npaths:\n  - \"src/**\"\n---\nbody\n")
