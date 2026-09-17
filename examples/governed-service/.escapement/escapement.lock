@@ -4,7 +4,7 @@
     {
       "source": "../packs/acme-org",
       "ref": "",
-      "hash": "sha256:bd3a11f07d8c14f5791d1819858d51070e1613b1c0fc1d4327f2facce6fc27ca"
+      "hash": "sha256:830bc9c4ba1064a17624da05a1621da55087642bdf8cf73e5aaffc25d15dea5d"
     }
   ],
   "artifacts": [
@@ -27,22 +27,22 @@
     {
       "path": "AGENTS.md",
       "kind": "block",
-      "hash": "sha256:d3439a1939e7f86b5555078a171fb57092eb7640df1fcda04f533589fa10361b"
+      "hash": "sha256:4127f9f00a25a0e7c70e411b08ee1cc7662f1c193470a485e4994713e63f1b80"
     },
     {
       "path": "CLAUDE.md",
       "kind": "block",
-      "hash": "sha256:d3439a1939e7f86b5555078a171fb57092eb7640df1fcda04f533589fa10361b"
+      "hash": "sha256:4127f9f00a25a0e7c70e411b08ee1cc7662f1c193470a485e4994713e63f1b80"
     },
     {
       "path": "GEMINI.md",
       "kind": "block",
-      "hash": "sha256:d3439a1939e7f86b5555078a171fb57092eb7640df1fcda04f533589fa10361b"
+      "hash": "sha256:4127f9f00a25a0e7c70e411b08ee1cc7662f1c193470a485e4994713e63f1b80"
     },
     {
       "path": "GOVERNANCE.md",
       "kind": "file",
-      "hash": "sha256:c35b0e307277dd62f009071cdc5a9d47280b57e92801e40e32bdc5d86c71cfd9"
+      "hash": "sha256:be25b7862178e2c8ba809338d77ce4103de9598345c006ebdda343ef3805d67d"
     }
   ]
 }

@@ -15,7 +15,7 @@ Active policy packs:
 | Anthropic Claude (API) | model | preferred | Via the org gateway — key issuance at https://keys.acme.example | acme-org |
 | Headscale | hosting-exposure | allowed | Self-hosted tailnet for lab clusters | acme-org |
 | Vercel | app-hosting | allowed | Static and preview deployments | acme-org |
-| Lovable | app-hosting | allowed | POCs only — production must move to an approved platform | acme-org |
+| Lovable | app-hosting | allowed | POCs only. Production must move to an approved platform | acme-org |
 | Cloudflare Tunnel | hosting-exposure | review-required | Request review in #platform-team | acme-org |
 | Model-vendor hosting (Claude artifacts, OpenAI apps) | app-hosting | review-required | Fine for demos; data-handling review before real user data | acme-org |
 | Self-hosted open-weights models | model | review-required | Talk to #ml-platform about GPU pool and eval requirements | acme-org |
@@ -27,18 +27,18 @@ Active policy packs:
 
 - Never write API keys, tokens, or credentials inline in code, config files, or agent instructions.
 - Keep secrets in the org vault: https://vault.acme.example. Request access in #platform-team.
-- Get API keys for AI providers from https://keys.acme.example. Do not create personal provider accounts for org work: a centrally issued key can be rotated and revoked, a personal one cannot.
+- Get API keys for AI providers from https://keys.acme.example. Do not create personal provider accounts for org work: the org can rotate and revoke a centrally issued key, and cannot touch a personal one.
 - If you find a hardcoded secret, stop and flag it to the developer. Do not copy or move it: moving a leaked secret spreads it without rotating it.
 
 ## Authentication & authorization
 
 - Never build custom login, session, or password storage. The org SSO service handles authentication: https://sso.acme.example/docs.
-- Use the approved OIDC flow with the org identity provider for every new service, through `acme-auth-go` or `acme-auth-ts`.
+- Use the approved OIDC flow with the org identity provider for every new service. The libraries are `acme-auth-go` and `acme-auth-ts`.
 - Put authorization checks at the API layer. Use the central policy service where it is available.
 
 ## Hosting & network exposure
 
-- Run production workloads on the paved-road platform (https://platform.acme.example). For a POC, use one of the allowed hosted platforms in the catalog below.
+- Run production workloads on the paved-road platform (https://platform.acme.example). A POC may use one of the allowed hosted platforms in the catalog below.
 - To share a locally hosted service, use the org tailnet (Tailscale). Use Headscale only for lab clusters. Cloudflare Tunnel requires review by #platform-team.
 - Never expose a local service to the internet via raw port forwarding or by binding to 0.0.0.0 on a public interface.
 - Any newly opened port on a deployed service requires review by #platform-team before it ships.
@@ -51,7 +51,7 @@ Active policy packs:
 
 ## Agent behavior
 
-- Stop an orchestration run at 50 turns per goal. Leave a progress summary for a human, because the cap exists so a run that is not converging is caught by a person, not by a budget alarm.
+- Stop an orchestration run at 50 turns per goal. Leave a progress summary for a human. The cap exists so a run that is not converging is caught by a person, not by a budget alarm.
 - Use fast models for mechanical edits and code-generation subagents. Reserve reasoning models for design, review, and security-sensitive decisions.
 - Escalate to a human before: opening a network port, adopting a new cloud service, adding a new AI model or provider, or granting any credential access.
 

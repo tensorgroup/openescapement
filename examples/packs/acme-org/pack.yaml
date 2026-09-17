@@ -50,7 +50,7 @@ catalog:
   - name: Lovable
     category: app-hosting
     status: allowed
-    notes: POCs only — production must move to an approved platform
+    notes: POCs only. Production must move to an approved platform
   - name: Model-vendor hosting (Claude artifacts, OpenAI apps)
     category: app-hosting
     status: review-required

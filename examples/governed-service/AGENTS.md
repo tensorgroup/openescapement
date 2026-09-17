@@ -1,22 +1,22 @@
-<!-- escapement:begin packs=acme-org@0.1.1 hash=sha256:d3439a1939e7f86b5555078a171fb57092eb7640df1fcda04f533589fa10361b -->
+<!-- escapement:begin packs=acme-org@0.1.1 hash=sha256:4127f9f00a25a0e7c70e411b08ee1cc7662f1c193470a485e4994713e63f1b80 -->
 > Managed by escapement. Do not edit. Run `esc diff` to see source. Team content goes outside this block.
 
 ## Secrets & keys
 
 - Never write API keys, tokens, or credentials inline in code, config files, or agent instructions.
 - Keep secrets in the org vault: https://vault.acme.example. Request access in #platform-team.
-- Get API keys for AI providers from https://keys.acme.example. Do not create personal provider accounts for org work: a centrally issued key can be rotated and revoked, a personal one cannot.
+- Get API keys for AI providers from https://keys.acme.example. Do not create personal provider accounts for org work: the org can rotate and revoke a centrally issued key, and cannot touch a personal one.
 - If you find a hardcoded secret, stop and flag it to the developer. Do not copy or move it: moving a leaked secret spreads it without rotating it.
 
 ## Authentication & authorization
 
 - Never build custom login, session, or password storage. The org SSO service handles authentication: https://sso.acme.example/docs.
-- Use the approved OIDC flow with the org identity provider for every new service, through `acme-auth-go` or `acme-auth-ts`.
+- Use the approved OIDC flow with the org identity provider for every new service. The libraries are `acme-auth-go` and `acme-auth-ts`.
 - Put authorization checks at the API layer. Use the central policy service where it is available.
 
 ## Hosting & network exposure
 
-- Run production workloads on the paved-road platform (https://platform.acme.example). For a POC, use one of the allowed hosted platforms in the catalog below.
+- Run production workloads on the paved-road platform (https://platform.acme.example). A POC may use one of the allowed hosted platforms in the catalog below.
 - To share a locally hosted service, use the org tailnet (Tailscale). Use Headscale only for lab clusters. Cloudflare Tunnel requires review by #platform-team.
 - Never expose a local service to the internet via raw port forwarding or by binding to 0.0.0.0 on a public interface.
 - Any newly opened port on a deployed service requires review by #platform-team before it ships.
@@ -29,7 +29,7 @@
 
 ## Agent behavior
 
-- Stop an orchestration run at 50 turns per goal. Leave a progress summary for a human, because the cap exists so a run that is not converging is caught by a person, not by a budget alarm.
+- Stop an orchestration run at 50 turns per goal. Leave a progress summary for a human. The cap exists so a run that is not converging is caught by a person, not by a budget alarm.
 - Use fast models for mechanical edits and code-generation subagents. Reserve reasoning models for design, review, and security-sensitive decisions.
 - Escalate to a human before: opening a network port, adopting a new cloud service, adding a new AI model or provider, or granting any credential access.
 
@@ -54,7 +54,7 @@ If none of these fit, ask in #platform-team before rolling your own.
 - **Preferred:** Anthropic Claude (API) (model) - Via the org gateway — key issuance at https://keys.acme.example
 - **Allowed:** Headscale (hosting-exposure) - Self-hosted tailnet for lab clusters
 - **Allowed:** Vercel (app-hosting) - Static and preview deployments
-- **Allowed:** Lovable (app-hosting) - POCs only — production must move to an approved platform
+- **Allowed:** Lovable (app-hosting) - POCs only. Production must move to an approved platform
 - **Review required:** Cloudflare Tunnel (hosting-exposure) - Request review in #platform-team
 - **Review required:** Model-vendor hosting (Claude artifacts, OpenAI apps) (app-hosting) - Fine for demos; data-handling review before real user data
 - **Review required:** Self-hosted open-weights models (model) - Talk to #ml-platform about GPU pool and eval requirements
