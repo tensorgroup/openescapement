@@ -674,7 +674,7 @@ func TestInitRejectsPositionalArguments(t *testing.T) {
 	}
 }
 
-// The whole offer for the worst case: all six targets detected, four of them
+// The whole offer for the worst case: all six targets detected, three of them
 // eligible files. One gate, one position question, one answer applied to
 // every file. Pinned as exact output, since the entire point of the reshape
 // was what this reads like.
@@ -696,22 +696,19 @@ func TestInitOfferFullFlowForSixTargets(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("init exit %d:\n%s", code, out)
 	}
-	wantOffer := "\nOptional: write " + render.Placeholder + " into all 4 files now, to choose where the block lands.\n" +
-		"  CLAUDE.md\n  AGENTS.md\n  GEMINI.md\n  GOVERNANCE.md\n" +
+	wantOffer := "\nOptional: write " + render.Placeholder + " into all 3 files now, to choose where the block lands.\n" +
+		"  CLAUDE.md\n  AGENTS.md\n  GEMINI.md\n" +
 		"Place the marker now? [y/N] " +
-		"Where should it go in all 4 files?\n" +
+		"Where should it go in all 3 files?\n" +
 		"  [a] above the title, the first thing in the file (below any frontmatter)\n" +
 		"  [e] end of the file\n> " +
 		"  CLAUDE.md: wrote " + render.Placeholder + "\n" +
 		"  AGENTS.md: wrote " + render.Placeholder + "\n" +
-		"  GEMINI.md: wrote " + render.Placeholder + "\n" +
-		"  GOVERNANCE.md: wrote " + render.Placeholder + "\n"
+		"  GEMINI.md: wrote " + render.Placeholder + "\n"
 	if !strings.HasSuffix(out, wantOffer) {
 		t.Errorf("offer output =\n%q\nwant suffix\n%q", out, wantOffer)
 	}
-	// mcp and skills are never offered a marker, and the one answer reached
-	// every eligible file.
-	for _, name := range []string{"CLAUDE.md", "AGENTS.md", "GEMINI.md", "GOVERNANCE.md"} {
+	for _, name := range []string{"CLAUDE.md", "AGENTS.md", "GEMINI.md"} {
 		content, err := os.ReadFile(filepath.Join(root, name))
 		if err != nil {
 			t.Fatal(err)

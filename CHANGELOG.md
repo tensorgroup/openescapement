@@ -160,6 +160,15 @@ tagged releases begin.
   disabled, and hx-disable wrapping all pack-authored markdown.
 
 ### Changed
+- The whole-file occupied gate and orphan pass now cover every `KindFile`
+  artifact, `GOVERNANCE.md` included: a repo that already has its own
+  `GOVERNANCE.md` is reported `occupied` and is no longer overwritten silently
+  on first sync (move or delete it, or let escapement adopt a byte-identical
+  copy); a `GOVERNANCE.md` no longer in the effective set is reported `orphan`
+  and removed, or left in place if hand-edited.
+- Containment now runs before reads as well as writes: `esc status`, `esc diff`,
+  `esc render`, and `esc sync` refuse a symlinked instruction-file target (exit
+  4) instead of reading through it.
 - Portal model guidance refreshed to match the packs: Claude Fable 5.1 and Opus
   4.8 added, Fable 5 moved to legacy, Sonnet 5 at its permanent $2/$10, GPT-6
   Astra added with Sol narrowed to review; starters and routing fragments follow.

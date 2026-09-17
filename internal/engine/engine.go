@@ -221,7 +221,8 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 		case render.TargetGovernance:
 			content := render.Governance(res.PackObjs)
 			res.Artifacts = append(res.Artifacts, Artifact{
-				Path: render.TargetFile[t], Kind: KindFile, Hash: esc.HashBytes([]byte(content)), Body: content,
+				Path: render.TargetFile[t], Kind: KindFile,
+				Hash: esc.HashBytes(render.NormalizeEndings([]byte(content))), Body: content,
 			})
 		case render.TargetSkills:
 			// Conflicts are first-class and fail closed (spec §3): two entries
@@ -360,6 +361,9 @@ func checkVersionRef(ref, version, src string) error {
 // prospectiveContent computes what an artifact's file would contain after
 // apply, without writing.
 func prospectiveContent(root string, a Artifact) ([]byte, error) {
+	if err := refuseSymlinks(root, a.Path); err != nil {
+		return nil, err
+	}
 	existing, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(a.Path)))
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err

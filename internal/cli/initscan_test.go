@@ -255,10 +255,11 @@ func TestInitExplainsAllSixDetectedTargets(t *testing.T) {
 			"  - insert a managed block at the top of CLAUDE.md\n"+
 			"  - insert a managed block at the top of AGENTS.md\n"+
 			"  - insert a managed block at the top of GEMINI.md\n"+
-			"  - insert a managed block at the top of GOVERNANCE.md\n"+
+			"  - report GOVERNANCE.md as occupied and not overwrite it — move or delete it so escapement can own it\n"+
 			"  - add pack MCP servers alongside your existing ones\n"+
 			"  - add pack skills alongside yours in .claude/skills\n\n"+
-			"Your current content is preserved byte for byte and reported as a local amendment.\n\n"+
+			"Your current content is preserved byte for byte and reported as a local amendment.\n"+
+			"A detected GOVERNANCE.md is a whole file escapement owns: it is reported occupied and left untouched until you move or delete it.\n\n"+
 			"To place the block somewhere else, put %s where you want it before syncing.\n",
 		config.Path(root), render.Placeholder)
 	if got := out.String(); got != want {

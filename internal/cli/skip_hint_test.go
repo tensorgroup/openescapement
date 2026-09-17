@@ -30,6 +30,8 @@ func TestSkipHintPerCause(t *testing.T) {
 		// nothing to revert then.
 		{engine.SkipOrphanDirEdited, "nothing was removed · restore the pack files as synced, or `esc sync --force` to retire the directory"},
 		{engine.SkipOrphanBlockEdited, "the block is still in that file · `esc sync --force` to remove it"},
+		{engine.SkipUnmanagedFileAtTarget, "escapement never owned that file · move it aside, then `esc sync` (`--force` does not override this)"},
+		{engine.SkipOrphanFileEdited, "the file is still there · revert it to the synced content, or `esc sync --force` to remove it"},
 	}
 	seen := map[string]engine.SkipCause{}
 	for _, c := range cases {

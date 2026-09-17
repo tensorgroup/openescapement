@@ -475,7 +475,7 @@ func syncOnce(ctx context.Context, root string, force bool, stdout, stderr io.Wr
 		fmt.Fprintf(stderr, "    %s\n", skipHint(s))
 	}
 	for _, s := range res.Adopted {
-		fmt.Fprintf(stderr, "  adopted %s: existing directory matches pack content exactly\n", s)
+		fmt.Fprintf(stderr, "  adopted %s: existing content matches pack output exactly\n", s)
 	}
 	publishSyncResult(ctx, root, res, stderr)
 	return nil
@@ -536,6 +536,10 @@ func skipHint(s engine.Skipped) string {
 		return "the block is still in that file · `esc sync --force` to remove it"
 	case engine.SkipUnmanagedDirAtTarget:
 		return "escapement never owned that directory · move it aside, then `esc sync` (`--force` does not override this)"
+	case engine.SkipUnmanagedFileAtTarget:
+		return "escapement never owned that file · move it aside, then `esc sync` (`--force` does not override this)"
+	case engine.SkipOrphanFileEdited:
+		return "the file is still there · revert it to the synced content, or `esc sync --force` to remove it"
 	default:
 		return "`esc diff` to inspect · `esc sync --force` to overwrite"
 	}

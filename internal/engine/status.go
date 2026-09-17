@@ -321,6 +321,53 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 		}
 	}
 
+	// Orphan whole files: a KindFile the lockfile records that the effective set
+	// no longer contains. A containment/symlink failure propagates (exit 4) to
+	// match sync's orphan-file pass; only os.IsNotExist reads as already gone.
+	desiredFilesStatus := map[string]bool{}
+	for _, a := range plan.Artifacts {
+		if a.Kind == KindFile {
+			desiredFilesStatus[a.Path] = true
+		}
+	}
+	if lock != nil {
+		for _, la := range lock.Artifacts {
+			if la.Kind != KindFile || desiredFilesStatus[la.Path] {
+				continue
+			}
+			if !ownedFilePath(la.Path) {
+				res.Findings = append(res.Findings, Finding{
+					Subject: la.Path, Kind: la.Kind, State: Orphan, Local: LocalNone,
+					Detail: "lockfile records a file escapement does not own; `esc sync` refuses to remove it. Delete the stale lockfile entry by hand",
+				})
+				continue
+			}
+			abs, cerr := containedPath(root, la.Path)
+			if cerr != nil {
+				return nil, cerr
+			}
+			if serr := refuseSymlinks(root, la.Path); serr != nil {
+				return nil, serr
+			}
+			content, err := os.ReadFile(abs)
+			if os.IsNotExist(err) {
+				continue // already gone
+			}
+			if err != nil {
+				return nil, err
+			}
+			f := Finding{
+				Subject: la.Path, Kind: la.Kind, State: Orphan, Local: LocalNone,
+				Detail: "a file escapement rendered for a target no longer in the effective set — run `esc sync` to remove it",
+			}
+			if actual := esc.HashBytes(render.NormalizeEndings(content)); actual != la.Hash {
+				f.Alteration = &Alteration{ExpectedHash: la.Hash, ActualHash: actual}
+				f.Detail = "a hand-edited file escapement rendered for a target no longer in the effective set; `esc sync` leaves it in place, `esc sync --force` removes it"
+			}
+			res.Findings = append(res.Findings, f)
+		}
+	}
+
 	for _, v := range plan.Violations {
 		res.Findings = append(res.Findings, Finding{Subject: v.Path, Kind: KindConstraint, State: ConstraintViolated, Local: LocalNone, Detail: v.Rule})
 	}
@@ -408,6 +455,19 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 		}
 		return f
 	case KindFile:
+		if locked == nil {
+			// Mirror of Apply's KindFile occupied gate: no prior lock entry plus
+			// something on disk is a file escapement never wrote. A byte-for-byte
+			// (endings-normalized) match adopts on the next sync, so report the
+			// in-sync verdict it will converge to, not Occupied.
+			if _, lerr := os.Lstat(abs); lerr == nil {
+				if identicalFileContent(abs, a.Hash) {
+					return Finding{Subject: a.Path, Kind: a.Kind, State: InSync, Local: LocalNone}
+				}
+				return Finding{Subject: a.Path, Kind: a.Kind, State: Occupied, Local: LocalNone,
+					Detail: "an unmanaged file occupies this path; escapement will not adopt or overwrite it — move it aside, then run `esc sync` (`--force` does not override this)"}
+			}
+		}
 		content, err := os.ReadFile(abs)
 		if err != nil {
 			return Finding{Subject: a.Path, Kind: a.Kind, State: Missing, Local: LocalNone, Detail: "file does not exist — run `esc sync`"}

@@ -143,6 +143,8 @@ func detectedSyncClause(d Detected) string {
 		return "add pack MCP servers alongside your existing ones"
 	case render.TargetSkills:
 		return "add pack skills alongside yours in .claude/skills"
+	case render.TargetGovernance:
+		return "report GOVERNANCE.md as occupied and not overwrite it — move or delete it so escapement can own it"
 	default:
 		switch {
 		case d.HasBlock:
@@ -176,9 +178,14 @@ func explainDetection(w io.Writer, detected []Detected) {
 	labels := make([]string, len(ordered))
 	clauses := make([]string, len(ordered))
 	needsPlacementHint := false
+	governanceDetected := false
 	for i, d := range ordered {
 		labels[i] = detectedItemLabel(d)
 		clauses[i] = detectedSyncClause(d)
+		if d.Target == render.TargetGovernance {
+			governanceDetected = true
+			continue
+		}
 		if isFileTarget(d.Target) && !d.HasBlock && !d.HasPlaceholder {
 			needsPlacementHint = true
 		}
@@ -189,14 +196,22 @@ func explainDetection(w io.Writer, detected []Detected) {
 	// managed block at the top of" four times in a row, which is the exact
 	// case a first-contact explanation most needs to stay readable in.
 	const preserved = "Your current content is preserved byte for byte and reported as a local amendment."
+	const governanceNote = "A detected GOVERNANCE.md is a whole file escapement owns: it is reported occupied and left untouched until you move or delete it."
 	if len(clauses) == 1 {
-		fmt.Fprintf(w, "`esc sync` will %s. %s\n", clauses[0], preserved)
+		if governanceDetected {
+			fmt.Fprintf(w, "`esc sync` will %s.\n", clauses[0])
+		} else {
+			fmt.Fprintf(w, "`esc sync` will %s. %s\n", clauses[0], preserved)
+		}
 	} else {
 		fmt.Fprintln(w, "`esc sync` will:")
 		for _, c := range clauses {
 			fmt.Fprintf(w, "  - %s\n", c)
 		}
 		fmt.Fprintf(w, "\n%s\n", preserved)
+		if governanceDetected {
+			fmt.Fprintf(w, "%s\n", governanceNote)
+		}
 	}
 	if needsPlacementHint {
 		fmt.Fprintf(w, "\nTo place the block somewhere else, put %s where you want it before syncing.\n", render.Placeholder)

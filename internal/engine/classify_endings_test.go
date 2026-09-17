@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/tensorgroup/openescapement/internal/esc"
+	"github.com/tensorgroup/openescapement/internal/lockfile"
 	"github.com/tensorgroup/openescapement/internal/render"
 )
 
@@ -71,7 +72,10 @@ func TestClassifyEndingsNormalization(t *testing.T) {
 			t.Fatal(err)
 		}
 		a := Artifact{Path: "GOVERNANCE.md", Kind: KindFile, Hash: esc.HashBytes([]byte(content))}
-		f := classify(root, a, nil)
+		lock := &lockfile.Lock{Artifacts: []lockfile.LockArtifact{
+			{Path: "GOVERNANCE.md", Kind: KindFile, Hash: "sha256:previoussync"},
+		}}
+		f := classify(root, a, lock)
 		if f.State != Altered {
 			t.Fatalf("state = %q, want altered: a genuine content edit must still be caught under CRLF endings", f.State)
 		}
