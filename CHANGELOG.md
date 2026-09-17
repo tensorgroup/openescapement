@@ -158,6 +158,15 @@ tagged releases begin.
   JavaScript is off; fragments are returned only for HX-Request requests. htmx
   runs under the strict CSP with eval, history, and injected indicator styles
   disabled, and hx-disable wrapping all pack-authored markdown.
+- `rules` target: one escapement-owned file per opt-in fragment under
+  `.claude/rules/esc-<pack>-<stem>.md`, carrying a verbatim `paths:` scope for
+  Claude Code (and read by Grok Build). Built-in and part of the default set;
+  an explicit `targets:` list must name it to receive rule files.
+- `agents-skills` target: the pack's skill directories rendered a second time
+  under `.agents/skills/<name>` for cross-tool agents (Kimi Code). Opt-in: an
+  empty `targets:` list does not include it.
+- Packs that ship a `targets: [rules]` fragment require an `esc` that knows the
+  target; an older binary rejects the fragment as an unknown target (exit 1).
 
 ### Changed
 - The whole-file occupied gate and orphan pass now cover every `KindFile`
@@ -244,6 +253,9 @@ tagged releases begin.
 - Vendor guidance sweep cadence: weekly community scan plus a monthly deep check,
   replacing the quarterly check. DeepSeek and Z.ai join the source list for the
   model registry and model packs, not as render targets.
+- Fragment line endings are normalized to LF at load, so a CRLF-authored
+  fragment keeps its frontmatter and scope. Packs whose fragments were
+  previously CRLF re-render once as a one-time `stale` on the next sync.
 
 ### Fixed
 - CRLF instruction files: leading YAML frontmatter with CRLF line endings is

@@ -4,7 +4,7 @@
 
 **Deterministic governance for your AI usage.**
 
-`esc` ships your organization's AI policy as versioned, signed **rule packs**, rendered directly into the files coding agents already read — `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.claude/skills/`, `.mcp.json` — plus a human-readable `GOVERNANCE.md`. Think **Dependabot-meets-dotfiles for AI policy**: one policy source, synced everywhere, drift-detected, reviewable in every PR.
+`esc` ships your organization's AI policy as versioned, signed **rule packs**, rendered directly into the files coding agents already read — `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.claude/skills/`, `.claude/rules/`, `.agents/skills/`, `.mcp.json` — plus a human-readable `GOVERNANCE.md`. Think **Dependabot-meets-dotfiles for AI policy**: one policy source, synced everywhere, drift-detected, reviewable in every PR.
 
 ```
 ┌──────────────────┐   git + signed tags   ┌───────────────────────────────┐
@@ -231,6 +231,8 @@ constraints:
   forbidden_patterns: ["ignore (the )?governance"]
 ```
 
+A rule fragment can opt into `targets: [rules]` to render as its own file under `.claude/rules/` instead of joining the shared managed block, and scope itself to part of the tree with `paths:`. See `docs/pack-authoring.md` for the full authoring reference, including the `rules` and `agents-skills` targets.
+
 Shipped examples: `examples/packs/acme-org` is a complete org pack (rules, paved paths,
 a catalog, a skill, an MCP server, constraints); `anthropic-models`, `openai-models`,
 and `zai-models` are per-vendor model packs, each catalog entry carrying its price, the
@@ -366,6 +368,10 @@ There's also a GitHub Action:
 - uses: tensorgroup/openescapement@main
   # runs `esc status --check` — policy drift fails the build
 ```
+
+### Targets
+
+`rules` (path-scoped files under `.claude/rules/`) and `agents-skills` (a second skills root under `.agents/skills/`) are built-in targets. `rules` is part of the default set: an empty `targets:` list renders every built-in except `agents-skills`, which is opt-in only. An explicit `targets:` list is an exhaustive filter, not an addition to the defaults, so a repo that sets one must list `rules` to keep receiving rule files and `agents-skills` to render the second skills root. A pack that ships a `targets: [rules]` fragment needs a repo running an `esc` new enough to know that target; an older binary rejects the fragment as an unknown target and exits 1.
 
 ### Custom targets
 

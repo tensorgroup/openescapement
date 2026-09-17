@@ -52,6 +52,7 @@ That is the value of running `esc serve`: one table where each row is a repo and
 - **Never sees prompt content.** Reports carry pack pins, artifact states, counts, hashes, and item names. Amendment text and diffs leave a repo only at the `content` level, which a pack must declare and a repo can always lower.
 - **Never blocks a sync.** Publishing runs after the lockfile is written and exit codes are set. A portal outage queues to a local outbox and prints one line to stderr.
 - **Never required.** Every CLI command works with no portal configured. A repo with no `reporting` block sends nothing, ever.
+- **Never renders the OS-level managed-policy `CLAUDE.md`.** Some vendors read a `CLAUDE.md` from an OS-managed path outside any repo, as an IT or device-management fleet channel. `esc` writes agent-readable files only inside the governed repo, so that OS-path file is deliberately not a render target. Revisit only if the portal is asked to publish it.
 
 ## Where the portal's features actually live
 
