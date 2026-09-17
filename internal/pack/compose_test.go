@@ -1,8 +1,11 @@
 package pack
 
 import (
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/tensorgroup/openescapement/internal/esc"
 )
 
 func TestComposeFragmentsMergesFrontmatterAndBodies(t *testing.T) {
@@ -64,5 +67,24 @@ func TestComposeFragmentsBadFrontmatterErrors(t *testing.T) {
 func TestComposeFragmentsEmptyErrors(t *testing.T) {
 	if _, err := ComposeFragments(nil); err == nil {
 		t.Fatal("expected error for empty parts")
+	}
+}
+
+func TestComposeFragmentsRejectsPaths(t *testing.T) {
+	parts := [][]byte{
+		[]byte("---\ntargets: [rules]\npaths:\n  - \"src/**\"\n---\nbody a\n"),
+		[]byte("---\ntargets: [rules]\n---\nbody b\n"),
+	}
+	if _, err := ComposeFragments(parts); !errors.Is(err, esc.ErrManifest) {
+		t.Fatalf("compose must reject a path-scoped part with ErrManifest, got %v", err)
+	}
+}
+
+func TestComposeFragmentsRejectsSinglePathScopedPart(t *testing.T) {
+	// The portal's resolveAdoptSelection can pass a single part, which used to
+	// return byte-identical before any parse.
+	one := [][]byte{[]byte("---\ntargets: [rules]\npaths:\n  - \"src/**\"\n---\nbody\n")}
+	if _, err := ComposeFragments(one); !errors.Is(err, esc.ErrManifest) {
+		t.Fatalf("single path-scoped part must be rejected, got %v", err)
 	}
 }

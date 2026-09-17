@@ -19,20 +19,35 @@ func ComposeFragments(parts [][]byte) ([]byte, error) {
 	if len(parts) == 0 {
 		return nil, fmt.Errorf("%w: compose: no fragments selected", esc.ErrManifest)
 	}
-	if len(parts) == 1 {
-		return parts[0], nil
+	// Normalize endings up front so the LF-only splitter never lets a CRLF
+	// scoped part slip through unparsed.
+	norm := make([][]byte, len(parts))
+	for i, p := range parts {
+		norm[i] = []byte(strings.ReplaceAll(string(p), "\r\n", "\n"))
+	}
+	for i, p := range norm {
+		has, err := partHasPaths(p, i)
+		if err != nil {
+			return nil, err
+		}
+		if has {
+			return nil, fmt.Errorf("%w: compose part %d: a path-scoped rule fragment cannot be composed", esc.ErrManifest, i)
+		}
+	}
+	if len(norm) == 1 {
+		return norm[0], nil
 	}
 	var union []string
 	seen := map[string]bool{}
-	bodies := make([]string, 0, len(parts))
-	for i, p := range parts {
+	bodies := make([]string, 0, len(norm))
+	for _, p := range norm {
 		content := string(p)
 		if fm, body, ok := splitFrontmatter(content); ok {
 			var meta struct {
 				Targets []string `yaml:"targets"`
 			}
 			if err := yaml.Unmarshal([]byte(fm), &meta); err != nil {
-				return nil, fmt.Errorf("%w: compose part %d frontmatter: %v", esc.ErrManifest, i, err)
+				return nil, fmt.Errorf("%w: compose frontmatter: %v", esc.ErrManifest, err)
 			}
 			for _, t := range meta.Targets {
 				if !seen[t] {
@@ -51,4 +66,27 @@ func ComposeFragments(parts [][]byte) ([]byte, error) {
 	b.WriteString(strings.Join(bodies, "\n\n"))
 	b.WriteString("\n")
 	return []byte(b.String()), nil
+}
+
+// partHasPaths reports whether a compose part carries a non-empty paths: list.
+func partHasPaths(part []byte, i int) (bool, error) {
+	fm, _, ok := splitFrontmatter(string(part))
+	if !ok {
+		return false, nil
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal([]byte(fm), &doc); err != nil {
+		return false, fmt.Errorf("%w: compose part %d frontmatter: %v", esc.ErrManifest, i, err)
+	}
+	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return false, nil
+	}
+	m := doc.Content[0]
+	for j := 0; j+1 < len(m.Content); j += 2 {
+		if m.Content[j].Value == "paths" {
+			v := m.Content[j+1]
+			return v.Kind == yaml.SequenceNode && len(v.Content) > 0, nil
+		}
+	}
+	return false, nil
 }
