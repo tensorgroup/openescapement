@@ -38,7 +38,7 @@ Weekly scan, per community source:
 - Subreddits: fetch `https://old.reddit.com/r/<name>/top/?t=week`, then the `top.json?t=week` and `top.rss?t=week` forms of the same URL, then web search restricted to `site:reddit.com/r/<name>` for the past week. If every route fails, record the subreddit as unreachable in the log entry, not as no signal. A subreddit that returns "not found" or "banned" is a source-list correction, not a finding.
 - Hacker News: query `https://hn.algolia.com/api/v1/search_by_date?tags=story&numericFilters=created_at_i>EPOCH&query=TERM`, where `EPOCH` is the Unix time seven days ago (`date -v-7d +%s` on macOS, `date -d '7 days ago' +%s` on Linux), once per term: `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `context engineering`, `Claude Code`, `Codex CLI`, `Gemini CLI`, `Kimi Code`, `Grok Build`.
 
-Deep check, per primary source: fetch each URL listed under `### Primary sources per vendor` and read for changes since the newest `[deep]` entry (or since the newest entry for that vendor when there is no `[deep]` entry yet). For vendors whose URL is a docs index, follow the instruction-file or customization page one level down.
+Deep check, per primary source: fetch each URL listed under `### Primary sources per vendor` and read for changes since the newest `[deep]` entry (or since the newest entry for that vendor when there is no `[deep]` entry yet, or the vendor's full current page when it has never been logged). For vendors whose URL is a docs index, follow the instruction-file or customization page one level down.
 
 Collect candidates as: source, claim, URL, date seen.
 

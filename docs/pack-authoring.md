@@ -66,4 +66,4 @@ Run this over every rule file, skill, and catalog note before publishing a pack 
 - [ ] No ALL-CAPS emphasis, no repeated emphasis, no bold sentences.
 - [ ] Nothing restates what the repo itself shows.
 
-Four items are checkable by machine, at least in part: one term per concept, one instruction per sentence, the line budget, and no emphasis. They are candidates for a future `esc pack lint` (`docs/ideas/pack-lint.md`). The rest are review.
+Four items are checkable by machine, at least in part: one term per concept, one instruction per sentence, the line budget (as a size cap, since whether a line changes behavior is a judgment), and no emphasis. They are candidates for a future `esc pack lint` (`docs/ideas/pack-lint.md`). The rest are review.

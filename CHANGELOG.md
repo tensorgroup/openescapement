@@ -36,75 +36,6 @@ tagged releases begin.
 - `.claude/skills/sweep-sources`: a repo skill that runs the two-tier source sweep
   (weekly community signal, monthly deep vendor check) and logs a tagged entry in
   `docs/roadmap/vendor-guidance-tracking.md`.
-
-### Changed
-- Portal model guidance refreshed to match the packs: Claude Fable 5.1 and Opus
-  4.8 added, Fable 5 moved to legacy, Sonnet 5 at its permanent $2/$10, GPT-6
-  Astra added with Sol narrowed to review; starters and routing fragments follow.
-  Files you have edited by hand are never overwritten; delete one to take the
-  refreshed copy.
-- `examples/packs/anthropic-models` 0.2.0: Fable 5.1 preferred; Opus 4.8 the
-  Opus-tier choice; Sonnet 5 at its now-permanent $2/$10; Opus 5 moved to
-  review-required with the reason and a measurable reversal condition; Fable 5 to
-  review-required as superseded.
-- **BREAKING for CI gating on `esc sync`.** Exit 0 from `esc sync` no longer
-  asserts that the repo matches policy. It now asserts only that everything
-  escapement was willing to apply was applied: an artifact whose managed
-  region was hand-edited, and a retired skill directory still holding files
-  the team added or a pack-provided file the team edited, are all reported
-  and skipped, and sync still exits 0. Any
-  pipeline that treated `esc sync` exit 0 as a compliance check must move that
-  gate to `esc status --check`, which exits 1 on any artifact not in sync.
-  Skipped artifacts are listed on stderr and in the `skipped` array of
-  `esc sync --json`.
-- `esc sync --json` and `esc status --json` name an artifact with `subject` in
-  both `findings[]` and `skipped[]`. `skipped[].path` was renamed to
-  `skipped[].subject` for that consistency.
-- `skipped[]` entries carry a machine-readable `cause` alongside the prose
-  `reason`: `hand-edited`, `orphan-dir-unmanaged`, `orphan-dir-edited`, or
-  `orphan-block-edited`.
-- `esc sync` prints a remedy line under each declined artifact instead of one
-  blanket line covering all of them. The blanket line pointed at `esc diff`,
-  which only ever covers a hand-edited managed region, so a declined skill
-  directory or an undeleted orphaned block sent the reader to a command that
-  shows nothing about it.
-- **BREAKING for CI gating on `esc status --check`.** `esc status` reports a
-  retired esc skill directory as an `orphan` finding, the way it already did
-  for an orphaned managed block. A retirement that `esc sync` declines is
-  therefore visible to `esc status --check` instead of passing it at exit 0.
-  Repos previously green on `--check` while parked in a declined retirement
-  now exit 1 there.
-- A symlink standing where escapement is about to write now exits 4, not 1.
-  Exit 1 is the drift-and-constraint class a CI gate reads as routine and
-  self-healing; a containment refusal is neither, and the other containment
-  refusals already exit 4.
-- Guidance seeding now refreshes unedited files to the latest embedded content
-  instead of create-if-missing only, tracked by a
-  `<data-dir>/guidance/.seeded.json` hash manifest; hand-edited and
-  portal-edited files are still never overwritten, and pre-manifest dirs are
-  migrated by recording only files that still match the shipped content.
-- `esc serve --demo` now resets its demo-owned data (org store, pack repos,
-  demo repo, guidance) to pristine on every startup and prints
-  `esc: demo data reset`. Non-demo servers are unaffected.
-- The managed-block notice line reads "Managed by escapement. Do not edit."
-  (previously an em-dash), and the catalog notes separator is now a spaced
-  hyphen, `name (category) - notes` (previously an em-dash there too, and
-  the awesome-list convention this catalog line follows machine-enforces
-  the hyphen form). Cosmetic for humans; a hash change for tooling: the
-  next `esc sync` rewrites the block, and until then `esc status` reports
-  `stale`, which is routine drift.
-- `esc init` confirms each marker write ("CLAUDE.md: wrote <!-- escapement:block -->")
-  and says so when a position answer is not recognized, instead of writing
-  or declining silently.
-- Example packs audited against `docs/pack-authoring.md`: one instruction per
-  sentence, one name per concept, a stated reason on rules an agent would route
-  around, no ALL-CAPS or italic emphasis. acme-org 0.1.1, anthropic-models 0.2.1,
-  openai-models 0.1.1, zai-models 0.1.1, model-seats 0.1.1.
-- Vendor guidance sweep cadence: weekly community scan plus a monthly deep check,
-  replacing the quarterly check. DeepSeek and Z.ai join the source list for the
-  model registry and model packs, not as render targets.
-
-### Added
 - `esc init` detects instruction files a repo already has, pre-fills `targets` from them, explains what the first sync will do, and offers once, on a TTY, to place the managed-block marker. The offer defaults to no; one answer covers every detected file. It never writes rendered policy, never writes over a file with uncommitted changes, and outside a git repository says there is no undo before asking. `esc init` now rejects positional arguments instead of silently scaffolding the current directory.
 - The seeded demo pack ships an `esc-reconcile` skill: guidance for an agent comparing a team's existing rules against the pack's.
 - Local amendments: content escapement does not own is preserved everywhere, reported on a new `local` axis, and surfaced in `esc status`. Files added to skill directories are no longer deleted by sync.
@@ -227,6 +158,82 @@ tagged releases begin.
   JavaScript is off; fragments are returned only for HX-Request requests. htmx
   runs under the strict CSP with eval, history, and injected indicator styles
   disabled, and hx-disable wrapping all pack-authored markdown.
+
+### Changed
+- Portal model guidance refreshed to match the packs: Claude Fable 5.1 and Opus
+  4.8 added, Fable 5 moved to legacy, Sonnet 5 at its permanent $2/$10, GPT-6
+  Astra added with Sol narrowed to review; starters and routing fragments follow.
+  Files you have edited by hand are never overwritten; delete one to take the
+  refreshed copy.
+- Portal model guidance for Google, xAI, and DeepSeek refreshed from the first
+  source sweep: Gemini 3.8 Flash (the coding default) and 3.7 Flash added at
+  their introductory price, 3.6 Flash to legacy; Grok 4.6 added as the flagship,
+  4.5 to legacy; DeepSeek V4.1 Flash added as `deepseek-flash`, V4 Flash to
+  legacy as a routed alias, V4 Pro's reversed retirement and peak/off-peak
+  pricing recorded.
+- `examples/packs/zai-models` price notes state Z.ai's list price and the
+  OpenRouter provider range with a date; the cheaper rate is a live per-provider
+  discount, not an ended launch promotion.
+- `examples/packs/anthropic-models` 0.2.0: Fable 5.1 preferred; Opus 4.8 the
+  Opus-tier choice; Sonnet 5 at its now-permanent $2/$10; Opus 5 moved to
+  review-required with the reason and a measurable reversal condition; Fable 5 to
+  review-required as superseded.
+- **BREAKING for CI gating on `esc sync`.** Exit 0 from `esc sync` no longer
+  asserts that the repo matches policy. It now asserts only that everything
+  escapement was willing to apply was applied: an artifact whose managed
+  region was hand-edited, and a retired skill directory still holding files
+  the team added or a pack-provided file the team edited, are all reported
+  and skipped, and sync still exits 0. Any
+  pipeline that treated `esc sync` exit 0 as a compliance check must move that
+  gate to `esc status --check`, which exits 1 on any artifact not in sync.
+  Skipped artifacts are listed on stderr and in the `skipped` array of
+  `esc sync --json`.
+- `esc sync --json` and `esc status --json` name an artifact with `subject` in
+  both `findings[]` and `skipped[]`. `skipped[].path` was renamed to
+  `skipped[].subject` for that consistency.
+- `skipped[]` entries carry a machine-readable `cause` alongside the prose
+  `reason`: `hand-edited`, `orphan-dir-unmanaged`, `orphan-dir-edited`, or
+  `orphan-block-edited`.
+- `esc sync` prints a remedy line under each declined artifact instead of one
+  blanket line covering all of them. The blanket line pointed at `esc diff`,
+  which only ever covers a hand-edited managed region, so a declined skill
+  directory or an undeleted orphaned block sent the reader to a command that
+  shows nothing about it.
+- **BREAKING for CI gating on `esc status --check`.** `esc status` reports a
+  retired esc skill directory as an `orphan` finding, the way it already did
+  for an orphaned managed block. A retirement that `esc sync` declines is
+  therefore visible to `esc status --check` instead of passing it at exit 0.
+  Repos previously green on `--check` while parked in a declined retirement
+  now exit 1 there.
+- A symlink standing where escapement is about to write now exits 4, not 1.
+  Exit 1 is the drift-and-constraint class a CI gate reads as routine and
+  self-healing; a containment refusal is neither, and the other containment
+  refusals already exit 4.
+- Guidance seeding now refreshes unedited files to the latest embedded content
+  instead of create-if-missing only, tracked by a
+  `<data-dir>/guidance/.seeded.json` hash manifest; hand-edited and
+  portal-edited files are still never overwritten, and pre-manifest dirs are
+  migrated by recording only files that still match the shipped content.
+- `esc serve --demo` now resets its demo-owned data (org store, pack repos,
+  demo repo, guidance) to pristine on every startup and prints
+  `esc: demo data reset`. Non-demo servers are unaffected.
+- The managed-block notice line reads "Managed by escapement. Do not edit."
+  (previously an em-dash), and the catalog notes separator is now a spaced
+  hyphen, `name (category) - notes` (previously an em-dash there too, and
+  the awesome-list convention this catalog line follows machine-enforces
+  the hyphen form). Cosmetic for humans; a hash change for tooling: the
+  next `esc sync` rewrites the block, and until then `esc status` reports
+  `stale`, which is routine drift.
+- `esc init` confirms each marker write ("CLAUDE.md: wrote <!-- escapement:block -->")
+  and says so when a position answer is not recognized, instead of writing
+  or declining silently.
+- Example packs audited against `docs/pack-authoring.md`: one instruction per
+  sentence, one name per concept, a stated reason on rules an agent would route
+  around, no ALL-CAPS or italic emphasis. acme-org 0.1.1, anthropic-models 0.2.1,
+  openai-models 0.1.1, zai-models 0.1.1, model-seats 0.1.1.
+- Vendor guidance sweep cadence: weekly community scan plus a monthly deep check,
+  replacing the quarterly check. DeepSeek and Z.ai join the source list for the
+  model registry and model packs, not as render targets.
 
 ### Fixed
 - CRLF instruction files: leading YAML frontmatter with CRLF line endings is
