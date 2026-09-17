@@ -61,12 +61,12 @@ type PlanResult struct {
 	PackObjs   []*pack.Pack
 	Artifacts  []Artifact
 	Violations []render.Violation
+	// Notices are non-fatal, exit-code-neutral messages the CLI prints to
+	// stderr (e.g. a pack targets rules but the repo's filter excludes it).
+	Notices []string
 }
 
-var allTargets = []string{
-	render.TargetClaude, render.TargetAgents, render.TargetGemini,
-	render.TargetGovernance, render.TargetSkills, render.TargetMCP,
-}
+var allTargets = targets.Defaults()
 
 // CacheDir resolves the pack cache location (ESC_CACHE_DIR overrides).
 func CacheDir() (string, error) {
@@ -190,6 +190,28 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 		targets = append(append([]string{}, allTargets...), sortedNames(rendered)...)
 	}
 
+	// Filter-excludes-rules notice: an explicit targets: list is an
+	// exhaustive filter (§3), so a pack that targets rules while the repo's
+	// filter excludes it is not a violation — just worth a stderr line. Never
+	// a Violation and never changes the exit code.
+	rulesSelected := false
+	for _, t := range targets {
+		if strings.ToLower(t) == render.TargetRules {
+			rulesSelected = true
+			break
+		}
+	}
+	if !rulesSelected {
+		for _, p := range res.PackObjs {
+			for _, f := range p.Fragments {
+				if render.FragmentNamesTarget(f, render.TargetRules) {
+					res.Notices = append(res.Notices, fmt.Sprintf("pack %s targets rules; this repo's targets list excludes it", p.Manifest.Name))
+					break
+				}
+			}
+		}
+	}
+
 	for _, t := range targets {
 		// Custom target names are lowercase-only by construction
 		// (targets.ValidateCustom), and rendered/allDeclared are keyed
@@ -260,6 +282,30 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 					res.Artifacts = append(res.Artifacts, Artifact{
 						Path: target,
 						Kind: KindDir, Hash: h, SrcDir: src, Files: files,
+					})
+				}
+			}
+		case render.TargetRules:
+			// In-pack collisions are caught in pack.Load. Here the map is
+			// cross-pack, keyed by pack index (two sources may share a
+			// manifest name), case-folded: a repo path produced by two
+			// different packs is ErrConfig naming both.
+			ruleOwner := map[string]int{} // lowercased repo path -> pack index
+			for i, p := range res.PackObjs {
+				for _, f := range p.Fragments {
+					if !render.FragmentNamesTarget(f, render.TargetRules) {
+						continue
+					}
+					relPath := render.RuleFilePath(p.Manifest.Name, f)
+					lc := strings.ToLower(relPath)
+					if owner, ok := ruleOwner[lc]; ok && owner != i {
+						return nil, fmt.Errorf("%w: rule file %s is produced by packs %s and %s; rename one fragment", esc.ErrConfig, relPath, res.PackObjs[owner].Manifest.Name, p.Manifest.Name)
+					}
+					ruleOwner[lc] = i
+					content := render.RenderRule(f, p.Manifest.Name)
+					res.Artifacts = append(res.Artifacts, Artifact{
+						Path: relPath, Kind: KindFile,
+						Hash: esc.HashBytes(render.NormalizeEndings([]byte(content))), Body: content,
 					})
 				}
 			}

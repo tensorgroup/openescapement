@@ -477,6 +477,9 @@ func syncOnce(ctx context.Context, root string, force bool, stdout, stderr io.Wr
 	for _, s := range res.Adopted {
 		fmt.Fprintf(stderr, "  adopted %s: existing content matches pack output exactly\n", s)
 	}
+	for _, n := range plan.Notices {
+		fmt.Fprintf(stderr, "  notice: %s\n", n)
+	}
 	publishSyncResult(ctx, root, res, stderr)
 	return nil
 }

@@ -53,6 +53,12 @@
       "local": "none"
     },
     {
+      "subject": ".mcp.json",
+      "kind": "json-keys",
+      "managed": "in-sync",
+      "local": "none"
+    },
+    {
       "subject": ".claude/skills/esc-acme-org-vault-usage",
       "kind": "dir",
       "managed": "in-sync",
@@ -71,12 +77,6 @@
           "team-notes.md"
         ]
       }
-    },
-    {
-      "subject": ".mcp.json",
-      "kind": "json-keys",
-      "managed": "in-sync",
-      "local": "none"
     }
   ],
   "collection": {
