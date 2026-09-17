@@ -9,7 +9,7 @@ This matters to us twice over:
 
 ## Practice
 
-Two tiers, both run by the `/sweep-sources` skill in this repo (`.claude/skills/sweep-sources/SKILL.md`). With no argument the skill runs whatever is due; `weekly`, `deep`, or `all` forces a tier.
+Two tiers, both run by the `/sweep-sources` skill in this repo (`.claude/skills/sweep-sources/SKILL.md`). With no argument the skill runs whatever is due; `weekly`, `deep`, or `all` forces a tier. The cadence is kept by a person running the skill when they think of it: an irregular habit still covers both tiers, because a run escalates to the deep check once a month has passed. A cloud routine that runs it on a schedule and opens a PR exists as an optional hands-off variant and is paused by default; running it by hand is the supported path, and `docs/ideas/sweep-as-pack-skill.md` records the idea of shipping the skill to governed repos.
 
 - **Weekly, community signal.** Scan the community sources listed under Sources for instruction-file convention changes (new files, renames, hierarchy or size-cap changes), context and prompting guidance changes, new agent targets worth rendering to, and major model-generation releases. Ignore hype, benchmarks, and product drama. Community sources are signal only: every candidate claim is verified against the vendor's primary source before it enters this log or drives any change. Secondary coverage has already been wrong twice (a stale Grok size cap and a wrong AAIF date, both caught in the 2026-07-30 sweep).
 - **Monthly, deep vendor check.** Read the primary sources for every vendor below, and again at every major model-generation release. Quarterly was judged too slow for the current pace of change (decision 2026-08-08).

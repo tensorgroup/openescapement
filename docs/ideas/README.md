@@ -19,6 +19,7 @@ Every file starts with a status line, the spec sections it touches, and an expli
 |---|---|---|
 | [Agent credential use, attribution & audit](agent-credential-attribution.md) | Raw idea, unscoped | §3 Pillar A/B/C, §4 boundaries, §11 Q4/Q6/Q9 |
 | [`esc pack lint`](pack-lint.md) | Raw idea, unscoped | §3 Pillar A; `esc pack` author commands |
+| [Ship the source sweep as a pack skill](sweep-as-pack-skill.md) | Raw idea, unscoped | §3 Pillar A skills distribution; §4 no scheduler, no server |
 
 ## Unfiled thoughts
 
