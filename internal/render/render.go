@@ -4,7 +4,10 @@ package render
 
 import (
 	"fmt"
+	"path"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/tensorgroup/openescapement/internal/pack"
 	"github.com/tensorgroup/openescapement/internal/targets"
@@ -138,6 +141,38 @@ func composeCatalog(packs []*pack.Pack) string {
 			b.WriteString("\n")
 		}
 	}
+	return b.String()
+}
+
+// RuleFileStem is a rules fragment's filename without the .md suffix.
+func RuleFileStem(f pack.Fragment) string {
+	return strings.TrimSuffix(path.Base(f.Path), ".md")
+}
+
+// RuleFilePath is the repo-relative path a rules fragment renders to.
+func RuleFilePath(packName string, f pack.Fragment) string {
+	return path.Join(".claude", "rules", "esc-"+packName+"-"+RuleFileStem(f)+".md")
+}
+
+// RenderRule renders one rules fragment to a whole .claude/rules file:
+// optional paths frontmatter (only when path-scoped, so frontmatter sits at
+// byte 0 as Claude Code's rules loader requires), a one-line ownership notice
+// (deliberately without the pack version, so a version bump does not rewrite
+// every rule file), a blank line, then the endings-normalized,
+// trailing-whitespace-trimmed body plus exactly one newline. Deterministic.
+func RenderRule(f pack.Fragment, packName string) string {
+	var b strings.Builder
+	if len(f.Paths) > 0 {
+		fm, _ := yaml.Marshal(struct {
+			Paths []string `yaml:"paths"`
+		}{f.Paths})
+		b.WriteString("---\n")
+		b.Write(fm)
+		b.WriteString("---\n")
+	}
+	b.WriteString("<!-- Managed by escapement (pack " + packName + "). Do not edit. -->\n\n")
+	b.WriteString(strings.TrimSpace(string(NormalizeEndings([]byte(f.Body)))))
+	b.WriteString("\n")
 	return b.String()
 }
 

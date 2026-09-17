@@ -44,6 +44,28 @@ func Governance(packs []*pack.Pack) string {
 			b.WriteString("\n")
 		}
 	}
+
+	for _, p := range packs {
+		var rules []pack.Fragment
+		for _, f := range p.Fragments {
+			if fragmentNamesTarget(f, TargetRules) {
+				rules = append(rules, f)
+			}
+		}
+		if len(rules) == 0 {
+			continue
+		}
+		b.WriteString(fmt.Sprintf("\n## Rule files: %s %s\n", p.Manifest.Name, p.Manifest.Version))
+		for _, f := range rules {
+			b.WriteString(fmt.Sprintf("\n**%s**", "esc-"+p.Manifest.Name+"-"+RuleFileStem(f)+".md"))
+			if len(f.Paths) > 0 {
+				b.WriteString(" — paths: " + strings.Join(f.Paths, ", "))
+			}
+			b.WriteString("\n\n")
+			b.WriteString(strings.TrimSuffix(f.Body, "\n"))
+			b.WriteString("\n")
+		}
+	}
 	return b.String()
 }
 
