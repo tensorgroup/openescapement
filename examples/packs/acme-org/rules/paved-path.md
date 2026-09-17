@@ -1,6 +1,6 @@
 ## Paved path — services that already exist
 
-Before building infrastructure, check these. They exist, they're maintained, and using them is always acceptable:
+Before building infrastructure, check this table. These services exist, are maintained, and are always acceptable to use:
 
 | Need | Use | Where |
 |---|---|---|

@@ -15,7 +15,7 @@ Rules of thumb:
 - Reach for Astra when the work is a plan, a design, a decision, or a review where a missed finding is expensive. It matches the top Anthropic tier on price, so treat it the same way: the first model for judgment, not for volume.
 - Code day-to-day on Terra. It is the default implementation model and covers review on lower-stakes diffs.
 - Run bulk and mechanical edits on Luna; it is an order of magnitude cheaper than Terra on output tokens.
-- Sol is not retired. Keep it where it already reviews well, and move planning and design work to Astra as sessions roll over.
+- Sol is not retired. Keep it where it already reviews well. Move planning and design work to Astra as sessions roll over.
 - Codex CLI under a ChatGPT sign-in bills to the plan, not per token; the same models through the API bill per token. Know which one a given session is on before running something long.
 - Use the exact model IDs in the table. Never guess or construct IDs.
 - Model lineup and pricing change. This guidance is versioned and updated centrally; changes arrive through the pack, not by editing this block.

@@ -15,5 +15,5 @@ Rules of thumb:
 - Verify its findings like anyone else's. A cheap model earns its place on confirmed-finding rate, not on volume.
 - Pin a provider through OpenRouter's provider routing when you need the full context window or a specific data policy; the effective window and the terms both vary by provider, and private code goes wherever the request is routed.
 - Set a spend cap on the OpenRouter key. Near-free is not free, and an agent loop can run all night.
-- Never name a preview id in a wrapper, a schema, or an interface; pin it in one line of config. The stealth id this model launched under lasted weeks. This pack names it once, in the catalog, as banned: a policy may name what it forbids so a stale config is caught by its own text.
+- Never name a preview id in a wrapper, a schema, or an interface. Pin it in one line of config. The stealth id this model launched under lasted weeks. This pack names it once, in the catalog, as banned: a policy may name what it forbids so a stale config is caught by its own text.
 - Model lineup and pricing change. This guidance is versioned and updated centrally; changes arrive through the pack, not by editing this block.

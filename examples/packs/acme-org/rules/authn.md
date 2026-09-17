@@ -1,5 +1,5 @@
 ## Authentication & authorization
 
 - Never build custom login, session, or password storage. The org SSO service handles authentication: https://sso.acme.example/docs.
-- New services must use the approved OIDC flow with the org identity provider; libraries: `acme-auth-go`, `acme-auth-ts`.
-- Authorization checks belong at the API layer; use the central policy service where available.
+- Use the approved OIDC flow with the org identity provider for every new service, through `acme-auth-go` or `acme-auth-ts`.
+- Put authorization checks at the API layer. Use the central policy service where it is available.

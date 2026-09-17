@@ -30,7 +30,7 @@ func TestExamplesSync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"pnpm install", "vault.acme.example", "Tailscale", "escapement:begin packs=acme-org@0.1.0"} {
+	for _, want := range []string{"pnpm install", "vault.acme.example", "Tailscale", "escapement:begin packs=acme-org@0.1.1"} {
 		if !strings.Contains(string(claude), want) {
 			t.Errorf("example CLAUDE.md missing %q", want)
 		}

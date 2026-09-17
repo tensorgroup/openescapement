@@ -1,6 +1,6 @@
 schema: 1
 name: acme-org
-version: 0.1.0
+version: 0.1.1
 description: Example org-wide AI governance baseline (copy and adapt)
 
 rules:

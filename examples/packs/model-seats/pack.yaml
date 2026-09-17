@@ -1,6 +1,6 @@
 schema: 1
 name: model-seats
-version: 0.1.0
+version: 0.1.1
 description: Governance for multi-model agent collaboration. Which seat holds which duty, with what oversight, decided from logged dispute outcomes rather than vibes. Seats are named by role; the model behind each is a config detail that changes. Copy and adapt. The catalog's reference roster is a dated example, not a recommendation; replace it with yours.
 
 rules:

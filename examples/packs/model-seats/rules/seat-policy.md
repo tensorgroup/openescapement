@@ -3,7 +3,7 @@
 Multiple frontier models participate in reviews and planning as **seats** with assigned
 duties. A seat is a role; the model behind it is one line of config, expected to change
 (the reference roster's first metered model was retired by its provider within weeks).
-Seats are granted and revoked from *logged evidence*, dispute win shares and
+Seats are granted and revoked from logged evidence, dispute win shares and
 confirmed-finding rates, never from a single anecdote or a model's confidence.
 
 | Seat | Duties | Restrictions |

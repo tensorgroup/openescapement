@@ -1,6 +1,6 @@
 schema: 1
 name: anthropic-models
-version: 0.2.0
+version: 0.2.1
 description: Model selection guidance for Anthropic Claude. Which model, when, and why. Every status carries the reason and, where it departs from the vendor's default, the condition that would reverse it.
 
 rules:

@@ -1,6 +1,6 @@
 schema: 1
 name: zai-models
-version: 0.1.0
+version: 0.1.1
 description: Model selection guidance for Z.ai's GLM family, reached through OpenRouter. GLM 5.3 Flash is the near-free metered model; it was served as a stealth preview before release, and the retired preview id is banned here by name so a stale config is caught, not guessed at.
 
 rules:

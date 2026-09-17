@@ -9,44 +9,44 @@ This file is owned by the team. Everything above the managed block is ours;
 - Test: `pnpm test`
 - This service is a demo — it has no real code, it exists to show escapement managing a repo.
 
-<!-- escapement:begin packs=acme-org@0.1.0 hash=sha256:17add78aa6d78ac68c61bcad5c12b89626f69c10b2c452c9ef9f9b0559897825 -->
+<!-- escapement:begin packs=acme-org@0.1.1 hash=sha256:d3439a1939e7f86b5555078a171fb57092eb7640df1fcda04f533589fa10361b -->
 > Managed by escapement. Do not edit. Run `esc diff` to see source. Team content goes outside this block.
 
 ## Secrets & keys
 
 - Never write API keys, tokens, or credentials inline in code, config files, or agent instructions.
-- Secrets live in the org vault: https://vault.acme.example — request access in #platform-team.
-- API keys for AI providers are issued through https://keys.acme.example (do not create personal provider accounts for org work).
-- If you (an agent) encounter a hardcoded secret, stop and flag it for the developer instead of copying or moving it.
+- Keep secrets in the org vault: https://vault.acme.example. Request access in #platform-team.
+- Get API keys for AI providers from https://keys.acme.example. Do not create personal provider accounts for org work: a centrally issued key can be rotated and revoked, a personal one cannot.
+- If you find a hardcoded secret, stop and flag it to the developer. Do not copy or move it: moving a leaked secret spreads it without rotating it.
 
 ## Authentication & authorization
 
 - Never build custom login, session, or password storage. The org SSO service handles authentication: https://sso.acme.example/docs.
-- New services must use the approved OIDC flow with the org identity provider; libraries: `acme-auth-go`, `acme-auth-ts`.
-- Authorization checks belong at the API layer; use the central policy service where available.
+- Use the approved OIDC flow with the org identity provider for every new service, through `acme-auth-go` or `acme-auth-ts`.
+- Put authorization checks at the API layer. Use the central policy service where it is available.
 
 ## Hosting & network exposure
 
-- Production workloads run on the paved-road platform (https://platform.acme.example). POCs may use the allowed hosted platforms in the catalog below.
-- Sharing a locally-hosted service: use the org tailnet (Tailscale — preferred) or Headscale for lab clusters. Cloudflare Tunnel requires review by #platform-team.
+- Run production workloads on the paved-road platform (https://platform.acme.example). For a POC, use one of the allowed hosted platforms in the catalog below.
+- To share a locally hosted service, use the org tailnet (Tailscale). Use Headscale only for lab clusters. Cloudflare Tunnel requires review by #platform-team.
 - Never expose a local service to the internet via raw port forwarding or by binding to 0.0.0.0 on a public interface.
-- Any newly opened port on a deployed service requires review by the platform team before it ships.
+- Any newly opened port on a deployed service requires review by #platform-team before it ships.
 
 ## SDLC requirements
 
-- All code — including POCs and vibe-coded experiments — lives in a tracked repository under the org's GitHub organization.
-- CI runs on every PR and must include: tests, dependency scanning, and SAST. Use the shared workflow templates at https://github.com/acme/workflows.
-- Do not disable, skip, or `--no-verify` past commit hooks or CI gates.
+- Keep all code, including POCs and vibe-coded experiments, in a tracked repository under the org's GitHub organization.
+- Run CI on every PR with tests, dependency scanning, and SAST. Use the shared workflow templates at https://github.com/acme/workflows.
+- Do not disable, skip, or `--no-verify` past commit hooks or CI gates. A red gate is a finding to fix, not an obstacle to route around.
 
 ## Agent behavior
 
-- Orchestration runs are limited to 50 turns per goal; if a task exceeds this, stop and summarize progress for a human instead of continuing.
-- Model routing: use fast models for mechanical edits and code generation subagents; reserve reasoning models for design, review, and security-sensitive decisions.
+- Stop an orchestration run at 50 turns per goal. Leave a progress summary for a human, because the cap exists so a run that is not converging is caught by a person, not by a budget alarm.
+- Use fast models for mechanical edits and code-generation subagents. Reserve reasoning models for design, review, and security-sensitive decisions.
 - Escalate to a human before: opening a network port, adopting a new cloud service, adding a new AI model or provider, or granting any credential access.
 
 ## Paved path — services that already exist
 
-Before building infrastructure, check these. They exist, they're maintained, and using them is always acceptable:
+Before building infrastructure, check this table. These services exist, are maintained, and are always acceptable to use:
 
 | Need | Use | Where |
 |---|---|---|

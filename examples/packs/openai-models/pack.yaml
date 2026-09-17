@@ -1,6 +1,6 @@
 schema: 1
 name: openai-models
-version: 0.1.0
+version: 0.1.1
 description: Model selection guidance for OpenAI. Which model, when, and why. GPT-6 Astra is the frontier seat; the GPT-5.6 tiers cover day-to-day and bulk work.
 
 rules:
