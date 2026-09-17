@@ -32,7 +32,7 @@ tagged releases begin.
   the pack cache and `esc serve` data) and the three install paths.
 - `docs/pack-authoring.md`: the committed style rule for pack rule files, skills,
   and catalog notes, with an author checklist. `docs/ideas/pack-lint.md` files the
-  mechanically checkable third of it as a future `esc pack lint`.
+  machine-checkable part of it as a future `esc pack lint`.
 - `.claude/skills/sweep-sources`: a repo skill that runs the two-tier source sweep
   (weekly community signal, monthly deep vendor check) and logs a tagged entry in
   `docs/roadmap/vendor-guidance-tracking.md`.

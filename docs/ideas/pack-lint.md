@@ -6,7 +6,7 @@
 
 ## The problem
 
-`docs/pack-authoring.md` is the committed style rule for rule files. Three of its nine checklist items are mechanically checkable, and nothing checks them. A pack author who skips the checklist ships emphasis and run-on rules to every repo that syncs the pack, and the first review that catches it is a model misfollowing the rule.
+`docs/pack-authoring.md` is the committed style rule for rule files. Four of its ten checklist items are checkable by machine, at least in part (one term per concept, one instruction per sentence, the line budget, no emphasis), and nothing checks them. A pack author who skips the checklist ships emphasis and run-on rules to every repo that syncs the pack, and the first review that catches it is a model misfollowing the rule.
 
 ## Mechanically checkable
 

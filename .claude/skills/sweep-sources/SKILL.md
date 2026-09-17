@@ -35,7 +35,7 @@ Ignore hype, benchmarks, pricing rumors, and product drama.
 
 Weekly scan, per community source:
 
-- Subreddits: fetch `https://old.reddit.com/r/<name>/top/?t=week`. If the fetch is blocked, use web search restricted to `site:reddit.com/r/<name>` for the past week. A subreddit that returns "not found" or "banned" is a source-list correction, not a finding.
+- Subreddits: fetch `https://old.reddit.com/r/<name>/top/?t=week`, then the `top.json?t=week` and `top.rss?t=week` forms of the same URL, then web search restricted to `site:reddit.com/r/<name>` for the past week. If every route fails, record the subreddit as unreachable in the log entry, not as no signal. A subreddit that returns "not found" or "banned" is a source-list correction, not a finding.
 - Hacker News: query `https://hn.algolia.com/api/v1/search_by_date?tags=story&numericFilters=created_at_i>EPOCH&query=TERM`, where `EPOCH` is the Unix time seven days ago (`date -v-7d +%s` on macOS, `date -d '7 days ago' +%s` on Linux), once per term: `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `context engineering`, `Claude Code`, `Codex CLI`, `Gemini CLI`, `Kimi Code`, `Grok Build`.
 
 Deep check, per primary source: fetch each URL listed under `### Primary sources per vendor` and read for changes since the newest `[deep]` entry (or since the newest entry for that vendor when there is no `[deep]` entry yet). For vendors whose URL is a docs index, follow the instruction-file or customization page one level down.
@@ -56,11 +56,14 @@ Append one entry at the top of `## Log` in this shape, newest first:
 - **YYYY-MM-DD** — [weekly|deep] <source(s)>. <What changed, with the primary-source URL.> Action: <what was done, or "none">.
 ```
 
+A deep entry may carry one indented sub-bullet per vendor, each ending with its own `Action:`, with the verdict line as the last sub-bullet; the 2026-09-16 entry is the precedent.
+
 With nothing to report, tag the tier that actually ran, so its last-run date still advances:
 
 ```
 - **YYYY-MM-DD** — [weekly] no signal.
 - **YYYY-MM-DD** — [deep] no signal.
+- **YYYY-MM-DD** — [weekly] community tier: reddit unreachable; Hacker News no signal.
 ```
 
 Then assess impact against, in order:

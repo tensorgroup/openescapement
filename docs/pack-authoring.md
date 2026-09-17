@@ -2,7 +2,7 @@
 
 A rule file is a markdown file under `rules/` in a pack. The renderer places it inside a managed block in every instruction file the pack targets (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`), in every repo that syncs the pack, and an agent loads that block into every session. One wasted line in a rule file is wasted in every session in every repo. Write accordingly.
 
-This guide is the committed rule for every rule file, skill `SKILL.md`, and catalog note in a pack. It applies to this repository's own `AGENTS.md` as well; that file predates the guide and is brought into line in its own pass, not silently.
+This guide is the committed rule for every rule file, skill `SKILL.md`, and catalog note in a pack. It applies to this repository's own `AGENTS.md` as well. That file predates the guide and is brought into line in its own pass, not silently.
 
 ## Say it so a model acts on it
 
@@ -49,7 +49,7 @@ The reason belongs in the same bullet as the rule, in one sentence. A rule that 
 
 ## What this guide rejects
 
-Full ASD-STE100 is rejected, and recorded here so it is not relitigated. STE's controlled dictionary (about 900 approved words, one approved meaning each) and its sentence-length caps solve a problem models do not have: non-native human readers and translation. The dictionary costs precision on terms of art, and STE's procedural style strips rationale, which is among the highest-value content in an instruction file. Take the four principles above; leave the rest.
+Full ASD-STE100 is rejected, and recorded here so it is not relitigated. STE's controlled dictionary (about 900 approved words, one approved meaning each) and its sentence-length caps solve a problem models do not have: non-native human readers and translation. The dictionary costs precision on terms of art, and STE's procedural style strips rationale, which is among the highest-value content in an instruction file. Take the four principles above. Leave the rest.
 
 ## Checklist
 
@@ -60,9 +60,10 @@ Run this over every rule file, skill, and catalog note before publishing a pack 
 - [ ] One instruction per sentence.
 - [ ] Every `it`, `this`, `these`, `they` has one obvious referent.
 - [ ] Every rule an agent might work around states its reason.
+- [ ] Every rewrite keeps the rule's meaning: a permission stays a permission, a list stays a list.
 - [ ] Every line would change agent behavior if kept and would not if cut.
 - [ ] Detail lives in a linked doc, not inline.
 - [ ] No ALL-CAPS emphasis, no repeated emphasis, no bold sentences.
 - [ ] Nothing restates what the repo itself shows.
 
-The first, third, and eighth items are mechanically checkable and are candidates for a future `esc pack lint` (`docs/ideas/pack-lint.md`). The rest are review.
+Four items are checkable by machine, at least in part: one term per concept, one instruction per sentence, the line budget, and no emphasis. They are candidates for a future `esc pack lint` (`docs/ideas/pack-lint.md`). The rest are review.
