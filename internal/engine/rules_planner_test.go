@@ -87,6 +87,29 @@ func TestRulesCrossPackCollisionCaseFolded(t *testing.T) {
 	}
 }
 
+// TestUntargetedFragmentDoesNotRenderAsRuleFile is the engine-level half of
+// the spec's "a fragment with no frontmatter does not render as a rule file"
+// claim. internal/pack already covers that a no-frontmatter fragment gets no
+// Targets/Paths (TestNoFrontmatterFragmentHasNoPaths); this plans a pack
+// containing one under the default target set (which includes rules) and
+// asserts no .claude/rules/ artifact is produced for it — an untargeted
+// fragment is never treated as implicitly naming rules, unlike the "applies
+// to every built-in target" rule that governs the block targets.
+func TestUntargetedFragmentDoesNotRenderAsRuleFile(t *testing.T) {
+	pd := writeRulePack(t, "acme", "1.0.0", map[string]string{
+		"rules/api.md": "no frontmatter here, just a plain body\n",
+	})
+	res, err := planLocal(t, ruleCfg(nil, pd)) // empty targets = defaults, includes rules
+	if err != nil {
+		t.Fatalf("plan: %v", err)
+	}
+	for i := range res.Artifacts {
+		if strings.HasPrefix(res.Artifacts[i].Path, ".claude/rules/") {
+			t.Errorf("an untargeted (no-frontmatter) fragment must not render as a rule file: %+v", res.Artifacts[i])
+		}
+	}
+}
+
 func TestRulesFilterExcludedNotice(t *testing.T) {
 	pd := writeRulePack(t, "acme", "1.0.0", map[string]string{"rules/api.md": "---\ntargets: [rules]\n---\na\n"})
 	res, err := planLocal(t, ruleCfg([]string{"claude"}, pd))

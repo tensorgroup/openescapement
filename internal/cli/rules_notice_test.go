@@ -130,6 +130,12 @@ func TestSymlinkedRulesDirRefusedExit4(t *testing.T) {
 	}
 }
 
+// TestStatusReportsOrphanRuleFile switches the repo to targets: [claude],
+// which orphans the rule file but also orphans AGENTS.md, GEMINI.md, and
+// GOVERNANCE.md (every other built-in target this repo had). Asserting only
+// a non-zero status --check exit would pass even if the rule file's own
+// orphan detection were broken, since those other orphans alone already
+// fail the gate. Assert the rule file's own finding by path instead.
 func TestStatusReportsOrphanRuleFile(t *testing.T) {
 	root := governRulePack(t, "---\ntargets: [rules]\n---\nbody\n", "")
 	if code, out := run(t, root, "sync"); code != 0 {
@@ -140,7 +146,19 @@ func TestStatusReportsOrphanRuleFile(t *testing.T) {
 	if err := os.WriteFile(cfgPath, append(cfg, []byte("targets:\n  - claude\n")...), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if code, out := run(t, root, "status", "--check"); code == 0 {
-		t.Errorf("an orphaned rule file must fail status --check:\n%s", out)
+
+	out, code := runEscOut(t, root, "status", "--json")
+	if code != 0 {
+		t.Fatalf("status --json exit %d, want 0 (bare status never gates on drift): %s", code, out)
+	}
+	f := findOrphan(t, out, ".claude/rules/esc-acme-api.md")
+	if f == nil {
+		t.Fatalf("no orphan finding for the rule file itself, got:\n%s", out)
+	}
+	if f.Managed != "orphan" {
+		t.Errorf("managed = %q, want orphan", f.Managed)
+	}
+	if code, out := run(t, root, "status", "--check"); code != 1 {
+		t.Errorf("status --check must exit 1 on an orphaned rule file, got %d:\n%s", code, out)
 	}
 }
