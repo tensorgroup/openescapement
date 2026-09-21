@@ -116,6 +116,62 @@ func TestDetectExistingFindsCorruptBlock(t *testing.T) {
 	}
 }
 
+// TestDetectExistingSkipsSymlinkedAgentsAncestor: os.Lstat(".agents/skills")
+// reports a real directory even when ".agents" itself (not "skills") is a
+// symlink, since Lstat only refuses to follow the final path component. A
+// pre-fill here would make the first `esc sync` refuse the ancestor at exit
+// 4 (refuseSymlinks walks every component). The "skills" leaf is real; only
+// the ".agents" ancestor is symlinked.
+func TestDetectExistingSkipsSymlinkedAgentsAncestor(t *testing.T) {
+	root := t.TempDir()
+	real := filepath.Join(root, "real-agents-dir")
+	if err := os.MkdirAll(filepath.Join(real, "skills", "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(real, "skills", "x", "SKILL.md"), []byte("y\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, filepath.Join(root, ".agents")); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	got, err := detectExisting(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range got {
+		if d.Target == render.TargetAgentsSkills {
+			t.Errorf("must not detect agents-skills through a symlinked .agents ancestor: %+v", got)
+		}
+	}
+}
+
+// TestDetectExistingSkipsSymlinkedClaudeAncestor is the .claude/skills parity
+// gap: detectExisting used plain os.ReadDir with no symlink check at all, so
+// it followed a symlinked ".claude" (or a symlinked "skills" leaf) straight
+// through to a real directory beyond it.
+func TestDetectExistingSkipsSymlinkedClaudeAncestor(t *testing.T) {
+	root := t.TempDir()
+	real := filepath.Join(root, "real-claude-dir")
+	if err := os.MkdirAll(filepath.Join(real, "skills", "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(real, "skills", "x", "SKILL.md"), []byte("y\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, filepath.Join(root, ".claude")); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	got, err := detectExisting(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range got {
+		if d.Target == render.TargetSkills {
+			t.Errorf("must not detect skills through a symlinked .claude ancestor: %+v", got)
+		}
+	}
+}
+
 // TestTargetOrderCoversAllTargets pins targetOrder to exactly the built-in
 // table order. It reads targets.BuiltIns() directly rather than through
 // builtInTargetOrder() — the very expression that initializes targetOrder —

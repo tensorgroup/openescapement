@@ -23,6 +23,28 @@ type Detected struct {
 	HasPlaceholder bool // already carries the placement marker
 }
 
+// skillsDirCandidate reports the absolute path of segments joined under root
+// (e.g. root, ".claude", "skills") and whether every segment along the way,
+// leaf included, is a real directory reached with no symlink standing in it
+// — the same shape the first `esc sync` would refuse at exit 4 (refuseSymlinks
+// walks every path component, not just the last one). os.Lstat on the full
+// joined path alone is not enough: it only refuses to follow the final
+// component's own symlink, so a symlinked ancestor (".agents" itself, say,
+// pointing at a real directory that happens to contain a real "skills" dir)
+// would report a real, non-symlink leaf and pre-fill a target the first sync
+// then refuses.
+func skillsDirCandidate(root string, segments ...string) (abs string, ok bool) {
+	cur := root
+	for _, seg := range segments {
+		cur = filepath.Join(cur, seg)
+		fi, err := os.Lstat(cur)
+		if err != nil || fi.Mode()&os.ModeSymlink != 0 || !fi.IsDir() {
+			return "", false
+		}
+	}
+	return cur, true
+}
+
 // detectExisting reports the instruction files a repo already has. It never
 // modifies anything. The result is sorted by Path and is empty, not nil, when
 // nothing is found.
@@ -56,14 +78,13 @@ func detectExisting(root string) ([]Detected, error) {
 	if info, err := os.Stat(filepath.Join(root, ".mcp.json")); err == nil && !info.IsDir() {
 		out = append(out, Detected{Target: render.TargetMCP, Path: ".mcp.json", Bytes: int(info.Size())})
 	}
-	if entries, err := os.ReadDir(filepath.Join(root, ".claude", "skills")); err == nil && len(entries) > 0 {
-		out = append(out, Detected{Target: render.TargetSkills, Path: ".claude/skills"})
+	if abs, ok := skillsDirCandidate(root, ".claude", "skills"); ok {
+		if entries, err := os.ReadDir(abs); err == nil && len(entries) > 0 {
+			out = append(out, Detected{Target: render.TargetSkills, Path: ".claude/skills"})
+		}
 	}
-	if info, err := os.Lstat(filepath.Join(root, ".agents", "skills")); err == nil && info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
-		// Lstat + IsDir + non-symlink: a `.agents/skills -> ../.claude/skills`
-		// layout must not be pre-filled, or the first sync would fail sync's
-		// symlink refusal at exit 4.
-		if entries, err := os.ReadDir(filepath.Join(root, ".agents", "skills")); err == nil && len(entries) > 0 {
+	if abs, ok := skillsDirCandidate(root, ".agents", "skills"); ok {
+		if entries, err := os.ReadDir(abs); err == nil && len(entries) > 0 {
 			out = append(out, Detected{Target: render.TargetAgentsSkills, Path: ".agents/skills"})
 		}
 	}
