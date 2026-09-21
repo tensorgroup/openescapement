@@ -72,10 +72,13 @@ Most first contact isn't a blank repo, it's one with a hand-written `CLAUDE.md` 
 `AGENTS.md` already in place. `esc init` handles that case explicitly:
 
 - **Detects** what's already there (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`,
-  `GOVERNANCE.md`, `.mcp.json`, `.claude/skills/`) and pre-fills `targets` in the
-  generated config with exactly what it found. A repo with `AGENTS.md` and no
-  `GEMINI.md` doesn't get `GEMINI.md` conjured into existence by its first sync.
-  Nothing detected leaves `targets` empty, which still means all targets.
+  `GOVERNANCE.md`, `.mcp.json`, `.claude/skills/`, `.agents/skills/`) and pre-fills
+  `targets` in the generated config with exactly what it found, plus `rules`: a
+  newly governed repo should still receive rule files by default, so an explicit
+  targets list always includes it even when nothing on disk implied it. A repo
+  with `AGENTS.md` and no `GEMINI.md` doesn't get `GEMINI.md` conjured into
+  existence by its first sync. Nothing detected leaves `targets` empty, which
+  still means all targets.
 - **Explains**, in the same vocabulary `esc status` uses, what the first `esc sync`
   will do to each detected file: your content is preserved byte for byte and
   reported as a local amendment. A file that already carries a managed block or the
@@ -330,7 +333,7 @@ structs:
 | `packs[]` | array | One entry per pinned pack: `source`, `ref`, `pinned` (resolved content hash), `latest` (omitted if unknown), `signed` |
 | `findings[]` | array | Every classified artifact, pack pin, or subsystem signal (see below) |
 | `collection` | object | `amendments` (`off` / `metrics` / `content`) and `source` (`default` / `pack` / `repo-override`): the resolved reporting level and where it came from |
-| `skipped[]` | array | `sync` only, always present (possibly `[]`); omitted entirely for `status`. What sync declined to write or remove: `subject`, `kind`, `cause`, `reason`, `expected_hash`, `actual_hash`. `cause` is the machine-readable discriminator (`hand-edited`, `orphan-dir-unmanaged`, `orphan-dir-edited`, `orphan-block-edited`, `unmanaged-file-at-target`, `orphan-file-edited`); `reason` is prose for a human and nothing should branch on it |
+| `skipped[]` | array | `sync` only, always present (possibly `[]`); omitted entirely for `status`. What sync declined to write or remove: `subject`, `kind`, `cause`, `reason`, `expected_hash`, `actual_hash`. `cause` is the machine-readable discriminator (`hand-edited`, `orphan-dir-unmanaged`, `orphan-dir-edited`, `orphan-block-edited`, `unmanaged-dir-at-target`, `unmanaged-file-at-target`, `orphan-file-edited`); `reason` is prose for a human and nothing should branch on it |
 
 Each `findings[]` entry carries `subject` (an artifact path, a pack source
 URL, or the literal `"update-check"`), `kind` (`block` / `file` / `dir` /
@@ -448,7 +451,7 @@ This tool writes instructions that agents execute — its distribution channel i
 
 ## Status & roadmap
 
-**v0.1 (this release):** rule-pack format, renderer, git-native sync with signatures + lockfile, drift detection, CI gate, six render targets, example pack.
+**v0.1 (this release):** rule-pack format, renderer, git-native sync with signatures + lockfile, drift detection, CI gate, eight render targets, example pack.
 
 **Next:** self-service project registry with expiry (the shadow-IT map), MCP server surface (live policy queries: *"am I allowed to open a port?"*), usage telemetry and dashboard, SIEM export, review workflows. See `ai-governance-product-spec.md` for the full picture.
 

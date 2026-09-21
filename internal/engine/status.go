@@ -460,7 +460,7 @@ func classify(root string, a Artifact, lock *lockfile.Lock) Finding {
 					return Finding{Subject: a.Path, Kind: a.Kind, State: InSync, Local: LocalNone}
 				}
 				return Finding{Subject: a.Path, Kind: a.Kind, State: Occupied, Local: LocalNone,
-					Detail: "an unmanaged file occupies this path; escapement will not adopt or overwrite it — move it aside, then run `esc sync` (`--force` does not override this)"}
+					Detail: "an unmanaged file or directory occupies this path; escapement will not adopt or overwrite it — move it aside, then run `esc sync` (`--force` does not override this)"}
 			}
 		}
 		content, err := os.ReadFile(abs)

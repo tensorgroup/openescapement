@@ -57,7 +57,7 @@ Keep a path-scoped rule file small. An agent loads it the same way it loads `.cl
 
 Do not write your own notice line into the file body. Escapement writes that line for you, the same way it does for every other managed target.
 
-Do not use the `esc-` prefix in a rule's filename stem. It is a reserved namespace: escapement uses it to build the on-disk filename (`.claude/rules/esc-<pack>-<stem>.md`) and a fragment that claims it collides with escapement's own naming.
+The `esc-` prefix is not reserved in your rule's *filename stem* — a stem like `esc-x` is legal and simply composes into `.claude/rules/esc-acme-esc-x.md`. What is reserved is the *destination* namespace: any path matching `.claude/rules/esc-*` is treated as escapement's, whether or not escapement actually wrote it. Do not place a team-owned file there yourself. Unlike other team-added content, a file in that namespace gets none of the protection escapement otherwise gives a hostile or stale lockfile entry, because the prefix alone is what escapement checks before touching a path there.
 
 The filename stem must match `^[a-z0-9][a-z0-9-]*$`. Pick one that reads clearly next to the pack name it gets composed with.
 
