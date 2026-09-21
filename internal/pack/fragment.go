@@ -93,6 +93,9 @@ func parsePaths(fm []byte, packName, rel string) (paths []string, present bool, 
 		return fmt.Errorf("%w: pack %q: rule %s: %s", esc.ErrManifest, packName, rel, msg)
 	}
 	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Tag == "!!merge" {
+			return nil, false, fail("merge keys are not supported in fragment frontmatter, because a merged key cannot be validated")
+		}
 		if m.Content[i].Value != "paths" {
 			continue
 		}

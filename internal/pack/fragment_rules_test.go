@@ -78,6 +78,25 @@ func TestWhitespaceOnlyRulesBodyIsError(t *testing.T) {
 	mustFail(t, "api.md", "---\ntargets: [rules]\n---\n   \n\t\n")
 }
 
+// A merge key (<<:) is invisible to the yaml.Node walk parsePaths performs:
+// the typed struct decode resolves a merged paths: or targets: field, but the
+// node walk sees only the literal "<<" key, so a merged paths: would silently
+// vanish and the fragment would render unscoped. Reject any merge key outright.
+func TestMergeKeyMergingPathsIsRejected(t *testing.T) {
+	mustFail(t, "api.md", "---\ntargets: [rules]\ndefaults: &d\n  paths: [\"src/api/**\"]\n<<: *d\n---\nbody\n")
+}
+func TestMergeKeyMergingTargetsIsRejected(t *testing.T) {
+	mustFail(t, "api.md", "---\ndefaults: &d\n  targets: [claude]\n<<: *d\n---\nbody\n")
+}
+
+// A plain anchor/alias used as a *value* (not a merge key) is a different
+// shape: the yaml.Node at that position is an AliasNode, which already fails
+// the existing paths: must-be-a-sequence check. This must keep failing via
+// that check, not change behavior.
+func TestAliasValueForPathsStillRejectedBySequenceCheck(t *testing.T) {
+	mustFail(t, "api.md", "---\ndefaults: &d\n  - \"src/api/**\"\ntargets: [rules]\npaths: *d\n---\nbody\n")
+}
+
 func TestRulesAndClaudeTogetherIsValid(t *testing.T) {
 	f, err := loadOneFragment(t, "api.md", "---\ntargets: [rules, claude]\npaths:\n  - \"src/**\"\n---\nbody\n")
 	if err != nil {

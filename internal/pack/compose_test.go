@@ -89,6 +89,26 @@ func TestComposeFragmentsRejectsSinglePathScopedPart(t *testing.T) {
 	}
 }
 
+// A merge key is invisible to partHasPaths's literal-key walk the same way it
+// is to parsePaths: reject it outright rather than let a merged paths: slip
+// an unscoped part into a composed whole. Exercised both as the sole part
+// (which used to bypass parsing entirely) and as the second of two.
+func TestComposeFragmentsRejectsMergeKeySingle(t *testing.T) {
+	one := [][]byte{[]byte("---\ntargets: [rules]\ndefaults: &d\n  paths: [\"src/**\"]\n<<: *d\n---\nbody\n")}
+	if _, err := ComposeFragments(one); !errors.Is(err, esc.ErrManifest) {
+		t.Fatalf("single merge-key part must be rejected, got %v", err)
+	}
+}
+func TestComposeFragmentsRejectsMergeKeySecondOfTwo(t *testing.T) {
+	parts := [][]byte{
+		[]byte("---\ntargets: [rules]\n---\nbody a\n"),
+		[]byte("---\ntargets: [rules]\ndefaults: &d\n  paths: [\"src/**\"]\n<<: *d\n---\nbody b\n"),
+	}
+	if _, err := ComposeFragments(parts); !errors.Is(err, esc.ErrManifest) {
+		t.Fatalf("merge-key part must be rejected, got %v", err)
+	}
+}
+
 // Malformed paths: shapes (scalar, empty list, null) must be rejected the
 // same as a well-formed paths: list: any of these composing silently would
 // have the rebuilt frontmatter drop the scope without complaint. Each is

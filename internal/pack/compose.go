@@ -88,6 +88,9 @@ func partHasPaths(part []byte, i int) (bool, error) {
 	}
 	m := doc.Content[0]
 	for j := 0; j+1 < len(m.Content); j += 2 {
+		if m.Content[j].Tag == "!!merge" {
+			return false, fmt.Errorf("%w: compose part %d: merge keys are not supported in fragment frontmatter, because a merged key cannot be validated", esc.ErrManifest, i)
+		}
 		if m.Content[j].Value == "paths" {
 			return true, nil
 		}
