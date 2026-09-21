@@ -131,11 +131,15 @@ func TestStatusOrphanGovernanceEditedSetsAlteration(t *testing.T) {
 	}
 }
 
-// TestStatusOrphanFileUnownedLockEntryReported: (c) a lockfile KindFile entry
-// naming a path escapement does not own (ownedFilePath false) is reported as
-// an orphan status cannot ask sync to remove, matching Apply's refusal on
-// the same entry.
-func TestStatusOrphanFileUnownedLockEntryReported(t *testing.T) {
+// TestStatusOrphanFileUnownedLockEntryFailsClosed: (c) a lockfile KindFile
+// entry naming a path escapement does not own (ownedFilePath false) is a
+// containment refusal, not routine drift: it propagates as a hard error (exit
+// 4), matching Apply's refusal on the same entry and the block/dir passes'
+// own symlink-refusal handling. `esc status` (bare, no --check) must not exit
+// 0 on a tampered lockfile path — AGENTS.md is explicit that containment
+// refusals are exit 4 precisely so a CI gate never reads them as ordinary,
+// self-healing drift.
+func TestStatusOrphanFileUnownedLockEntryFailsClosed(t *testing.T) {
 	root := setupGovernedRepo(t)
 	runEsc(t, root, "sync")
 	lock, err := lockfile.Load(root)
@@ -150,21 +154,20 @@ func TestStatusOrphanFileUnownedLockEntryReported(t *testing.T) {
 	}
 
 	out, code := runEscOut(t, root, "status", "--json")
-	if code != 0 && code != 1 {
-		t.Fatalf("status exit %d, want 0 or 1:\n%s", code, out)
+	if code != 4 {
+		t.Fatalf("status must fail closed (exit 4) on an unowned lockfile file entry, got %d:\n%s", code, out)
 	}
-	f := findOrphan(t, out, "docs/GOVERNANCE.md")
-	if f == nil {
-		t.Fatal("no finding for the unowned lockfile file entry")
+	if !strings.Contains(out, "not an escapement-owned file") && !strings.Contains(out, "docs/GOVERNANCE.md") {
+		t.Errorf("stderr should name the unowned path, got:\n%s", out)
 	}
-	if f.Managed != "orphan" {
-		t.Errorf("managed = %q, want orphan", f.Managed)
+	var report struct {
+		Findings []orphanFinding `json:"findings"`
 	}
-	if !strings.Contains(f.Detail, "does not own") || !strings.Contains(f.Detail, "refuses") {
-		t.Errorf("detail must say escapement does not own this path and sync refuses it, got %q", f.Detail)
+	if err := json.Unmarshal([]byte(out), &report); err == nil && len(report.Findings) > 0 {
+		t.Errorf("a fatal status error must print no findings block, got: %s", out)
 	}
 	if _, code := runEscOut(t, root, "sync"); code != 4 {
-		t.Fatalf("Apply must refuse this entry with exit 4, matching status's advice, got %d", code)
+		t.Fatalf("Apply must refuse this entry with exit 4, matching status's now-identical refusal, got %d", code)
 	}
 }
 

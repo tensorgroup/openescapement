@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -341,13 +340,12 @@ func Status(ctx context.Context, root string) (*StatusResult, error) {
 			}
 			_, actual, gone, err := inspectOrphanFile(root, la)
 			if err != nil {
-				if errors.Is(err, errUnownedOrphanFile) {
-					res.Findings = append(res.Findings, Finding{
-						Subject: la.Path, Kind: la.Kind, State: Orphan, Local: LocalNone,
-						Detail: "lockfile records a file escapement does not own; `esc sync` refuses to remove it. Delete the stale lockfile entry by hand",
-					})
-					continue
-				}
+				// An unowned lockfile path is a containment refusal, not
+				// routine drift: it propagates like any other error from
+				// inspectOrphanFile (symlink, containment), matching Apply's
+				// refusal on the same entry. See AGENTS.md on why containment
+				// refusals are exit 4 rather than a finding a CI gate could
+				// read as self-healing.
 				return nil, err
 			}
 			if gone {

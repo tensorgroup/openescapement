@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -362,33 +361,26 @@ func identicalFileContent(abs, wantHash string) bool {
 	return esc.HashBytes(render.NormalizeEndings(got)) == wantHash
 }
 
-// errUnownedOrphanFile marks inspectOrphanFile's "lockfile names a file
-// escapement does not own" outcome, distinguishing it from a containment or
-// symlink failure on the same call. The two orphan-file passes react to it
-// differently: Apply propagates it as a hard error (refusing to touch a path
-// it cannot prove it owns, same as any other error from this helper), while
-// Status downgrades it to a finding instead of failing the whole report —
-// exactly the asymmetry the two passes had before this helper existed.
-var errUnownedOrphanFile = errors.New("not an escapement-owned file")
-
 // inspectOrphanFile resolves and inspects one lockfile KindFile entry the
 // effective set no longer contains — the read-only work shared by Apply's
 // orphan-file removal pass and Status's orphan-file finding pass. It refuses
-// a non-canonical or unowned path (errUnownedOrphanFile, checked before any
-// read), resolves containment, refuses a symlink anywhere along the path,
-// and reads the file's current endings-normalized hash.
+// a non-canonical or unowned path (checked before any read), resolves
+// containment, refuses a symlink anywhere along the path, and reads the
+// file's current endings-normalized hash.
 //
 // gone reports the file having already been removed (os.IsNotExist): abs and
 // actualHash are unset and err is nil, matching what both passes previously
 // did with their own "continue // already gone" line. Any other error
-// (containment, symlink, or an unreadable file) is returned as-is; neither
-// caller may report anything after it, per the containment-refusal ruling in
-// AGENTS.md.
+// (unowned path, containment, symlink, or an unreadable file) is returned
+// as-is: both callers propagate it as a hard error (exit 4) rather than
+// downgrade it to a finding, per the containment-refusal ruling in
+// AGENTS.md — an unowned or hostile lockfile path is not routine, self-
+// healing drift.
 func inspectOrphanFile(root string, prev lockfile.LockArtifact) (abs, actualHash string, gone bool, err error) {
 	// ownedFilePath already rejects any non-canonical path before it is
 	// compared or read.
 	if !ownedFilePath(prev.Path) {
-		return "", "", false, fmt.Errorf("%w: %q", errUnownedOrphanFile, prev.Path)
+		return "", "", false, fmt.Errorf("not an escapement-owned file: %q", prev.Path)
 	}
 	abs, err = containedPath(root, prev.Path)
 	if err != nil {
