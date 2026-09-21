@@ -165,6 +165,30 @@ func TestOwnedSkillPathBothRoots(t *testing.T) {
 	}
 }
 
+// TestOwnedSkillPathRejectsNonCanonical: ownedSkillPath used to decide
+// ownership with path.Dir(path.Clean(rel)) alone, so a "./"-aliased dir lock
+// path canonicalized to exactly ".claude/skills" and was accepted as owned —
+// the identical shape ownedFilePath already refuses via canonicalRel. Two
+// reviewers traced this as not exploitable today (deletion is manifest-only,
+// and containment/symlink refusal already run before any read), so this is
+// hardening parity, not a hole. Table mirrors TestOwnedFilePathExactGovernanceOnly's
+// non-canonical cases (backslash, leading slash, nested, wrong case), which
+// were already refused by the plain path.Dir comparison and must stay refused.
+func TestOwnedSkillPathRejectsNonCanonical(t *testing.T) {
+	for _, p := range []string{
+		"./.claude/skills/x", // "./" alias — the actual gap this closes
+		`.claude\skills\x`,   // backslash
+		"/.claude/skills/x",  // leading slash
+		".claude/skills/x/y", // nested (already refused)
+		".Claude/skills/x",   // wrong case (already refused)
+		".claude//skills/x",  // doubled separator
+	} {
+		if ownedSkillPath(p) {
+			t.Errorf("%q must not be owned", p)
+		}
+	}
+}
+
 func TestSkillDuplicateNeverAttachesToAgentsSkills(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

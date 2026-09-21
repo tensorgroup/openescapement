@@ -299,6 +299,9 @@ func handEdited(f Finding, prev *lockfile.LockArtifact) bool {
 // pack-provided file after escapement last wrote it, so that edit isn't
 // silently deleted out from under them on retirement.
 func ownedSkillPath(rel string) bool {
+	if !canonicalRel(rel) {
+		return false
+	}
 	d := path.Dir(path.Clean(rel))
 	return d == ".claude/skills" || d == ".agents/skills"
 }
