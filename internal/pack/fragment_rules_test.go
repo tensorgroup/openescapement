@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/tensorgroup/openescapement/internal/esc"
@@ -127,6 +128,54 @@ func TestCRLFFrontmatterSplitAfterNormalize(t *testing.T) {
 	}
 	if len(f.Targets) != 1 || f.Targets[0] != "rules" || f.Body != "body line\n" {
 		t.Errorf("targets/body lost on CRLF fragment: %v / %q", f.Targets, f.Body)
+	}
+}
+
+// A fragment whose content ends immediately after the closing "---" fence
+// (no trailing newline) used to bypass splitFrontmatter entirely, since it
+// requires "\n---\n": the whole file, frontmatter included, landed in Body
+// with no Targets and no Paths ever parsed. A non-rules target with no body
+// is otherwise valid, so this is a clean positive case proving the fence at
+// EOF is now recognized.
+func TestClosingFenceAtEOFParsesTargets(t *testing.T) {
+	f, err := loadOneFragment(t, "api.md", "---\ntargets: [claude]\n---")
+	if err != nil {
+		t.Fatalf("fence at EOF must parse: %v", err)
+	}
+	if len(f.Targets) != 1 || f.Targets[0] != "claude" {
+		t.Errorf("targets not parsed from EOF-fenced frontmatter: %v", f.Targets)
+	}
+	if f.Body != "" {
+		t.Errorf("body = %q, want empty", f.Body)
+	}
+}
+
+// The same shape naming the rules target has no body to speak of (the file
+// ends at the fence), so it must be rejected by the ordinary empty-body
+// rule — proving Targets was populated (and validateRulePaths therefore ran)
+// rather than silently accepted as an untargeted fragment.
+func TestClosingFenceAtEOFNamingRulesEmptyBodyIsError(t *testing.T) {
+	mustFail(t, "api.md", "---\ntargets: [rules]\n---")
+}
+
+// A malformed paths: at the same EOF-fenced shape must surface the paths-
+// specific validation error (parsePaths runs before the empty-body check),
+// proving paths: was actually read out of the recovered frontmatter and not
+// left unparsed inside the raw body text.
+func TestClosingFenceAtEOFMalformedPathsIsValidated(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "rules"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "rules", "api.md"), []byte("---\ntargets: [rules]\npaths: foo\n---"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := loadFragment(dir, "acme", "rules/api.md", map[string]bool{})
+	if !errors.Is(err, esc.ErrManifest) {
+		t.Fatalf("want ErrManifest, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "paths:") {
+		t.Fatalf("error should be the paths-specific validation error, got %v", err)
 	}
 }
 

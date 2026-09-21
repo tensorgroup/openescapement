@@ -152,16 +152,23 @@ func validateRulePaths(packName, rel string, tgts []string, hasPaths bool, body 
 	return nil
 }
 
-// splitFrontmatter splits "---\n<yaml>\n---\n<body>". Returns ok=false when
-// the file has no frontmatter.
+// splitFrontmatter splits "---\n<yaml>\n---\n<body>". A closing fence at the
+// very end of the input (no trailing newline after it) is also accepted,
+// with the body normalized to empty: requiring "\n---\n" alone would treat a
+// fragment ending immediately after its closing fence as having no
+// frontmatter at all, silently skipping targets/paths parsing and dumping
+// the raw frontmatter text into the body. Returns ok=false when the file has
+// no frontmatter.
 func splitFrontmatter(content string) (fm, body string, ok bool) {
 	if !strings.HasPrefix(content, "---\n") {
 		return "", "", false
 	}
 	rest := content[len("---\n"):]
-	idx := strings.Index(rest, "\n---\n")
-	if idx < 0 {
-		return "", "", false
+	if idx := strings.Index(rest, "\n---\n"); idx >= 0 {
+		return rest[:idx], rest[idx+len("\n---\n"):], true
 	}
-	return rest[:idx], rest[idx+len("\n---\n"):], true
+	if strings.HasSuffix(rest, "\n---") {
+		return rest[:len(rest)-len("\n---")], "", true
+	}
+	return "", "", false
 }
