@@ -1,6 +1,6 @@
 schema: 1
 name: anthropic-models
-version: 0.2.1
+version: 0.3.0
 description: Model selection guidance for Anthropic Claude. Which model, when, and why. Every status carries the reason and, where it departs from the vendor's default, the condition that would reverse it.
 
 rules:
@@ -11,10 +11,10 @@ catalog:
     category: model
     status: preferred
     notes: The default for planning, design, review, debugging, and any problem that is not simple. Anthropic's most capable widely released model; thinking is always on. $10/$50 per 1M tokens; requires 30-day data retention; its safety classifiers may refuse security-adjacent work, so keep a fallback.
-  - name: Claude Opus 4.8 (claude-opus-4-8)
+  - name: Claude Opus 5.5 (claude-opus-5-5)
     category: model
     status: allowed
-    notes: The Opus-tier choice when Fable's price or retention requirement is the constraint. Everyday coding, agentic runs, planning behind a reviewed spec. $5/$25 per 1M tokens.
+    notes: The Opus-tier choice when Fable's price or retention requirement is the constraint, and Anthropic's own recommended starting point. Everyday coding, long agentic runs, planning behind a reviewed spec. $4/$20 per 1M tokens, cheaper than the Opus models it replaces. Thinking is always on and default effort is medium, one level below its predecessors, so set effort explicitly. Forced tool_choice (any or tool) returns a 400.
   - name: Claude Sonnet 5 (claude-sonnet-5)
     category: model
     status: allowed
@@ -26,7 +26,11 @@ catalog:
   - name: Claude Opus 5 (claude-opus-5)
     category: model
     status: review-required
-    notes: Anthropic's recommended starting point, and a deliberate departure here. In the maintainers' logged agentic use (2026-09) it proved weaker than Opus 4.8 at the same price, so do not pin it as a default or pass it as an override without logged evidence. Reversal condition, so the departure does not outlive its evidence, is at least 10 logged reviews over 30 days in which Opus 5's confirmed-finding rate meets or beats Opus 4.8's.
+    notes: Superseded by Opus 5.5 at a lower price, and in the maintainers' logged agentic use (2026-09) it proved weaker than Opus 4.8. Still served; migrate existing pins to Opus 5.5 rather than starting new work on it.
+  - name: Claude Opus 4.8 (claude-opus-4-8)
+    category: model
+    status: review-required
+    notes: Legacy since Opus 5.5 shipped. It was this pack's Opus-tier choice through 2026-09; migrate pins to Opus 5.5, which is cheaper ($4/$20 against $5/$25). When migrating, thinking can no longer be disabled and forced tool_choice is rejected, so lower effort and use auto instead.
   - name: Claude Fable 5 (claude-fable-5)
     category: model
     status: review-required

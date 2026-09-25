@@ -175,6 +175,12 @@ tagged releases begin.
 - `examples/packs/zai-models` price notes state Z.ai's list price and the
   OpenRouter provider range with a date; the cheaper rate is a live per-provider
   discount, not an ended launch promotion.
+- `examples/packs/anthropic-models` 0.3.0: Opus 5.5 (`claude-opus-5-5`, $4/$20)
+  replaces Opus 4.8 as the Opus-tier choice, with its migration traps named
+  (default effort `medium`, thinking cannot be disabled, forced `tool_choice`
+  rejected); Opus 4.8 to review-required as legacy; Opus 5 stays review-required,
+  now as superseded. `model-seats` 0.1.2 re-points the on-demand same-vendor seat
+  to Opus 5.5 with a fresh scoreboard. The embedded model registry follows suit.
 - `examples/packs/anthropic-models` 0.2.0: Fable 5.1 preferred; Opus 4.8 the
   Opus-tier choice; Sonnet 5 at its now-permanent $2/$10; Opus 5 moved to
   review-required with the reason and a measurable reversal condition; Fable 5 to

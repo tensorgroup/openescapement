@@ -10,21 +10,21 @@ vendors:
         docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/about-claude/models/choosing-a-model]
         verified: 2026-09-16
         starter: examples/anthropic/starter-claude-fable-5-1.md
-      - id: claude-opus-4-8
-        name: Claude Opus 4.8
+      - id: claude-opus-5-5
+        name: Claude Opus 5.5
         tier: frontier
         roles: [planning, plan-check, review, coding]
         status: current
-        docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/about-claude/models/choosing-a-model]
-        verified: 2026-09-16
-        starter: examples/anthropic/starter-claude-opus-4-8.md
+        docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/models/opus-5-5/overview]
+        verified: 2026-09-22
+        starter: examples/anthropic/starter-claude-opus-5-5.md
       - id: claude-opus-5
         name: Claude Opus 5
         tier: frontier
         roles: [planning, plan-check, review]
         status: current
         docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/about-claude/models/choosing-a-model]
-        verified: 2026-09-16
+        verified: 2026-09-22
         starter: examples/anthropic/starter-claude-opus-5.md
       - id: claude-fable-5
         name: Claude Fable 5
@@ -33,6 +33,13 @@ vendors:
         status: legacy
         docs: [https://platform.claude.com/docs/en/about-claude/models/overview]
         verified: 2026-09-16
+      - id: claude-opus-4-8
+        name: Claude Opus 4.8
+        tier: frontier
+        roles: [planning, plan-check, review, coding]
+        status: legacy
+        docs: [https://platform.claude.com/docs/en/about-claude/models/overview]
+        verified: 2026-09-22
       - id: claude-sonnet-5
         name: Claude Sonnet 5
         tier: mid

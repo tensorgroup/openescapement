@@ -1,6 +1,6 @@
 schema: 1
 name: model-seats
-version: 0.1.1
+version: 0.1.2
 description: Governance for multi-model agent collaboration. Which seat holds which duty, with what oversight, decided from logged dispute outcomes rather than vibes. Seats are named by role; the model behind each is a config detail that changes. Copy and adapt. The catalog's reference roster is a dated example, not a recommendation; replace it with yours.
 
 rules:
@@ -24,10 +24,10 @@ catalog:
     category: model-seat
     status: preferred
     notes: The moderator's own model family, run with none of the moderator's conversation, so its round-1 agreement is an independent signal. Scored as a peer; the moderator must not favor it.
-  - name: On-demand second same-vendor seat (reference roster, 2026-09, claude-opus-4-8)
+  - name: On-demand second same-vendor seat (reference roster, 2026-09, claude-opus-5-5)
     category: model-seat
     status: review-required
-    notes: Dropped from the reference roster's default panel on scoreboard evidence (one unique catch in its first thirteen findings, and a refuted finding). Convene it when a high-stakes target warrants a second blind read from the same family. Re-promotion criterion, five consecutive panels in which it lands at least one confirmed unique catch. The pattern is the point; substitute your own numbers.
+    notes: Dropped from the reference roster's default panel on its previous occupant's scoreboard (claude-opus-4-8, one unique catch in its first thirteen findings, and a refuted finding). Re-pointed to claude-opus-5-5 on 2026-09-22 when 4.8 went legacy; a new model generation starts a fresh scoreboard, the same rule the planning lead seat followed. Convene it when a high-stakes target warrants a second blind read from the same family. Re-promotion criterion, five consecutive panels in which it lands at least one confirmed unique catch. The pattern is the point; substitute your own numbers.
   - name: Unmoderated multi-model debate (no logging, no substance bar)
     category: model-seat
     status: banned
