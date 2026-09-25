@@ -181,6 +181,13 @@ tagged releases begin.
   rejected); Opus 4.8 to review-required as legacy; Opus 5 stays review-required,
   now as superseded. `model-seats` 0.1.2 re-points the on-demand same-vendor seat
   to Opus 5.5 with a fresh scoreboard. The embedded model registry follows suit.
+- `examples/packs/openai-models` 0.2.0: GPT-6 Sol (`gpt-6-sol`, $2/$10) and GPT-6
+  Luna (`gpt-6-luna`, $0.10/$0.50) take the coding and bulk roles, with GPT-5.6
+  Terra and Luna kept as the fallback while the GPT-6 pair rolls out to Codex
+  accounts (a not-yet-rolled-out account gets a 400, not a retirement); GPT-5.5
+  review-required ahead of its 2026-10-14 Codex retirement. The embedded model
+  registry adds both models with starters, re-points the GPT-5.6 starters, and
+  registers GPT-5.5 as legacy so usage that still reports it is attributed.
 - `examples/packs/anthropic-models` 0.2.0: Fable 5.1 preferred; Opus 4.8 the
   Opus-tier choice; Sonnet 5 at its now-permanent $2/$10; Opus 5 moved to
   review-required with the reason and a measurable reversal condition; Fable 5 to
