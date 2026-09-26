@@ -28,6 +28,10 @@ Conduct rules the moderator enforces:
   by the model. A seat that does not return inside it is recorded as absent, left out
   of that panel's per-seat counts, and the panel proceeds on the rest; a timeout never
   drops a seat from the roster.
+- **Usage caps.** When a seat's model hits a plan usage cap, run that seat on its
+  configured fallback model and score the run under the fallback's own id. Record the
+  capped seat as absent (usage cap), because crediting one model with another's findings
+  corrupts the scoreboard the roster is decided from.
 - **Evidence-cited policy changes.** Any change to seat assignments must cite the
   scoreboard (win share, confirmed-finding rate, unique catches) over a window, never
   one bad review, and state what would earn the role back. This block is versioned

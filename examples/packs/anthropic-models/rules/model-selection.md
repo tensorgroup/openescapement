@@ -15,6 +15,8 @@ Pick the model by the task, not by habit. Start at the top for anything that nee
 Rules of thumb:
 
 - Start with Fable 5.1 for work where being wrong is expensive: plans, reviews, debugging, design. Keep a fallback model configured, because its classifiers can refuse.
+- Route every Fable 5.1 slot to Opus 5.5 while a plan's Fable usage cap is spent: the session, pinned subagents, and review seats. Do not fall back to Opus 5, because Opus 5.5 supersedes it at a lower price.
+- Pin the `opus` alias to `claude-opus-5-5` in harness settings (Claude Code: `ANTHROPIC_DEFAULT_OPUS_MODEL`) before relying on it for a fallback. An alias resolves to whatever the client maps it to, which can be a model you ruled out.
 - Use Opus 5.5 when the task is Opus-shaped or when Fable's price or data-retention requirement is a constraint. Anthropic recommends it as the starting point for most workloads.
 - Set effort explicitly on Opus 5.5. Its default is `medium`, one level below Opus 4.8 and Opus 5, so a pin moved over without an effort setting quietly thinks less.
 - Moving a pin from Opus 4.8 or Opus 5 to Opus 5.5 is not a drop-in swap. Thinking can no longer be disabled, and forced `tool_choice` (`any` or `tool`) returns a 400. Lower effort instead of disabling thinking, and use `auto` with `strict: true` tools instead of forcing a call.

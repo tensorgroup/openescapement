@@ -8,6 +8,12 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- Usage-cap fallback guidance: `examples/packs/anthropic-models` 0.3.1 and the
+  portal's Anthropic model-routing example route every Fable 5.1 slot to Opus 5.5
+  (never Opus 5) while a plan's Fable cap is spent, and pin the `opus` alias to
+  `claude-opus-5-5` so a fallback cannot resolve to a ruled-out model.
+  `examples/packs/model-seats` 0.1.3 adds the matching conduct rule: a capped seat
+  runs on its fallback, is scored under the fallback's id, and is logged absent.
 - `examples/packs/model-seats`: governance for multi-model agent collaboration.
   Seats are named by role (moderator, planning lead, peers, on-demand) with the
   models behind them a dated reference roster in the catalog; a dispute substance
