@@ -40,14 +40,21 @@ vendors:
         status: legacy
         docs: [https://platform.claude.com/docs/en/about-claude/models/overview]
         verified: 2026-09-22
+      - id: claude-sonnet-5-5
+        name: Claude Sonnet 5.5
+        tier: mid
+        roles: [coding, review]
+        status: current
+        docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/models/sonnet-5-5/overview]
+        verified: 2026-09-29
+        starter: examples/anthropic/starter-claude-sonnet-5-5.md
       - id: claude-sonnet-5
         name: Claude Sonnet 5
         tier: mid
         roles: [coding, review]
-        status: current
+        status: legacy
         docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://www.anthropic.com/news/claude-sonnet-5]
-        verified: 2026-09-16
-        starter: examples/anthropic/starter-claude-sonnet-5.md
+        verified: 2026-09-29
       - id: claude-haiku-4-5
         name: Claude Haiku 4.5
         tier: fast

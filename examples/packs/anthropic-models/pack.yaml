@@ -1,6 +1,6 @@
 schema: 1
 name: anthropic-models
-version: 0.3.1
+version: 0.4.0
 description: Model selection guidance for Anthropic Claude. Which model, when, and why. Every status carries the reason and, where it departs from the vendor's default, the condition that would reverse it.
 
 rules:
@@ -15,10 +15,10 @@ catalog:
     category: model
     status: allowed
     notes: The Opus-tier choice when Fable's price or retention requirement is the constraint, and Anthropic's own recommended starting point. Everyday coding, long agentic runs, planning behind a reviewed spec. $4/$20 per 1M tokens, cheaper than the Opus models it replaces. Thinking is always on and default effort is medium, one level below its predecessors, so set effort explicitly. Forced tool_choice (any or tool) returns a 400.
-  - name: Claude Sonnet 5 (claude-sonnet-5)
+  - name: Claude Sonnet 5.5 (claude-sonnet-5-5)
     category: model
     status: allowed
-    notes: Cost and latency saver. Routine coding, high-volume pipelines, subagents, and executors working from a written plan with tests. $2/$10 per 1M tokens (the launch rate, made permanent by Anthropic in 2026-08; the $3/$15 list price announced for September was withdrawn).
+    notes: Cost and latency saver. Routine coding, high-volume pipelines, subagents, and executors working from a written plan with tests. $2/$10 per 1M tokens, the same as Sonnet 5. Effort levels are recalibrated, so re-run the effort sweep. Disabled thinking and forced tool_choice (any or tool) return a 400; use thinking type between_tools and auto instead.
   - name: Claude Haiku 4.5 (claude-haiku-4-5)
     category: model
     status: allowed
@@ -35,3 +35,7 @@ catalog:
     category: model
     status: review-required
     notes: Superseded by Fable 5.1 in the same tier at the same price. Still served; migrate existing pins rather than starting new work on it.
+  - name: Claude Sonnet 5 (claude-sonnet-5)
+    category: model
+    status: review-required
+    notes: Legacy since Sonnet 5.5 shipped. It was this pack's Sonnet-tier choice through 2026-09; migrate pins to Sonnet 5.5 at the same $2/$10. When migrating, disabled thinking and forced tool_choice are rejected, and effort levels are recalibrated.
