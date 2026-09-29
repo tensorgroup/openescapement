@@ -8,7 +8,7 @@ vendors:
         roles: [planning, plan-check, review]
         status: current
         docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/about-claude/models/choosing-a-model]
-        verified: 2026-09-16
+        verified: 2026-09-29
         starter: examples/anthropic/starter-claude-fable-5-1.md
       - id: claude-opus-5-5
         name: Claude Opus 5.5
@@ -16,16 +16,15 @@ vendors:
         roles: [planning, plan-check, review, coding]
         status: current
         docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/models/opus-5-5/overview]
-        verified: 2026-09-22
+        verified: 2026-09-29
         starter: examples/anthropic/starter-claude-opus-5-5.md
       - id: claude-opus-5
         name: Claude Opus 5
         tier: frontier
         roles: [planning, plan-check, review]
-        status: current
-        docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/about-claude/models/choosing-a-model]
-        verified: 2026-09-22
-        starter: examples/anthropic/starter-claude-opus-5.md
+        status: legacy
+        docs: [https://platform.claude.com/docs/en/about-claude/models/overview]
+        verified: 2026-09-29
       - id: claude-fable-5
         name: Claude Fable 5
         tier: frontier
@@ -61,7 +60,7 @@ vendors:
         roles: [bulk]
         status: current
         docs: [https://platform.claude.com/docs/en/about-claude/models/overview]
-        verified: 2026-08-02
+        verified: 2026-09-29
         starter: examples/anthropic/starter-claude-haiku-4-5.md
   - key: openai
     name: OpenAI

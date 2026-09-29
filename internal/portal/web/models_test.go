@@ -306,7 +306,7 @@ func TestAdoptPOSTVersionTagExists422(t *testing.T) {
 	if rr := adoptPost(t, h, url.Values{"model": {"claude-sonnet-5-5"}, "pack": {"org-baseline"}, "version": {"1.3.0"}}); rr.Code != 303 {
 		t.Fatalf("first adopt: %d", rr.Code)
 	}
-	rr := adoptPost(t, h, url.Values{"model": {"claude-opus-5"}, "pack": {"org-baseline"}, "version": {"1.3.0"}})
+	rr := adoptPost(t, h, url.Values{"model": {"claude-opus-5-5"}, "pack": {"org-baseline"}, "version": {"1.3.0"}})
 	if rr.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("reused version code=%d body=%s", rr.Code, rr.Body.String())
 	}
@@ -318,7 +318,7 @@ func TestAdoptPOSTVersionTagExists422(t *testing.T) {
 
 func TestAdoptGETMultiRendersComposedPreview(t *testing.T) {
 	h := newTestServerWithPacksAndGuidance(t).Handler()
-	rr := get(t, h, "/models/anthropic/adopt?model=claude-opus-5&model=claude-sonnet-5-5&routing=1", nil)
+	rr := get(t, h, "/models/anthropic/adopt?model=claude-opus-5-5&model=claude-sonnet-5-5&routing=1", nil)
 	if rr.Code != 200 {
 		t.Fatalf("multi adopt GET code=%d", rr.Code)
 	}
@@ -326,9 +326,9 @@ func TestAdoptGETMultiRendersComposedPreview(t *testing.T) {
 	for _, want := range []string{
 		"rules/models-anthropic.md",
 		"Model routing (Anthropic)",
-		"Claude Opus 5 governance",
+		"Claude Opus 5.5 governance",
 		"Claude Sonnet 5.5 governance",
-		`name="model" value="claude-opus-5"`,
+		`name="model" value="claude-opus-5-5"`,
 		`name="routing" value="1"`,
 	} {
 		if !strings.Contains(body, want) {
@@ -340,7 +340,7 @@ func TestAdoptGETMultiRendersComposedPreview(t *testing.T) {
 func TestAdoptPOSTMultiPublishesVendorSet(t *testing.T) {
 	h := newTestServerWithPacksAndGuidance(t).Handler()
 	rr := adoptPost(t, h, url.Values{
-		"model": {"claude-opus-5", "claude-sonnet-5-5"}, "routing": {"1"},
+		"model": {"claude-opus-5-5", "claude-sonnet-5-5"}, "routing": {"1"},
 		"pack": {"org-baseline"}, "version": {"1.3.0"},
 	})
 	if rr.Code != 303 || rr.Header().Get("Location") != "/packs/org-baseline?published=v1.3.0" {
@@ -380,7 +380,7 @@ func TestAdoptRejectsUnknownOrForeignSelection(t *testing.T) {
 
 func TestAdoptMultiCollisionPreservesSelection(t *testing.T) {
 	h := newTestServerWithPacksAndGuidance(t).Handler()
-	form := url.Values{"model": {"claude-opus-5", "claude-sonnet-5-5"}, "routing": {"1"}, "pack": {"org-baseline"}, "version": {"1.3.0"}}
+	form := url.Values{"model": {"claude-opus-5-5", "claude-sonnet-5-5"}, "routing": {"1"}, "pack": {"org-baseline"}, "version": {"1.3.0"}}
 	if rr := adoptPost(t, h, form); rr.Code != 303 {
 		t.Fatalf("first adopt: %d", rr.Code)
 	}
@@ -390,7 +390,7 @@ func TestAdoptMultiCollisionPreservesSelection(t *testing.T) {
 		t.Fatalf("collision code=%d", rr.Code)
 	}
 	body := rr.Body.String()
-	for _, want := range []string{"Edit that fragment", `name="model" value="claude-opus-5"`, `name="model" value="claude-sonnet-5-5"`, `name="routing" value="1"`} {
+	for _, want := range []string{"Edit that fragment", `name="model" value="claude-opus-5-5"`, `name="model" value="claude-sonnet-5-5"`, `name="routing" value="1"`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("collision page missing %q", body)
 		}
@@ -442,7 +442,7 @@ func TestVendorPageRendersStarterSetPanel(t *testing.T) {
 	body := get(t, h, "/models/anthropic", nil).Body.String()
 	for _, want := range []string{
 		"Vendor starter set",
-		`<input type="checkbox" name="model" value="claude-opus-5" checked>`,
+		`<input type="checkbox" name="model" value="claude-opus-5-5" checked>`,
 		`<input type="checkbox" name="routing" value="1" checked>`,
 		"Use the vendor starter set panel above",
 	} {

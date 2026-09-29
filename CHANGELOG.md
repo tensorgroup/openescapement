@@ -194,6 +194,11 @@ tagged releases begin.
   review-required ahead of its 2026-10-14 Codex retirement. The embedded model
   registry adds both models with starters, re-points the GPT-5.6 starters, and
   registers GPT-5.5 as legacy so usage that still reports it is attributed.
+- `examples/packs/anthropic-models` 0.4.1: Opus 5 is marked legacy, since Anthropic
+  no longer lists it among current models (it stays review-required). The
+  embedded registry moves `claude-opus-5` to legacy and drops its starter, so the
+  current Anthropic entries match the vendor's overview exactly: Fable 5.1,
+  Opus 5.5, Sonnet 5.5, and Haiku 4.5.
 - `examples/packs/anthropic-models` 0.4.0: Sonnet 5.5 (`claude-sonnet-5-5`, $2/$10,
   the same price as Sonnet 5) replaces Sonnet 5 as the Sonnet-tier choice, with
   its migration traps named (disabled thinking and forced `tool_choice` rejected,

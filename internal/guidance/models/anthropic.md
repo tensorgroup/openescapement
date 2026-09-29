@@ -1,6 +1,6 @@
 # Anthropic
 
-Anthropic's current lineup is Claude 5-generation models across three tiers: Claude Fable 5.1, Claude Opus 5.5, and Claude Opus 5 at the frontier, Claude Sonnet 5.5 in the middle, and Claude Haiku 4.5 for fast, high-volume work. Claude Fable 5, Claude Opus 4.8, and Claude Sonnet 5 are still served but superseded. They fit an agentic SDLC cleanly: plan and review on the frontier tier, implement day-to-day on Sonnet, and run bulk or mechanical work on Haiku. Refreshed 2026-09-29: Sonnet 5.5 added as the Sonnet-tier choice, Sonnet 5 moved to legacy. The 2026-09-22 refresh added Opus 5.5 and moved Opus 4.8 to legacy; the 2026-09-16 refresh added Fable 5.1 and corrected Sonnet 5's price.
+Anthropic's current lineup is four models across three tiers: Claude Fable 5.1 and Claude Opus 5.5 at the frontier, Claude Sonnet 5.5 in the middle, and Claude Haiku 4.5 for fast, high-volume work. Claude Opus 5, Claude Fable 5, Claude Opus 4.8, and Claude Sonnet 5 are still served but superseded. They fit an agentic SDLC cleanly: plan and review on the frontier tier, implement day-to-day on Sonnet, and run bulk or mechanical work on Haiku. Refreshed 2026-09-29: Sonnet 5.5 added as the Sonnet-tier choice; Sonnet 5 and Opus 5 moved to legacy, so the registry's current entries match Anthropic's models overview exactly. The 2026-09-22 refresh added Opus 5.5 and moved Opus 4.8 to legacy; the 2026-09-16 refresh added Fable 5.1 and corrected Sonnet 5's price.
 
 ## Models
 
@@ -12,9 +12,9 @@ Anthropic's most capable widely released model, the successor to Claude Fable 5 
 
 The Opus-tier model when Fable's price or its retention requirement is the constraint, and the model Anthropic now recommends as the starting point for most workloads. Thinking is always on and cannot be disabled; default effort is `medium`, one level below Opus 4.8 and Opus 5, so set it explicitly. Forced `tool_choice` (`any` or `tool`) returns a 400. 1M-token context, 128K max output; $4 / $20 per million tokens, cheaper than the Opus models it supersedes. Recommended roles: planning, plan-check, review, and coding for the agentic runs that need Opus-level judgment.
 
-### Claude Opus 5 (claude-opus-5) - frontier
+### Claude Opus 5 (claude-opus-5) - legacy
 
-Still listed as current by Anthropic, but superseded by Opus 5.5 at a lower price. 1M-token context, 128K max output, $5 / $25 per million tokens. The maintainers' logged agentic use (2026-09) found it weaker than Opus 4.8 at the same price, and Opus 5.5 now undercuts both, so this registry treats it as review-required: migrate pins to Opus 5.5 rather than starting new work on it.
+Superseded by Opus 5.5 at a lower price; Anthropic no longer lists it among current models. $5 / $25 per million tokens. The maintainers' logged agentic use (2026-09) found it weaker than Opus 4.8 at the same price. Migrate pins to Opus 5.5 with the same changes listed under Opus 4.8, and never use it as a fallback for a capped Fable 5.1 slot.
 
 ### Claude Fable 5 (claude-fable-5) - legacy
 
@@ -34,13 +34,13 @@ Anthropic's best combination of speed and intelligence, the successor to Claude 
 
 ### Claude Haiku 4.5 (claude-haiku-4-5) - fast
 
-Anthropic's fastest model with near-frontier intelligence, built for high-volume, repetitive work: classification, extraction, mechanical edits, and simple agentic subtasks run thousands of times over. 200K-token context (smaller than the others), 64K max output, $1 / $5 per million tokens. Recommended role: bulk. It is the only current model without adaptive thinking, so keep it off tasks that need multi-step reasoning.
+Anthropic's fastest model with near-frontier intelligence, built for high-volume, repetitive work: classification, extraction, mechanical edits, and simple agentic subtasks run thousands of times over. 200K-token context (smaller than the others), 64K max output, $1 / $5 per million tokens. The alias `claude-haiku-4-5` points at the snapshot `claude-haiku-4-5-20251001`; Anthropic lists its retirement as not sooner than 2026-10-15, so watch for its successor. Recommended role: bulk. It is the only current model without adaptive thinking, so keep it off tasks that need multi-step reasoning.
 
 ## Governance
 
 - Require a human review gate before merging any change a frontier model produced with high autonomy (broad file access, destructive commands, or unsupervised multi-step runs). Frontier-tier judgment is strong but not infallible, and the blast radius of an autonomous frontier session is larger than a supervised one.
 - Route plan, plan-check, and review to Claude Fable 5.1, with a fallback configured for the requests its classifiers decline. Use Claude Opus 5.5 where Fable's price or retention requirement rules it out, and for long agentic runs, with effort set explicitly.
-- Treat Claude Opus 5 and Claude Opus 4.8 as review-required. Opus 5.5 supersedes both at a lower price; migrate their pins rather than starting new work on them.
+- Treat Claude Opus 5 and Claude Opus 4.8 as legacy and review-required. Opus 5.5 supersedes both at a lower price; migrate their pins rather than starting new work on them.
 - Treat Claude Sonnet 5 as legacy: Sonnet 5.5 supersedes it at the same price. Migrate pins, re-running the effort sweep, and pin the `sonnet` alias to `claude-sonnet-5-5` in harness settings (Claude Code: `ANTHROPIC_DEFAULT_SONNET_MODEL`).
 - Route bulk, mechanical, and high-volume work to Haiku 4.5 to hold spend down; it is 2x cheaper than Sonnet 5.5 and 10x cheaper than Fable 5.1 on output tokens.
 - Routing policy: plan, plan-check, and review on Fable 5.1 (Opus 5.5 when price or retention says so); code day-to-day on Sonnet 5.5; run bulk and mechanical edits on Haiku 4.5.
