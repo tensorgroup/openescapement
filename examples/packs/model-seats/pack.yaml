@@ -1,11 +1,12 @@
 schema: 1
 name: model-seats
-version: 0.1.3
+version: 0.2.0
 description: Governance for multi-model agent collaboration. Which seat holds which duty, with what oversight, decided from logged dispute outcomes rather than vibes. Seats are named by role; the model behind each is a config detail that changes. Copy and adapt. The catalog's reference roster is a dated example, not a recommendation; replace it with yours.
 
 rules:
   - rules/seat-policy.md
   - rules/panel-protocol.md
+  - rules/decision-model-routing.md
 
 catalog:
   - name: Moderator seat (the primary agent session)
@@ -28,6 +29,18 @@ catalog:
     category: model-seat
     status: review-required
     notes: Dropped from the reference roster's default panel on its previous occupant's scoreboard (claude-opus-4-8, one unique catch in its first thirteen findings, and a refuted finding). Re-pointed to claude-opus-5-5 on 2026-09-22 when 4.8 went legacy; a new model generation starts a fresh scoreboard, the same rule the planning lead seat followed. Convene it when a high-stakes target warrants a second blind read from the same family. Re-promotion criterion, five consecutive panels in which it lands at least one confirmed unique catch. The pattern is the point; substitute your own numbers.
+  - name: Decision model for routing advice (reference, 2026-09, typesafe/jev-1.13 via OpenRouter's decisions API)
+    category: decision-model
+    status: review-required
+    notes: Hosted, input-only billing (about $0.042 per million tokens), about 0.2 to 0.3 seconds per call, several typed questions answered in one request. Pilot status in the reference setup since 2026-09-29, advisory and raise-only. Pin the version, because thresholds are tuned against one release.
+  - name: Self-hosted decision model (Kev, SemIf, OpenJev, Laya; NanoJev and jevlike as training starters)
+    category: decision-model
+    status: review-required
+    notes: Keeps task text inside your network. Some expose a System One-compatible API, but context budgets and question limits differ, so a swap is not a config change. Run a contract test, a truncation test, and a re-calibration on logged tasks first.
+  - name: Decision-model routing that lowers a pin or skips a mandatory review
+    category: decision-model
+    status: banned
+    notes: Uncalibrated advice may only raise. A downgrade or a skipped review is a cost saving paid for with an unmeasured risk.
   - name: Unmoderated multi-model debate (no logging, no substance bar)
     category: model-seat
     status: banned

@@ -8,6 +8,14 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- `examples/packs/model-seats` 0.2.0: a decision-model routing rule (pilot status).
+  A decision model's typed answers advise the model tier, reasoning effort, and review
+  depth per task. The rule is raise-only until calibrated on the org's own outcomes,
+  keeps thresholds in code, and derives tier from difficulty tail plus a high-stakes
+  signal. It also sends only redacted task text with zero-data-retention routing,
+  keeps routing out of headless review seats, and scores review findings in shadow.
+  The catalog names Jev 1.13 as the hosted reference and the self-hosted alternatives
+  as review-required, and bans routing that lowers a pin or skips a mandatory review.
 - Usage-cap fallback guidance: `examples/packs/anthropic-models` 0.3.1 and the
   portal's Anthropic model-routing example route every Fable 5.1 slot to Opus 5.5
   (never Opus 5) while a plan's Fable cap is spent, and pin the `opus` alias to
