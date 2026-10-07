@@ -77,7 +77,7 @@ func TestFleetState(t *testing.T) {
 // Collection nil and Drift untouched. Field values and order mirror the
 // "status" event seed.go's governedRepoEvents emits.
 func TestOldShapeEventDecodes(t *testing.T) {
-	line := `{"ts":"2026-07-01T12:00:00Z","kind":"status","repo_id":"r1","team_id":"ligo","agent_tool":"claude-code","packs":[{"name":"org-baseline","version":"1.2.0","signed":true}],"drift":"drifted"}`
+	line := `{"ts":"2026-07-01T12:00:00Z","kind":"status","repo_id":"r1","team_id":"obs","agent_tool":"claude-code","packs":[{"name":"org-baseline","version":"1.2.0","signed":true}],"drift":"drifted"}`
 
 	var e Event
 	if err := json.Unmarshal([]byte(line), &e); err != nil {
@@ -92,7 +92,7 @@ func TestOldShapeEventDecodes(t *testing.T) {
 	if e.Drift != "drifted" {
 		t.Fatalf("Drift = %q, want %q (untouched)", e.Drift, "drifted")
 	}
-	if e.Kind != "status" || e.RepoID != "r1" || e.TeamID != "ligo" || e.AgentTool != "claude-code" {
+	if e.Kind != "status" || e.RepoID != "r1" || e.TeamID != "obs" || e.AgentTool != "claude-code" {
 		t.Fatalf("event mismatch: %+v", e)
 	}
 	if len(e.Packs) != 1 || e.Packs[0].Name != "org-baseline" || e.Packs[0].Version != "1.2.0" {
@@ -100,7 +100,7 @@ func TestOldShapeEventDecodes(t *testing.T) {
 	}
 
 	// Rolls up identically to before: FleetRows still reads e.Drift directly.
-	reg := Registry{Repos: []Repo{{ID: "r1", Name: "ligo-pipeline", TeamID: "ligo"}}}
+	reg := Registry{Repos: []Repo{{ID: "r1", Name: "obs-pipeline", TeamID: "obs"}}}
 	rows := FleetRows(reg, []Event{e})
 	if len(rows) != 1 || rows[0].Status != "drifted" {
 		t.Fatalf("FleetRows on old-shape event: %+v", rows)

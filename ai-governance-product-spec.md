@@ -3,7 +3,6 @@
 **Author:** Billy Zajac | Tensor Group
 **Status:** Draft v2 — pre-brainstorm baseline (extend in Claude Code)
 **Last updated:** July 2026
-**Related:** `caltech-ai-governance-role-spec.md` (first design-partner candidate)
 **Working tagline:** *Deterministic governance for your AI usage.*
 
 ---
@@ -24,7 +23,7 @@ The AI-era twist: for the first time, the "workers" being governed (coding agent
 
 ## 2. The Environment This Is Built For
 
-The design target is a complex, federated organization — Caltech is the archetype:
+The design target is a complex, federated organization — a research university is the archetype:
 
 - Dozens of departments/divisions, each with its own projects and teams
 - A central IT organization *plus* substantial shadow IT
@@ -79,7 +78,7 @@ Single shared/central pane of glass — with radical emphasis on **easy**: easy 
 
 ### Pillar C — Review Workflows (the expansion, kept deliberately light)
 - Human-in-the-loop gates defined in policy: port openings, new cloud services, new model adoption, exceptions
-- AI vendor/tool intake review — directly reusable at Caltech
+- AI vendor/tool intake review — directly reusable at federated institutions
 - Audit trail exportable for SOC 2 / ISO 42001 / NIST AI RMF evidence
 
 ## 4. What This Is Not
@@ -100,7 +99,7 @@ Single shared/central pane of glass — with radical emphasis on **easy**: easy 
 | **CISO / security** | Unknown AI attack surface | Telemetry, review gates, SIEM export, audit trail |
 | **Finance/ops** | Runaway token spend | Cost attribution, turn limits, anomaly alerts |
 
-Initial ICP: 50–500 person engineering orgs heavy on Claude Code / Cursor, **plus federated institutions (universities, hospitals, government labs) where the self-service registry + paved-path discovery is uniquely valuable**. Caltech as archetype and design partner.
+Initial ICP: 50–500 person engineering orgs heavy on Claude Code / Cursor, **plus federated institutions (universities, hospitals, government labs) where the self-service registry + paved-path discovery is uniquely valuable**. Research universities as the archetype.
 
 ## 6. Architecture Sketch (v0 thinking — extend in Claude Code)
 
@@ -235,13 +234,13 @@ judgment lives where an agent, not the CLI, can actually exercise it.
 
 1. **Open source *is* the moat, not the vulnerability.** If the rule-pack format, renderer, and CLI are open and become the *standard* way orgs express AI policy-as-artifacts, copying the format helps us — every community rule pack, every integration, every blog post compounds our position. Being copied by closed-source competitors then means fighting our free, standard, community-backed core.
 2. **The SaaS value is aggregation, not code:** hosted control plane, multi-org dashboard, SIEM export, review workflows, SSO, retention, support. Boring to self-host at scale, cheap to buy.
-3. **Speed + distribution + trust** beat feature parity. First-mover with the Caltech reference story ("governs AI at a top research institution") and community rule packs is hard to displace.
+3. **Speed + distribution + trust** beat feature parity. First-mover with a reference story at a major research institution and community rule packs is hard to displace.
 4. **Community rule packs as network effect:** "the Django pack," "the HIPAA pack," "the university research-data pack" — contributed, shared, versioned. Copycats get the code, not the library.
 
 **Proposed split (for brainstorm):**
 - **Open source:** rule-pack format/spec, renderer, CLI/daemon, base MCP server, reference dashboards
 - **SaaS/paid:** hosted multi-tenant control plane, org registry at scale, SIEM export, review workflows, audit/evidence export, SSO/SCIM, support; self-hosted enterprise licenses for institutions
-- **Services on-ramp:** governance discovery engagements (Caltech Phase 1 shape) that deploy the product as the deliverable
+- **Services on-ramp:** governance discovery engagements (a phased discovery engagement) that deploy the product as the deliverable
 
 ## 9. Competitive Frame (validate with research)
 
@@ -251,12 +250,11 @@ judgment lives where an agent, not the CLI, can actually exercise it.
 - **First-party vendor controls (GitHub Copilot enterprise managed settings, 2026-07-27):** the category's strongest validation so far and its nearest boundary. GitHub ships one enterprise-authored `managed-settings.json` that the Copilot app, cloud agent, CLI, and VS Code all enforce, overriding local developer settings, governing allowed plugins/marketplaces and whether prompts can be bypassed. It confirms the demand and settles central-over-local precedence, but it is single-vendor, governs client settings rather than instruction content, and is closed with no pack format, signing, or drift reporting. A shop running Copilot plus Claude Code plus Cursor still has no one place to say it. Details and watch items: `docs/roadmap/vendor-guidance-tracking.md` (2026-08-11).
 - **Open lane:** nobody owns "policy-as-artifacts for agentic development + unified usage/SDLC dashboard + self-service registry for federated orgs." Verify in research pass — the fast-follow risk (Section 8) makes the open-source-standard play more urgent, not less.
 
-## 10. Caltech Relationship (see role spec §8)
+## 10. Design Partners and IP
 
-- Build independently on Tensor Group time/infrastructure
-- License/deploy into any Caltech engagement — never work-for-hire; explicit IP language, attorney-reviewed
-- Caltech as design partner → the federated-institution segment + the reference story
-- Caltech's environment (departments, shadow IT, unknown central services, POC sprawl, mixed AI adoption) is literally Section 2 — discovery there doubles as product research
+- Build independently on Tensor Group time and infrastructure
+- Engagements use the Apache-2.0 open core under its license; never work-for-hire, with explicit IP language
+- Federated institutions are the target design partners: their environment (departments, shadow IT, unknown central services, POC sprawl, mixed AI adoption) is Section 2
 
 ## 11. Open Questions for Claude Code Brainstorm
 
@@ -282,5 +280,5 @@ judgment lives where an agent, not the CLI, can actually exercise it.
 10. **Regulatory tailwinds** — EU AI Act, ISO/IEC 42001, NIST AI RMF: which actually drive urgency for the ICP?
 11. **NEW — Registry lifecycle design:** what does the expire → keep/kill/archive flow look like? Who gets nagged? What's the default TTL for a "POC"?
 12. **NEW — Paved-path catalog ingestion:** how does an org's existing service catalog (auth endpoints, key issuance, vaults, gateways, docs) get into rule packs — manual YAML, CMDB import, or crawl-and-suggest?
-13. **NEW — Adoption sequencing in federated orgs:** single team → department → central IT, or land with central IT and push down? (Lean: bottom-up land, top-down expand — but Caltech may invert this.)
+13. **NEW — Adoption sequencing in federated orgs:** single team → department → central IT, or land with central IT and push down? (Lean: bottom-up land, top-down expand — but a central-IT-led design partner may invert this.)
 14. **NEW — How copy-resistant is the community rule-pack library really?** What makes packs sticky (versioning, signing, provenance, ratings)?

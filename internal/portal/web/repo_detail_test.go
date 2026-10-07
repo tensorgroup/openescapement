@@ -14,15 +14,15 @@ import (
 )
 
 // newTestServerWithRepo builds a server with one registry repo (r1, team
-// ligo/Physics) and appends evt as its posture event (skipped when evt is
+// obs/Physics) and appends evt as its posture event (skipped when evt is
 // the zero Event, for the "never synced" case). Returns the server so
 // callers can append more events or inspect the store afterward.
 func newTestServerWithRepo(t *testing.T, evt *store.Event) *Server {
 	t.Helper()
 	reg := store.Registry{
 		Departments: []store.Department{{ID: "phys", Name: "Physics"}},
-		Teams:       []store.Team{{ID: "ligo", Name: "LIGO Ops", DeptID: "phys"}},
-		Repos:       []store.Repo{{ID: "r1", Name: "ligo-pipeline", TeamID: "ligo", Governed: true}},
+		Teams:       []store.Team{{ID: "obs", Name: "Observatory Ops", DeptID: "phys"}},
+		Repos:       []store.Repo{{ID: "r1", Name: "obs-pipeline", TeamID: "obs", Governed: true}},
 	}
 	s := newTestServerWithRegistry(t, "", reg)
 	if evt != nil {
@@ -43,7 +43,7 @@ func TestRepoDetail404ForUnknownRepo(t *testing.T) {
 func TestRepoDetailNoEventYet(t *testing.T) {
 	h := newTestServerWithRepo(t, nil).Handler()
 	body := get(t, h, "/fleet/r1", nil).Body.String()
-	if !strings.Contains(body, "ligo-pipeline") || !strings.Contains(body, "Physics") || !strings.Contains(body, "LIGO Ops") {
+	if !strings.Contains(body, "obs-pipeline") || !strings.Contains(body, "Physics") || !strings.Contains(body, "Observatory Ops") {
 		t.Fatalf("missing repo/org placement: %s", body)
 	}
 	if !strings.Contains(body, "No posture events yet for this repo.") {
@@ -56,7 +56,7 @@ func TestRepoDetailNoEventYet(t *testing.T) {
 
 func TestRepoDetailContentCase(t *testing.T) {
 	evt := &store.Event{
-		TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "ligo", Drift: "in-sync",
+		TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "obs", Drift: "in-sync",
 		Collection: &engine.Collection{Amendments: "content", Source: "pack"},
 		Artifacts: []store.EventArtifact{{
 			Path: "CLAUDE.md", Kind: engine.KindBlock, Managed: "in-sync", Local: "amended",
@@ -84,7 +84,7 @@ func TestRepoDetailContentCase(t *testing.T) {
 // renders "content withheld by <source>", naming the source verbatim.
 func TestRepoDetailWithheldCase(t *testing.T) {
 	evt := &store.Event{
-		TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "ligo", Drift: "in-sync",
+		TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "obs", Drift: "in-sync",
 		Collection: &engine.Collection{Amendments: "metrics", Source: "repo-override"},
 		Artifacts: []store.EventArtifact{{
 			Path: "CLAUDE.md", Kind: engine.KindBlock, Managed: "in-sync", Local: "amended",
@@ -105,7 +105,7 @@ func TestRepoDetailWithheldCase(t *testing.T) {
 // "no amendments" and "amendments withheld" never render identically.
 func TestRepoDetailNoAmendmentsCase(t *testing.T) {
 	evt := &store.Event{
-		TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "ligo", Drift: "in-sync",
+		TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "obs", Drift: "in-sync",
 		Artifacts: []store.EventArtifact{{Path: "CLAUDE.md", Kind: engine.KindBlock, Managed: "in-sync", Local: "none"}},
 	}
 	h := newTestServerWithRepo(t, evt).Handler()
@@ -125,7 +125,7 @@ func TestRepoDetailNoAmendmentsCase(t *testing.T) {
 // as a complete, visible amendment, never the withheld copy.
 func TestRepoDetailItemsOnlyAmendmentIsNotWithheld(t *testing.T) {
 	evt := &store.Event{
-		TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "ligo", Drift: "in-sync",
+		TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "obs", Drift: "in-sync",
 		// Collection is deliberately "content" level: even at the highest
 		// level, an items-only amendment's Content is still "".
 		Collection: &engine.Collection{Amendments: "content", Source: "pack"},
@@ -155,7 +155,7 @@ func TestRepoDetailItemsOnlyAmendmentIsNotWithheld(t *testing.T) {
 // unlike Content, isn't redacted), so it's still complete, not withheld.
 func TestRepoDetailItemsOnlyAmendmentBelowContentLevelIsStillNotWithheld(t *testing.T) {
 	evt := &store.Event{
-		TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "ligo", Drift: "in-sync",
+		TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "obs", Drift: "in-sync",
 		Collection: &engine.Collection{Amendments: "metrics", Source: "repo-override"},
 		Artifacts: []store.EventArtifact{{
 			Path: ".mcp.json", Kind: engine.KindJSONKeys, Managed: "in-sync", Local: "amended",
@@ -174,7 +174,7 @@ func TestRepoDetailItemsOnlyAmendmentBelowContentLevelIsStillNotWithheld(t *test
 
 func TestRepoDetailAlteredArtifactShowsHashesAndDiff(t *testing.T) {
 	evt := &store.Event{
-		TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "ligo", Drift: "drifted",
+		TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "obs", Drift: "drifted",
 		Artifacts: []store.EventArtifact{{
 			Path: "AGENTS.md", Kind: engine.KindFile, Managed: "altered", Local: "none",
 			Alteration: &engine.Alteration{ExpectedHash: "exp123", ActualHash: "act456", Diff: "@@ -1 +1 @@\n-old\n+new\n"},
@@ -190,7 +190,7 @@ func TestRepoDetailAlteredArtifactShowsHashesAndDiff(t *testing.T) {
 }
 
 func TestRepoDetailRendersFullPageWithoutHX(t *testing.T) {
-	evt := &store.Event{TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "ligo", Drift: "in-sync"}
+	evt := &store.Event{TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "obs", Drift: "in-sync"}
 	h := newTestServerWithRepo(t, evt).Handler()
 	body := get(t, h, "/fleet/r1", nil).Body.String()
 	if !strings.Contains(body, "<html") || !strings.Contains(body, "esc <strong>portal</strong>") {
@@ -221,7 +221,7 @@ func TestFleetStateColumnRendersAllStatesFromSeed(t *testing.T) {
 
 func TestUnregisteredBucketListsGroupedRemotesAndRegisters(t *testing.T) {
 	reg := store.Registry{
-		Repos: []store.Repo{{ID: "r1", Name: "ligo-pipeline"}},
+		Repos: []store.Repo{{ID: "r1", Name: "obs-pipeline"}},
 	}
 	s := newTestServerWithRegistry(t, "", reg)
 	remote := "https://github.com/acme/shadow-repo"
@@ -301,7 +301,7 @@ func TestFleetAxisLabelsNameBothAxes(t *testing.T) {
 // governance vocabulary.
 func TestRepoDetailAxesAreLabeled(t *testing.T) {
 	evt := &store.Event{
-		TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "ligo", Drift: "in-sync",
+		TS: time.Now(), Kind: "status", RepoID: "r1", TeamID: "obs", Drift: "in-sync",
 		Artifacts: []store.EventArtifact{{Path: "CLAUDE.md", Kind: engine.KindBlock, Managed: "in-sync", Local: "none"}},
 	}
 	h := newTestServerWithRepo(t, evt).Handler()
@@ -318,7 +318,7 @@ func TestRepoDetailAxesAreLabeled(t *testing.T) {
 // (without explicitly choosing a repo) cannot silently bind the first repo
 // in the list.
 func TestFleetRegisterSelectHasPlaceholderOption(t *testing.T) {
-	reg := store.Registry{Repos: []store.Repo{{ID: "r1", Name: "ligo-pipeline"}}}
+	reg := store.Registry{Repos: []store.Repo{{ID: "r1", Name: "obs-pipeline"}}}
 	s := newTestServerWithRegistry(t, "", reg)
 	remote := "https://github.com/acme/shadow-repo"
 	if err := s.Store.AppendEvent(store.Event{TS: time.Now(), Kind: "mcp_connect", Remote: remote}); err != nil {
@@ -379,7 +379,7 @@ func TestFleetRegisterRejectsRemoteNotCurrentlyUnregistered(t *testing.T) {
 // succeed and leave RepoByRemote picking between two repos arbitrarily.
 func TestFleetRegisterRejectsRemoteAlreadyBoundToAnotherRepo(t *testing.T) {
 	reg := store.Registry{Repos: []store.Repo{
-		{ID: "r1", Name: "ligo-pipeline"},
+		{ID: "r1", Name: "obs-pipeline"},
 		{ID: "r2", Name: "campus-portal"},
 	}}
 	s := newTestServerWithRegistry(t, "", reg)
@@ -428,7 +428,7 @@ func TestFleetRegisterRejectsRemoteAlreadyBoundToAnotherRepo(t *testing.T) {
 // registering against a repo that already has a Remote must fail with 409
 // and an in-page banner, not silently overwrite the existing binding.
 func TestFleetRegisterRejectsAlreadyRegisteredRepo(t *testing.T) {
-	reg := store.Registry{Repos: []store.Repo{{ID: "r1", Name: "ligo-pipeline", Remote: "github.com/acme/existing"}}}
+	reg := store.Registry{Repos: []store.Repo{{ID: "r1", Name: "obs-pipeline", Remote: "github.com/acme/existing"}}}
 	s := newTestServerWithRegistry(t, "", reg)
 	remote := "https://github.com/acme/shadow-repo"
 	if err := s.Store.AppendEvent(store.Event{TS: time.Now(), Kind: "mcp_connect", Remote: remote}); err != nil {

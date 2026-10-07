@@ -1,4 +1,4 @@
-// Package seed generates a deterministic, fictional Caltech-shaped org with
+// Package seed generates a deterministic, fictional research-university-shaped org with
 // 60 days of governance and usage history, for `esc serve --demo`.
 package seed
 
@@ -51,8 +51,8 @@ type teamDef struct {
 var teamDefs = []teamDef{
 	{"physics-instr", "Physics Instrumentation", "physics", []string{
 		"daq-controller", "sensor-calibration", "beamline-monitor"}},
-	{"ligo-ops", "LIGO Ops", "physics", []string{
-		"ligo-analysis-pipeline", "ligo-detector-control", "ligo-data-archive"}},
+	{"observatory-ops", "Observatory Ops", "physics", []string{
+		"obs-analysis-pipeline", "obs-detector-control", "obs-data-archive"}},
 	{"physics-hpc", "Physics HPC", "physics", []string{
 		"hpc-job-scheduler", "hpc-storage-tools"}},
 	{"genomics", "Genomics Pipeline", "biology", []string{
@@ -161,7 +161,7 @@ type repoInfo struct {
 
 func buildRegistry() (store.Registry, []repoInfo) {
 	var reg store.Registry
-	reg.Org = store.Org{Name: "Caltech Institute of Technology (demo)"}
+	reg.Org = store.Org{Name: "Example Institute of Technology (demo)"}
 	for _, d := range deptDefs {
 		reg.Departments = append(reg.Departments, store.Department{ID: d.id, Name: d.name})
 	}

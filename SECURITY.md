@@ -4,7 +4,7 @@ OpenEscapement writes instructions that AI agents execute, so its distribution p
 
 ## Reporting a vulnerability
 
-Email **security@tensorgroup.example** (placeholder — replace before public release) with details and a proof of concept if you have one. Please do not open public issues for undisclosed vulnerabilities. We aim to acknowledge within 3 business days.
+Email **info@tensor.group** with details and a proof of concept if you have one. Please do not open public issues for undisclosed vulnerabilities. We aim to acknowledge within 3 business days.
 
 ## Threat model
 
