@@ -1,22 +1,27 @@
 schema: 1
 name: model-seats
-version: 0.2.0
+version: 0.3.0
 description: Governance for multi-model agent collaboration. Which seat holds which duty, with what oversight, decided from logged dispute outcomes rather than vibes. Seats are named by role; the model behind each is a config detail that changes. Copy and adapt. The catalog's reference roster is a dated example, not a recommendation; replace it with yours.
 
 rules:
   - rules/seat-policy.md
   - rules/panel-protocol.md
   - rules/decision-model-routing.md
+  - rules/lead-rotation.md
 
 catalog:
-  - name: Moderator seat (the primary agent session)
+  - name: Moderator seat (the lead, the agent the user works in)
     category: model-seat
     status: preferred
-    notes: Frames the brief, runs the seats, cross-examines disputes, verifies every surviving finding against the code, and writes the record. The only seat that ever changes the checkout. Never outsources the ruling.
-  - name: Planning lead seat (reference roster, 2026-09, gpt-6-astra via a read-only Codex CLI profile)
+    notes: Frames the brief, runs the seats, cross-examines disputes, verifies every surviving finding against the code, and writes the record, naming itself by resolved model id. The only seat that ever changes the checkout, under OS-level containment. Never outsources the ruling and never scores itself.
+  - name: Claude lead on a non-Anthropic plan (reference roster, 2026-10, claude-opus-5-5 via agy on a Google AI plan)
+    category: lead
+    status: review-required
+    notes: A Claude-family lead that does not draw on an Anthropic plan, so it can take over when that plan is capped. Lead quality not yet scored; compare it with first-party Claude Code on the same profile before ranking it in a lead order.
+  - name: Planning seat (reference roster, 2026-09, gpt-6-astra via a read-only Codex CLI profile)
     category: model-seat
     status: preferred
-    notes: Lead voice on plan, design, and decision targets; equal peer on code review. Full peer status from a fresh scoreboard on 2026-09-11 when the seat changed model generation. The previous occupant's demotion (wording disputes, conceded substance) was that model's trait and did not carry over; re-demote only on logged dispute evidence.
+    notes: First voice on plan, design, and decision targets; equal peer on code review. Full peer status from a fresh scoreboard on 2026-09-11 when the seat changed model generation. The previous occupant's demotion (wording disputes, conceded substance) was that model's trait and did not carry over; re-demote only on logged dispute evidence.
   - name: Metered peer seat (reference roster, 2026-09, glm-5.3-flash via OpenRouter behind a read-only agent)
     category: model-seat
     status: preferred
@@ -28,7 +33,19 @@ catalog:
   - name: On-demand second same-vendor seat (reference roster, 2026-09, claude-opus-5-5)
     category: model-seat
     status: review-required
-    notes: Dropped from the reference roster's default panel on its previous occupant's scoreboard (claude-opus-4-8, one unique catch in its first thirteen findings, and a refuted finding). Re-pointed to claude-opus-5-5 on 2026-09-22 when 4.8 went legacy; a new model generation starts a fresh scoreboard, the same rule the planning lead seat followed. Convene it when a high-stakes target warrants a second blind read from the same family. Re-promotion criterion, five consecutive panels in which it lands at least one confirmed unique catch. The pattern is the point; substitute your own numbers.
+    notes: Dropped from the reference roster's default panel on its previous occupant's scoreboard (claude-opus-4-8, one unique catch in its first thirteen findings, and a refuted finding). Re-pointed to claude-opus-5-5 on 2026-09-22 when 4.8 went legacy; a new model generation starts a fresh scoreboard, the same rule the planning seat followed. Convene it when a high-stakes target warrants a second blind read from the same family. Re-promotion criterion, five consecutive panels in which it lands at least one confirmed unique catch. The pattern is the point; substitute your own numbers.
+  - name: Google peer seat (trial, 2026-10, gemini-4-argon-high via agy on a Google AI plan)
+    category: model-seat
+    status: review-required
+    notes: On trial from 2026-10-24 with a fresh scoreboard. Peer on design, plan, and review. agy encodes the effort level in the model id, and agy writes a cache file into its working directory, so run it from the seat's own home with the reviewed repo added read-only.
+  - name: Kimi peer seat (trial, 2026-10, kimi-code/k3.1-pro via Kimi Code under an OS sandbox)
+    category: model-seat
+    status: review-required
+    notes: On trial from 2026-10-24 with a fresh scoreboard. Peer on review; plan on trial. Kimi Code ignored its own deny rules in non-interactive mode in a 2026-10-24 test, so the OS sandbox is the enforcement and a hook is only a second layer.
+  - name: Fast metered seat (trial, 2026-10, deepseek/deepseek-v4.1-flash via pi on OpenRouter)
+    category: model-seat
+    status: review-required
+    notes: On trial from 2026-10-24 with a fresh scoreboard. Triage of noisy panels, first-pass reads, and already-covered checks. Use the alias, not the dated -1017 snapshot, and set a spend cap on the OpenRouter key.
   - name: Decision model for routing advice (reference, 2026-09, typesafe/jev-1.13 via OpenRouter's decisions API)
     category: decision-model
     status: review-required
@@ -48,4 +65,4 @@ catalog:
   - name: A seat with write access to the checkout
     category: model-seat
     status: banned
-    notes: External seats are enforced read-only and verified by attack, on fresh and resumed sessions, after every harness upgrade. A seat that can write is a driver, governed separately; when a driver's work is reviewed, its vendor's seat is excluded from the panel, since a vendor reviewing its own output is self-assessment.
+    notes: External seats are enforced read-only at the OS level and verified by attack, on fresh and resumed sessions, after every harness upgrade. A seat that can write is a lead, governed by the lead-rotation rule. The lead's own vendor may still sit as a fresh blind session with none of the lead's conversation; only a seat that shares the lead's session is excluded, since that is the lead reviewing its own reasoning.

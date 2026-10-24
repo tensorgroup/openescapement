@@ -8,6 +8,18 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- `examples/packs/model-seats` 0.3.0: a lead-rotation rule (leads ordered per profile,
+  containment verified both ways by attack, switch on an observed cap, return at a task
+  boundary after the reset, one writable lead per worktree, every switch logged, leads
+  scored from git, review findings, and the user's rating, with no composite score). The
+  seat policy defines the lead as the moderator, requires OS-level read-only
+  enforcement and a recorded moderator per panel, and seats the lead's own vendor only
+  as a fresh blind session. The decision-model rule gains an acting mode bounded by a
+  profile's required seats and minimum, coverage-based misses, and full-roster audits.
+  The catalog adds three trial seats (Google via agy, Kimi via Kimi Code under an OS
+  sandbox, a fast metered DeepSeek seat via OpenRouter) and a Claude lead on a Google
+  plan, all review-required. The "planning lead" seat is renamed "planning seat" so
+  "lead" has one meaning.
 - `examples/packs/google-models` 0.1.0 (Gemini 4 Argon preferred for planning and
   review, the Flash tiers by role, agy as the plan route, the deprecated 3.7 Flash and
   retired 3 Pro Preview banned by name), `examples/packs/kimi-models` 0.1.0 (K3.1 Pro

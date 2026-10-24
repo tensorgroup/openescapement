@@ -38,3 +38,12 @@ threshold below as a starting point to calibrate, not a validated setting.
   tool permission as a side effect.
 - Test the request contract and truncation before swapping decision models. Context
   budgets and question limits differ between them, and each swap needs re-calibration.
+
+Acting mode, once shadow evidence earns it:
+
+- Let the router choose seats only within a profile's required seats and minimum seat count. The router may drop an optional seat; it never drops a required seat or goes below the minimum.
+- Count a miss as a confirmed finding group at major or above that no retained seat raised. Count by coverage, not uniqueness, because a finding two dropped seats both raised is still lost.
+- Promote a profile from shadow to acting only on shadow evidence: enough panels in which the router would have dropped a seat, enough confirmed major findings among them, and zero misses. Write the thresholds down before the data is in.
+- Run a full-roster audit on a fixed share of acting-mode panels, with the router's subset recorded before round 1. Panels that are not audits cannot reveal a miss and do not count as evidence.
+- Return the profile to shadow on one audit miss.
+- Restart the shadow count after any change to the profile's roster or to the decision model's pinned version. Evidence counts only for the setup it measured.

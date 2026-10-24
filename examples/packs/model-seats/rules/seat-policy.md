@@ -6,10 +6,12 @@ duties. A seat is a role; the model behind it is one line of config, expected to
 Seats are granted and revoked from logged evidence, dispute win shares and
 confirmed-finding rates, never from a single anecdote or a model's confidence.
 
+The **lead** is the agent the user works in for a project; the lead is the moderator of every panel it convenes.
+
 | Seat | Duties | Restrictions |
 |---|---|---|
-| Moderator (the primary agent) | frame the brief, run the seats, moderate disputes, verify findings against code, rule, log | may overrule any seat; may not skip logging; may not favor its own vendor's seat |
-| Planning lead | lead voice on plan, design, and decision targets; equal peer on code review | read-only access, always |
+| Moderator (the lead) | frame the brief, run the seats, moderate disputes, verify findings against code, rule, log | may overrule any seat; may not skip logging; may not favor its own vendor's seat; never scores itself |
+| Planning seat | first voice on plan, design, and decision targets; equal peer on code review | read-only access, always |
 | Peer seats | independent review on every target kind | read-only access, always |
 | On-demand seats | convened for high-stakes targets or when a second blind read from a family is worth the wall-clock | scored like every other seat when they run |
 
@@ -24,6 +26,16 @@ Conduct rules the moderator enforces:
 - **Read-only seats.** External model seats never hold write access to a checkout.
   Verify by attempted write, on fresh and resumed sessions, before trusting a seat and
   again after any harness upgrade.
+- **OS-level enforcement.** Enforce read-only at the OS level. A seat's own permission
+  settings are not enforcement until an attempted write fails with an OS error on a fresh
+  and a resumed session. Vendor permission rules have been seen to ignore deny rules in
+  non-interactive mode, and only the kernel's refusal proves the write cannot happen.
+- **Recorded moderator.** Record which lead moderated each panel, by resolved model id.
+  A lenient moderator inflates every seat's confirmed rate, and an alias hides which model
+  ruled.
+- **Same-vendor seats.** Seat the lead's own vendor only as a fresh blind session with
+  none of the lead's conversation. Exclude any seat that shares the lead's session, since
+  the moderator would be reviewing its own reasoning.
 - **Wall-clock caps.** Every seat runs under a finite cap enforced by the launcher, not
   by the model. A seat that does not return inside it is recorded as absent, left out
   of that panel's per-seat counts, and the panel proceeds on the rest; a timeout never
