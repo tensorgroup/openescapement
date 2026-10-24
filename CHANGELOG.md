@@ -8,6 +8,11 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- Portal Google guidance: Gemini 4 Argon (`gemini-4-argon`, GA 2026-10-13) is the
+  frontier choice for planning, plan-check, and review, with a starter. Gemini 3.1 Pro
+  Preview stays current (Google names no replacement) but is kept only for workloads that
+  need explicit context caching. Gemini 3.7 Flash moves to legacy after its 2026-10-08
+  deprecation. The routing example and every Google starter now route to Argon.
 - Portal model guidance: every vendor note gains an Access routes section (plan plus
   the vendor's own CLI, direct API, OpenRouter) with prices dated 2026-10-24, the
   vendor's stated plan limits, and break-even arithmetic for each plan it recommends.

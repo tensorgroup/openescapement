@@ -1,20 +1,23 @@
 # Google
 
-Google's current lineup centers on the Gemini 3 family: Gemini 3.1 Pro Preview at the frontier, Gemini 3.8 Flash in the middle, and Gemini 3.5 Flash-Lite for fast, high-volume work. Gemini 3.7 Flash, released three weeks before 3.8 at the same price, stays current for configurations that pinned it; Gemini 3.6 Flash and the original Gemini 3 Pro Preview are held in this registry as legacy ids. The tiers fit an agentic SDLC cleanly: plan and review on 3.1 Pro Preview, implement day-to-day on 3.8 Flash, and run bulk work on Flash-Lite. Prices below are the Standard tier; Batch and Flex run at half.
-
+Google's current lineup is led by Gemini 4 Argon, its flagship reasoning model (generally available since 2026-10-13), with Gemini 3.1 Pro Preview still served beside it, Gemini 3.8 Flash in the middle, and Gemini 3.5 Flash-Lite for fast, high-volume work. Gemini 3.7 Flash, Gemini 3.6 Flash, and the original Gemini 3 Pro Preview are held in this registry as legacy ids. The tiers fit an agentic SDLC cleanly: plan and review on Argon, implement day-to-day on 3.8 Flash, and run bulk work on Flash-Lite. Prices below are the Standard tier; Batch and Flex run at half. Refreshed 2026-10-24: Gemini 4 Argon added as the frontier choice; Gemini 3.7 Flash moved to legacy after Google deprecated it on 2026-10-08. Google has not named a replacement for 3.1 Pro Preview, so it stays current, behind Argon.
 ## Models
+
+### Gemini 4 Argon (gemini-4-argon) - frontier
+
+Google's flagship reasoning model, built for complex software engineering, deep mathematical and scientific problem solving, autonomous multi-step agents, and long decode. Text, image, video, audio, and PDF in; thinking at `low`, `medium` (the default), or `high`. A 1,048,576-token context window shared by input and output; 65,536 output tokens by default on a synchronous call, up to 1,048,576 with long decode. Priced at an introductory $2 / $10 per million input/output tokens through 2026-11-30, then $4 / $20 from 2026-12-01, with no long-prompt tier; Batch and Flex at half, Priority at $3.60 / $18 (then $7.20 / $36). Not on the Free tier. Only implicit caching is supported, and `temperature`, `top_p`, and `top_k` are ignored, so a migration removes explicit caching calls and sampling parameters and raises `max_output_tokens` (Google recommends at least 32,768). Recommended roles: planning, plan-check, and review. In the Antigravity CLI it is selected by an effort-suffixed id (`gemini-4-argon-low`, `-medium`, or `-high`, as listed by `agy models` on agy 1.4.7).
 
 ### Gemini 3.1 Pro Preview (gemini-3.1-pro-preview) - frontier
 
-Google's most advanced reasoning model, built to refine the Gemini 3 Pro series with better thinking, improved token efficiency, and a more grounded, factually consistent output. It is optimized for software engineering behavior and for agentic workflows that need precise tool use and reliable multi-step execution across real-world domains. 1,048,576-token input context, 65,536-token max output, priced at $2 / $12 per million input/output tokens for prompts up to 200K tokens (rising to $4 / $18 above that). Recommended roles: planning, plan-check, and review. Use it to plan multi-file changes, plan-check another agent's plan, and review diffs for risk. It still carries a preview release label even though it is Google's current frontier model; treat that as a production caveat, not a reason to avoid it.
+Google's previous Pro model, still served with no shutdown date announced, and built to refine the Gemini 3 Pro series with better thinking, improved token efficiency, and a more grounded, factually consistent output. It is optimized for software engineering behavior and for agentic workflows that need precise tool use and reliable multi-step execution across real-world domains. 1,048,576-token input context, 65,536-token max output, priced at $2 / $12 per million input/output tokens for prompts up to 200K tokens (rising to $4 / $18 above that). It still carries a preview label. Recommended roles: planning, plan-check, and review, only where a workload depends on explicit context caching, which Argon does not support; route new work to Argon.
 
 ### Gemini 3.8 Flash (gemini-3.8-flash) - mid
 
-Google's most intelligent Flash model, generally available since 2026-09-02 and engineered for long-horizon software engineering, autonomous agents, and complex enterprise workflows at Flash speed and cost. Text, image, video, audio, and PDF in; thinking at low, medium, or high effort (`minimal` is rejected). 1,048,576-token input context, 65,536-token max output. Priced at $0.75 / $3.75 per million input/output tokens through 2026-12-31, then $1.50 / $7.50 from 2027-01-01. Recommended roles: coding and review. This is the default day-to-day coding model, and it also covers review on lower-stakes diffs where a full Pro Preview pass is not warranted.
+Google's most intelligent Flash model, generally available since 2026-09-02 and engineered for long-horizon software engineering, autonomous agents, and complex enterprise workflows at Flash speed and cost. Text, image, video, audio, and PDF in; thinking at low, medium, or high effort (`minimal` is rejected). 1,048,576-token input context, 65,536-token max output. Priced at $0.75 / $3.75 per million input/output tokens through 2026-12-31, then $1.50 / $7.50 from 2027-01-01. Recommended roles: coding and review. This is the default day-to-day coding model, and it also covers review on lower-stakes diffs where a full Argon pass is not warranted.
 
-### Gemini 3.7 Flash (gemini-3.7-flash) - mid
+### Gemini 3.7 Flash (gemini-3.7-flash) - legacy
 
-Released 2026-08-13 as Google's workhorse model for coding and agents, then superseded by 3.8 Flash on 2026-09-02 at the same limits and the same price schedule ($0.75 / $3.75 per million tokens through 2026-12-31, $1.50 / $7.50 after). Recommended role: coding, only where a configuration already pins it; there is no price or capability reason to start new work on it rather than 3.8 Flash.
+Released 2026-08-13, superseded by 3.8 Flash on 2026-09-02, and deprecated on 2026-10-08. The endpoint is not shutting down: API requests to `gemini-3.7-flash` are served by `gemini-3.8-flash`, and Google AI Studio no longer offers it. Migrate pins to `gemini-3.8-flash`, so the configured id names the model that does the work.
 
 ### Gemini 3.5 Flash-Lite (gemini-3.5-flash-lite) - fast
 
@@ -26,15 +29,17 @@ The previous Flash generation, still served by Google on the same price schedule
 
 ### Gemini 3 Pro Preview (gemini-3-pro) - legacy
 
-Previously Google's frontier reasoning model, Gemini 3 Pro Preview (`gemini-3-pro-preview`) launched November 2025 and was shut down on 2026-03-09; its recommended replacement is `gemini-3.1-pro-preview`. It stays in this registry because seeded usage telemetry references it under the shorter id `gemini-3-pro`; do not route new work to it, and migrate any saved configuration to `gemini-3.1-pro-preview`.
+Previously Google's frontier reasoning model, Gemini 3 Pro Preview (`gemini-3-pro-preview`) launched November 2025 and was shut down on 2026-03-09; its listed replacement was `gemini-3.1-pro-preview`. It stays in this registry because seeded usage telemetry references it under the shorter id `gemini-3-pro`; do not route new work to it, and migrate any saved configuration to `gemini-4-argon`.
 
 ## Governance
 
-- Require a human review gate before merging any change Gemini 3.1 Pro Preview produced with high autonomy (broad file access, destructive commands, or unsupervised multi-step runs); its reasoning depth is strong but it still carries a preview label, and the blast radius of an autonomous frontier session is larger than a supervised one.
-- Route bulk, mechanical, and high-volume work to Gemini 3.5 Flash-Lite to hold spend down. Through 2026-12-31 it is 2.5x cheaper than 3.8 Flash on input and 1.5x cheaper on output ($2.50 vs $3.75 per million); from 2027-01-01, when Flash's introductory price ends, the gap widens to 5x and 3x. Against 3.1 Pro Preview it is roughly 5x cheaper on output ($2.50 vs $12 per million, prompts up to 200K tokens).
-- Treat Gemini 3.6 Flash as legacy: 3.8 Flash is more capable at the same price, so there is no configuration that should still prefer 3.6.
-- Treat Gemini 3 Pro Preview (`gemini-3-pro`) as retired: Google shut it down on 2026-03-09 and its recommended replacement is `gemini-3.1-pro-preview`, so point new configuration there directly.
-- Routing policy: plan, plan-check, and review on Gemini 3.1 Pro Preview; code day-to-day on Gemini 3.8 Flash; run bulk and mechanical edits on Gemini 3.5 Flash-Lite.
+- Require a human review gate before merging any change Gemini 4 Argon produced with high autonomy (broad file access, destructive commands, or unsupervised multi-step runs); its reasoning depth is strong but not infallible, and the blast radius of an autonomous frontier session is larger than a supervised one.
+- Route plan, plan-check, and review to Gemini 4 Argon, with the thinking level set explicitly. Keep Gemini 3.1 Pro Preview only for workloads that depend on explicit context caching.
+- Budget for Argon's price doubling on 2026-12-01 ($4 / $20 per million tokens from then); its Batch tier at half price suits reviews that can wait.
+- Route bulk, mechanical, and high-volume work to Gemini 3.5 Flash-Lite to hold spend down. Through 2026-12-31 it is 2.5x cheaper than 3.8 Flash on input and 1.5x cheaper on output ($2.50 vs $3.75 per million); from 2027-01-01, when Flash's introductory price ends, the gap widens to 5x and 3x. Against Argon it is 4x cheaper on output through 2026-11-30 and 8x after.
+- Treat Gemini 3.7 Flash and 3.6 Flash as legacy: 3.8 Flash is more capable at the same price, and 3.7 Flash requests are already served by 3.8 Flash.
+- Treat Gemini 3 Pro Preview (`gemini-3-pro`) as retired: Google shut it down on 2026-03-09, so point new configuration at `gemini-4-argon` directly.
+- Routing policy: plan, plan-check, and review on Gemini 4 Argon; code day-to-day on Gemini 3.8 Flash; run bulk and mechanical edits on Gemini 3.5 Flash-Lite.
 
 ## Access routes
 
@@ -53,6 +58,8 @@ Prices as of 2026-10-24.
 
 ## Sources
 
+- https://ai.google.dev/gemini-api/docs/models/gemini-4-argon (retrieved 2026-10-24)
+- https://ai.google.dev/gemini-api/docs/latest-model (Argon API changes and migration; retrieved 2026-10-24)
 - https://ai.google.dev/gemini-api/docs/models
 - https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview
 - https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash

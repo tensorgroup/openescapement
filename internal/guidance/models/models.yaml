@@ -130,6 +130,14 @@ vendors:
   - key: google
     name: Google
     models:
+      - id: gemini-4-argon
+        name: Gemini 4 Argon
+        tier: frontier
+        roles: [planning, plan-check, review]
+        status: current
+        docs: [https://ai.google.dev/gemini-api/docs/models/gemini-4-argon, https://ai.google.dev/gemini-api/docs/latest-model, https://ai.google.dev/gemini-api/docs/pricing]
+        verified: 2026-10-24
+        starter: examples/google/starter-gemini-4-argon.md
       - id: gemini-3.1-pro-preview
         name: Gemini 3.1 Pro Preview
         tier: frontier
@@ -150,10 +158,9 @@ vendors:
         name: Gemini 3.7 Flash
         tier: mid
         roles: [coding]
-        status: current
-        docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash, https://ai.google.dev/gemini-api/docs/pricing]
-        verified: 2026-09-16
-        starter: examples/google/starter-gemini-3.7-flash.md
+        status: legacy
+        docs: [https://ai.google.dev/gemini-api/docs/deprecations, https://ai.google.dev/gemini-api/docs/changelog]
+        verified: 2026-10-24
       - id: gemini-3.6-flash
         name: Gemini 3.6 Flash
         tier: mid
