@@ -8,6 +8,12 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- Portal Kimi guidance: Kimi K3.1 Pro (frontier; planning, plan-check, review) and
+  K3.1 Pro High-Speed (fast reads, bulk) added; K3 moves to legacy; the K2 series'
+  end of life (closed to new users 2026-10-31, retired by end of December 2026) noted.
+  A governance bullet says Kimi Code's permission rules are not enforcement in `-p`
+  runs (auto permission mode, deny rules ignored in a 2026-10-24 test, fail-open hooks)
+  and that an OS sandbox is.
 - Portal Google guidance: Gemini 4 Argon (`gemini-4-argon`, GA 2026-10-13) is the
   frontier choice for planning, plan-check, and review, with a starter. Gemini 3.1 Pro
   Preview stays current (Google names no replacement) but is kept only for workloads that

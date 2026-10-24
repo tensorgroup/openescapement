@@ -186,13 +186,27 @@ vendors:
   - key: kimi
     name: Kimi
     models:
+      - id: kimi-k3.1-pro
+        name: Kimi K3.1 Pro
+        tier: frontier
+        roles: [planning, plan-check, review]
+        status: current
+        docs: [https://platform.kimi.ai/docs/models, https://platform.kimi.ai/docs/pricing/chat-k3, https://platform.kimi.ai/docs/guide/kimi-k3-1-pro-quickstart]
+        verified: 2026-10-24
+      - id: kimi-k3.1-pro-highspeed
+        name: Kimi K3.1 Pro High-Speed
+        tier: fast
+        roles: [coding, bulk]
+        status: current
+        docs: [https://platform.kimi.ai/docs/models, https://platform.kimi.ai/docs/pricing/chat-k3]
+        verified: 2026-10-24
       - id: kimi-k3
         name: Kimi K3
         tier: frontier
         roles: [planning, plan-check, review]
-        status: current
+        status: legacy
         docs: [https://platform.kimi.ai/docs/models, https://platform.kimi.ai/docs/pricing/chat-k3]
-        verified: 2026-08-02
+        verified: 2026-10-24
       - id: kimi-k2.7-code
         name: Kimi K2.7 Code
         tier: mid
