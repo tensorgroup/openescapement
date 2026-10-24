@@ -1,6 +1,6 @@
 # Deepseek
 
-Deepseek's current API lineup is DeepSeek V4 Pro, the frontier reasoning model, and DeepSeek V4.1 Flash, the new-architecture general model released 2026-09-10 under the model name `deepseek-flash` and also reachable through OpenRouter. Both are OpenAI- and Anthropic-API compatible, share a 1M-token context window and a 384K-token max output, and support thinking and non-thinking modes on a single model id. Prices are peak / off-peak: off-peak (all hours outside 01:00 to 04:00 and 06:00 to 10:00 UTC on weekdays) is half of peak. Refreshed 2026-10-24: list prices re-verified; the OpenRouter route added.
+Deepseek's current API lineup is DeepSeek V4 Pro, the frontier reasoning model, and DeepSeek V4.1 Flash, the new-architecture general model released 2026-09-10 under the model name `deepseek-flash` and also reachable through OpenRouter. Both are OpenAI- and Anthropic-API compatible, share a 1M-token context window and a 384K-token max output, and support thinking and non-thinking modes on a single model id. Prices are peak / off-peak: off-peak (all hours outside 01:00 to 04:00 and 06:00 to 10:00 UTC on weekdays) is half of peak. Refreshed 2026-10-24: list prices re-verified; the OpenRouter route added, with its two ids mapped to the two V4.1 Flash releases they serve.
 
 ## Models
 
@@ -12,7 +12,7 @@ Deepseek's frontier reasoning model (served as DeepSeek-V4-Pro-0813): a 1.6T-par
 
 The smallest model in Deepseek's new architecture family: a 552B-parameter mixture-of-experts model with a causal encoder-decoder design (8B active parameters for input, 16B for output), native vision, and a KV cache a quarter the size of the previous generation. Tests by multiple parties, per Deepseek's launch note, put it ahead of V4 Pro on performance, cost, and speed. $0.30 / $1.20 per million input/output tokens at peak, $0.15 / $0.60 off-peak, cache hits $0.006 peak and $0.003 off-peak (re-verified 2026-10-24); the API serves it as model version DeepSeek-V4.1-Flash-1017. Recommended roles: coding, bulk, and fast second opinions and triage.
 
-On OpenRouter it has two ids. `deepseek/deepseek-v4.1-flash` is the alias to use: $0.02 / $1.00 per million tokens on 2026-10-24. `deepseek/deepseek-v4.1-flash-1017` is the dated snapshot: $0.15 / $0.60 on the same date, so it costs more on input and less on output than the alias. Both are provider prices, far from DeepSeek's own list on input, and can change without notice. The alias suits input-heavy work such as reviews and triage; pin the dated id only where a configuration must not move when the alias advances.
+On OpenRouter the two ids are two different releases, per OpenRouter's model list on 2026-10-24. `deepseek/deepseek-v4.1-flash` resolves to the 2026-09-10 launch release (canonical slug `deepseek/deepseek-v4.1-flash-20260910`): $0.02 / $1.00 per million input/output tokens at all hours. `deepseek/deepseek-v4.1-flash-1017` is the 2026-10-17 release (canonical slug `deepseek/deepseek-v4.1-flash-20261017`), the release DeepSeek's own API serves as `deepseek-flash`. It carries DeepSeek's peak schedule: $0.30 / $1.20 from 01:00 to 04:00 and 06:00 to 10:00 UTC Monday to Friday, $0.15 / $0.60 at all other hours. Both are provider prices that can change without notice. The alias is the cheapest way to run input-heavy work such as reviews and triage, on the older release. Use `-1017` where results must match what DeepSeek's own API returns.
 
 ### DeepSeek V4 Flash (deepseek-v4-flash) - legacy
 
@@ -34,10 +34,10 @@ Prices as of 2026-10-24.
 | Route | What you pay | Tool | Limits, per the vendor |
 |---|---|---|---|
 | Direct API | `deepseek-flash` $0.30 / $1.20 per million input/output tokens at peak, $0.15 / $0.60 off-peak; `deepseek-v4-pro` $1.32 / $3.96 peak, $0.66 / $1.98 off-peak | Any OpenAI- or Anthropic-compatible harness | Metered per token. Concurrency limit 2,500 (Flash) and 500 (Pro). |
-| OpenRouter | `deepseek/deepseek-v4.1-flash` $0.02 / $1.00; `deepseek/deepseek-v4.1-flash-1017` $0.15 / $0.60; `deepseek/deepseek-v4-pro` $0.209 / $0.418 | Any OpenAI-compatible harness, such as pi | Provider prices can change without notice. The alias's $0.02 input price is far under DeepSeek's own list. |
+| OpenRouter | `deepseek/deepseek-v4.1-flash` (2026-09-10 release) $0.02 / $1.00 at all hours; `deepseek/deepseek-v4.1-flash-1017` (2026-10-17 release) $0.30 / $1.20 at weekday peak (01:00 to 04:00 and 06:00 to 10:00 UTC, Monday to Friday), $0.15 / $0.60 otherwise; `deepseek/deepseek-v4-pro` $0.209 / $0.418 | Any OpenAI-compatible harness, such as pi | Provider prices can change without notice. The alias's $0.02 input price is far under DeepSeek's own list. |
 
 - No subscription plan with a vendor coding CLI was found for DeepSeek on 2026-10-24, so every route is metered.
-- Pick the route by the job's shape. Input-heavy reads (reviews of large diffs, triage of long transcripts) cost least on the OpenRouter alias while its input price holds. Output-heavy work costs least on DeepSeek's own API off-peak or on the dated `-1017` id.
+- Pick the route by the job's shape. Input-heavy reads (reviews of large diffs, triage of long transcripts) cost least on the OpenRouter alias while its input price holds. Output-heavy work costs least off-peak on DeepSeek's own API or on `-1017` ($0.60 per million output tokens). At weekday peak both charge $1.20, so the alias's flat $1.00 is the cheaper output rate then, on the older release.
 - Set a spend cap on the OpenRouter key; an agent loop on a cheap model still runs all night.
 
 ## Sources

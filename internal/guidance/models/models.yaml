@@ -251,7 +251,7 @@ vendors:
         roles: [coding, bulk]
         status: current
         docs: [https://api-docs.deepseek.com/quick_start/pricing, https://api-docs.deepseek.com/news/news260910/]
-        verified: 2026-09-16
+        verified: 2026-10-24
       - id: deepseek-v4-flash
         name: DeepSeek V4 Flash
         tier: mid
