@@ -31,8 +31,9 @@ A plan bills a flat monthly price and meters usage against windows the vendor se
 metered key bills every token. For a person who codes with an agent most days, the
 vendor's own CLI on a plan is usually the cheaper route; metered keys suit fast, small,
 occasional calls and unattended jobs that must not drain a person's plan. Each vendor note
-has an Access routes section with the dated prices, the vendor's stated limits, and the
-break-even arithmetic:
+has an Access routes section with the dated prices and the vendor's stated limits. A note
+whose vendor sells a subscription plan with a published price that covers its CLI also
+works out where that plan breaks even:
 
 - [Anthropic](../internal/guidance/models/anthropic.md#access-routes)
 - [OpenAI](../internal/guidance/models/openai.md#access-routes)
@@ -62,8 +63,10 @@ script requires.
 
 ## cc-switch
 
-A desktop app (MIT) that shows usage, cost, and quota for the vendor CLIs a person runs,
-read from the CLIs' own session logs. Use it for that view. Keep the rest of it off:
+A desktop app (MIT) that shows what the vendor CLIs a person runs have used. Usage and
+cost come from the CLIs' own local session logs. Remaining quota and account balances come
+from its per-provider usage queries instead, and some providers' queries must be
+configured before they report anything. Use it for that view. Keep the rest of it off:
 
 - **Routing, failover, and aggregation off.** These modes put a local proxy between the
   agent and the vendor. The usage view works without them.
@@ -84,19 +87,23 @@ kernel refusing a write. Two backends do this on macOS:
   supports Linux.
 - **`sandbox-exec`** (Seatbelt, built into macOS) needs no install. A generated profile
   denies writes everywhere except the runtime's state and temp directories and, for a
-  lead, the worktree. Reads stay open. Apple's man page marks it deprecated, and it is
-  still the mechanism the major agent CLIs use internally.
+  lead, the worktree and the repository's common git dir, where a linked worktree's
+  index, objects, and refs live. The common git dir's `hooks` and `config` stay denied.
+  Reads stay open. Apple's man page marks it deprecated.
 
 Verify containment by attack, never by reading a config: ask the agent to write inside and
 outside the allowed paths, on a fresh and a resumed session, and check the disk. On
 2026-10-24 the Balancewheel author ran three such checks under each backend, all passing,
 with the kernel's `EPERM` as the evidence:
 
-| Run | Inside the worktree | Outside it, `.git/hooks`, `.git/config`, a symlink escape, a child process writing outside |
-|---|---|---|
-| Kimi Code 2.3.1 as a read-only seat, fresh and resumed | every write denied, `.git` byte-identical | all denied |
-| Kimi Code 2.3.1 as a lead | write and commit succeed | all denied |
-| pi 0.85.1 with `deepseek/deepseek-v4.1-flash` as a lead | write and commit succeed | all denied |
+| Backend | Run | Inside the worktree | Outside it, `.git/hooks`, `.git/config`, a symlink escape, a child process writing outside |
+|---|---|---|---|
+| `sandbox-exec` | Kimi Code 2.3.1 as a read-only seat, fresh and resumed | every write denied, `.git` byte-identical | all denied |
+| `sandbox-exec` | Kimi Code 2.3.1 as a lead | write and commit succeed | all denied |
+| `sandbox-exec` | pi 0.85.1 with `deepseek/deepseek-v4.1-flash` as a lead | write and commit succeed | all denied |
+| nono | Kimi Code 2.3.1 as a read-only seat, fresh and resumed | every write denied, `.git` byte-identical | all denied |
+| nono | Kimi Code 2.3.1 as a lead | write and commit succeed | all denied |
+| nono | pi 0.85.1 with `deepseek/deepseek-v4.1-flash` as a lead | write and commit succeed | all denied |
 
 The same session found that Kimi Code 2.3.1 ignored its own `[[permission.rules]]` deny
 rules in `-p` mode, and that its hooks fail open by its own documentation. That is why
@@ -125,4 +132,4 @@ extra install with its own version to track:
 - https://github.com/eneskirca/nodeterm (Business Source License 1.1; retrieved 2026-10-24)
 - https://github.com/farion1231/cc-switch (MIT; retrieved 2026-10-24)
 - https://github.com/earendil-works/pi (MIT; retrieved 2026-10-24)
-- Balancewheel design, "Profiles, lead rotation, a starter, and the cockpit" (2026-10-24): the containment runs, the Kimi Code deny-rule finding, agy's working-directory write, pi's stdin wait, and the cc-switch settings, all first-party observations.
+- [Balancewheel](https://github.com/tensorgroup/balancewheel) design, `docs/superpowers/specs/2026-10-24-profiles-lead-rotation-cockpit-design.md`, "Profiles, lead rotation, a starter, and the cockpit" (2026-10-24): the containment runs, the Kimi Code deny-rule finding, agy's working-directory write, pi's stdin wait, and the cc-switch settings, all first-party observations.
