@@ -15,7 +15,7 @@ catalog:
     category: model
     status: preferred
     notes: OpenRouter's alias, which resolves to the 2026-09-10 launch release, not the 2026-10-17 release DeepSeek's own API serves. Provider price $0.02/$1.00 per 1M tokens at all hours on 2026-10-24, far under DeepSeek's own list on input; a provider price that can end without notice. Set a spend cap on the OpenRouter key.
-  - name: DeepSeek V4.1 Flash, OpenRouter dated snapshot (deepseek/deepseek-v4.1-flash-1017)
+  - name: DeepSeek V4.1 Flash, OpenRouter 2026-10-17 release (deepseek/deepseek-v4.1-flash-1017)
     category: model
     status: allowed
     notes: The 2026-10-17 release, the one DeepSeek's own API serves as deepseek-flash. Use it where results must match DeepSeek's API. Provider price on 2026-10-24 $0.30/$1.20 per 1M tokens from 01:00 to 04:00 and 06:00 to 10:00 UTC Monday to Friday, $0.15/$0.60 at all other hours.
