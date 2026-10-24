@@ -33,6 +33,25 @@ func TestEveryVendorNoteHasSources(t *testing.T) {
 	}
 }
 
+func TestEveryVendorNoteHasAccessRoutes(t *testing.T) {
+	s := Load("")
+	for _, key := range VendorOrder {
+		note, _, err := s.ReadFile(key + ".md")
+		if err != nil {
+			t.Fatalf("note %s.md: %v", key, err)
+		}
+		text := string(note)
+		routes := strings.Index(text, "## Access routes")
+		if routes < 0 {
+			t.Errorf("%s.md missing an Access routes section", key)
+			continue
+		}
+		if sources := strings.Index(text, "## Sources"); sources >= 0 && routes > sources {
+			t.Errorf("%s.md: Access routes must come before Sources", key)
+		}
+	}
+}
+
 func TestEveryCurrentFullDepthModelHasStarter(t *testing.T) {
 	s := Load("") // embedded
 	fullDepth := map[string]bool{"anthropic": true, "openai": true, "google": true}

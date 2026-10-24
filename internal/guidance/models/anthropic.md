@@ -45,6 +45,21 @@ Anthropic's fastest model with near-frontier intelligence, built for high-volume
 - Route bulk, mechanical, and high-volume work to Haiku 4.5 to hold spend down; it is 2x cheaper than Sonnet 5.5 and 10x cheaper than Fable 5.1 on output tokens.
 - Routing policy: plan, plan-check, and review on Fable 5.1 (Opus 5.5 when price or retention says so); code day-to-day on Sonnet 5.5; run bulk and mechanical edits on Haiku 4.5.
 
+## Access routes
+
+Prices as of 2026-10-24.
+
+| Route | What you pay | Tool | Limits, per the vendor |
+|---|---|---|---|
+| Plan + vendor CLI | Pro $20/month ($17/month billed annually); Max 5x $100/month; Max 20x $200/month | Claude Code (`claude`), included on Pro and both Max tiers | A rolling five-hour session window plus weekly limits; Claude Code draws from the same pool as the apps. Max gives 5x or 20x Pro's usage per five hours. No fixed message count is published. Past a limit, paid plans can switch on usage credits at API rates. |
+| Plan + another vendor's CLI | Google AI Pro (paid, not trial) or Ultra | Antigravity CLI (`agy`) | agy offers Claude Opus 5.5 and Sonnet 5.5 (thinking) on Google's plan, on a fixed limit separate from the Gemini pool. See the Google note. |
+| Direct API | Fable 5.1 $10 / $50; Opus 5.5 $4 / $20; Sonnet 5.5 $2 / $10; Haiku 4.5 $1 / $5 per million input/output tokens | Any harness with an API key | Metered per token. |
+| OpenRouter | `anthropic/claude-fable-5.1` $10 / $50; `anthropic/claude-opus-5.5` $4 / $20; `anthropic/claude-sonnet-5.5` $2 / $10; `anthropic/claude-haiku-4.5` $1 / $5 | Any OpenAI-compatible harness | Provider prices can change without notice. |
+
+- When a plan pays for itself, counting output tokens only: Pro at $20 matches 2M Sonnet 5.5 output tokens a month ($20 / $10 per M). Max 5x at $100 matches 5M Opus 5.5 output tokens ($100 / $20 per M). Max 20x at $200 matches 4M Fable 5.1 output tokens ($200 / $50 per M). An agent session also reads far more input than it writes, so the real break-even comes sooner.
+- Run repo-aware agent work through Claude Code on a plan for daily use; it is usually the cheaper route once a team member codes with an agent most days.
+- Use a metered key (direct or OpenRouter) for fast, small, occasional calls and for unattended jobs that must not draw down a person's plan.
+
 ## Sources
 
 - https://platform.claude.com/docs/en/about-claude/models/overview
@@ -55,3 +70,7 @@ Anthropic's fastest model with near-frontier intelligence, built for high-volume
 - https://claude.com/blog/the-new-rules-of-context-engineering-for-claude-5-generation-models
 - https://code.claude.com/docs/en/best-practices
 - docs/roadmap/vendor-guidance-tracking.md (this repo, 2026-07-28 log entry on the Claude 5 context-engineering rules; 2026-09-16, 2026-09-22, and 2026-09-29 entries on these refreshes)
+- https://claude.com/pricing (plans, limits FAQ; retrieved 2026-10-24)
+- https://support.claude.com/en/articles/11049741-what-is-the-max-plan (Max 5x and 20x prices; retrieved 2026-10-24)
+- https://antigravity.google/docs/models (Claude models on the Google plan; retrieved 2026-10-24)
+- https://openrouter.ai/api/v1/models (OpenRouter prices; retrieved 2026-10-24)

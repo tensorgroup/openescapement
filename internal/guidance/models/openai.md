@@ -47,6 +47,20 @@ Previously OpenAI's flagship, superseded by GPT-5.3-Codex, GPT-5.4, GPT-5.5, the
 - Treat GPT-5.2 as retired for new work: migrate saved configurations, custom agents, and scheduled tasks to GPT-6 Sol, or to GPT-6 Luna for the cheapest tier (GPT-5.6 Terra or Luna where GPT-6 is not yet available).
 - Routing policy: plan, plan-check, and review on GPT-6 Astra; code day-to-day on GPT-6 Sol; run bulk and mechanical edits on GPT-6 Luna. Where the GPT-6 rollout has not reached an account, fall back to GPT-5.6 Terra and Luna; GPT-5.6 Sol stays on review where it already reviews well.
 
+## Access routes
+
+Prices as of 2026-10-24.
+
+| Route | What you pay | Tool | Limits, per the vendor |
+|---|---|---|---|
+| Plan + vendor CLI | ChatGPT Plus $20/month; Pro $100, $200, or $500/month | Codex CLI (`codex`) under a ChatGPT sign-in | Plus, per five hours: roughly 5-45 local messages on GPT-6 Astra, 15-150 on GPT-6 Sol, 350-3,000 on GPT-6 Luna; weekly limits may also apply. Pro plans currently have no five-hour limit. OpenAI calls these estimates, not fixed limits. |
+| Direct API | GPT-6 Astra $10 / $50; GPT-6 Sol $2 / $10; GPT-6 Luna $0.10 / $0.50 per million input/output tokens | Codex CLI with an API key, or any harness | Metered per token. |
+| OpenRouter | `openai/gpt-6-astra` $10 / $50; `openai/gpt-6-sol` $2 / $10; `openai/gpt-6-luna` $0.10 / $0.50 | Any OpenAI-compatible harness | Provider prices can change without notice. |
+
+- When a plan pays for itself, counting output tokens only: Plus at $20 matches 2M GPT-6 Sol output tokens a month ($20 / $10 per M). Pro at $100 matches 2M GPT-6 Astra output tokens ($100 / $50 per M), and Pro at $200 matches 4M. Input tokens push the real break-even earlier.
+- Run repo-aware agent work through Codex CLI on a plan for daily use; Astra-heavy review is where the plan saves most, since Astra is the most expensive model per token.
+- Use a metered key for fast, small, occasional calls, and for any job on an account the GPT-6 rollout has not reached (the API serves GPT-6 Sol and Luna to direct keys).
+
 ## Sources
 
 - https://platform.openai.com/docs/models
@@ -61,3 +75,5 @@ Previously OpenAI's flagship, superseded by GPT-5.3-Codex, GPT-5.4, GPT-5.5, the
 - https://developers.openai.com/codex/models (recommended models, GPT-5.5 retirement, rollout)
 - https://openrouter.ai/openai/gpt-6-astra (launch pricing and tiers as listed 2026-09)
 - docs/roadmap/vendor-guidance-tracking.md (this repo, 2026-09-16 and 2026-09-25 entries on these refreshes)
+- https://developers.openai.com/codex/pricing (plans, per-five-hour estimates; retrieved 2026-10-24)
+- https://openrouter.ai/api/v1/models (OpenRouter prices; retrieved 2026-10-24)

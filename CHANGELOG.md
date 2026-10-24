@@ -8,6 +8,11 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- Portal model guidance: every vendor note gains an Access routes section (plan plus
+  the vendor's own CLI, direct API, OpenRouter) with prices dated 2026-10-24, the
+  vendor's stated plan limits, and break-even arithmetic for each plan it recommends.
+  Google's names agy as a route to Claude Opus 5.5 and Sonnet 5.5 on the Google plan.
+  `TestEveryVendorNoteHasAccessRoutes` requires the section, before Sources.
 - `examples/packs/model-seats` 0.2.0: a decision-model routing rule (pilot status).
   A decision model's typed answers advise the model tier, reasoning effort, and review
   depth per task. The rule is raise-only until calibrated on the org's own outcomes,

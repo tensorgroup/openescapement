@@ -36,6 +36,21 @@ Previously Google's frontier reasoning model, Gemini 3 Pro Preview (`gemini-3-pr
 - Treat Gemini 3 Pro Preview (`gemini-3-pro`) as retired: Google shut it down on 2026-03-09 and its recommended replacement is `gemini-3.1-pro-preview`, so point new configuration there directly.
 - Routing policy: plan, plan-check, and review on Gemini 3.1 Pro Preview; code day-to-day on Gemini 3.8 Flash; run bulk and mechanical edits on Gemini 3.5 Flash-Lite.
 
+## Access routes
+
+Prices as of 2026-10-24.
+
+| Route | What you pay | Tool | Limits, per the vendor |
+|---|---|---|---|
+| Plan + vendor CLI | Google AI Pro $20/month; Google AI Ultra $100/month (5x Pro's tokens) or $200/month (20x) | Antigravity CLI (`agy`), included on every plan | Pro: a quota refreshed every five hours until a weekly limit. Ultra: the highest quota, refreshed every five hours. No numbers are published. Gemini models share one pool drawn down at API prices; non-Gemini models have a separate fixed limit. Overage runs on purchased AI credits only if the "AI Credit Overages" setting is `Always`. |
+| Direct API | Gemini 4 Argon $2 / $10 per million input/output tokens through 2026-11-30, then $4 / $20 (Batch and Flex half); 3.8 Flash $0.75 / $3.75; 3.5 Flash-Lite $0.30 / $2.50 | Any harness with a Gemini API key | Metered per token. Argon is not on the Free tier. |
+| OpenRouter | `google/gemini-4-argon` $2 / $10; `google/gemini-4-argon:batch` $1 / $5; `google/gemini-3.8-flash` $0.825 / $4.125 | Any OpenAI-compatible harness | Provider prices can change without notice. |
+
+- agy also serves Claude Opus 5.5 and Claude Sonnet 5.5 (thinking) on Google AI Pro (paid subscriptions, not trials) and Ultra. That makes the Google plan a second route to Claude-family models that does not draw on an Anthropic plan.
+- Gemini 4 Argon is on paid Pro and Ultra in agy, not on Free or Plus. Gemini 3.1 Pro is offered in agy only on Enterprise.
+- When a plan pays for itself, counting output tokens only: Pro at $20 matches 2M Argon output tokens a month at the introductory $10 per M, and 1M from 2026-12-01 at $20 per M. Ultra at $100 matches 10M, then 5M. Input tokens push the real break-even earlier.
+- Run repo-aware agent work through agy on a plan for daily use. Use a metered key for fast, small, occasional calls; the Batch tier halves the price for work that can wait.
+
 ## Sources
 
 - https://ai.google.dev/gemini-api/docs/models
@@ -48,3 +63,8 @@ Previously Google's frontier reasoning model, Gemini 3 Pro Preview (`gemini-3-pr
 - https://ai.google.dev/gemini-api/docs/pricing
 - https://ai.google.dev/gemini-api/docs/changelog
 - https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/model-routing.md
+- https://antigravity.google/blog/changes-to-antigravity-plans/ (plan prices and multipliers, 2026-05-19; retrieved 2026-10-24)
+- https://antigravity.google/docs/plans (quota and overage rules; retrieved 2026-10-24)
+- https://antigravity.google/docs/models (models per plan in agy; retrieved 2026-10-24)
+- https://openrouter.ai/google/gemini-4-argon and https://openrouter.ai/google/gemini-4-argon:batch (retrieved 2026-10-24)
+- https://openrouter.ai/api/v1/models (OpenRouter prices; retrieved 2026-10-24)

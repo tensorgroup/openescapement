@@ -30,8 +30,25 @@ Superseded by K3. Moonshot has closed it to new accounts and is sunsetting it pl
 - Route planning, plan-check, and review to K3; day-to-day coding to K2.7 Code; high-volume or rapid-iteration edits to K2.7 Code High-Speed.
 - Move any workflow still on K2.5 or the moonshot-v1 series off before the 2026-08-31 platform sunset; those ids stop working after that date.
 
+## Access routes
+
+Prices as of 2026-10-24.
+
+| Route | What you pay | Tool | Limits, per the vendor |
+|---|---|---|---|
+| Plan + vendor CLI | Kimi Code plan, subscription-based; tiers and prices are on the Kimi Code site, which this note could not read on 2026-10-24 | Kimi Code CLI (`kimi`) | One subscription covers desktop, CLI, and IDE. The Kimi Code API is separate from the Kimi API Platform, and keys are not interchangeable. |
+| Direct API | K3.1 Pro $2 / $10; K3.1 Pro High-Speed $4 / $20; K3 $3 / $15 per million input/output tokens (cache hits $0.20 on K3.1) | Kimi Code with an API Platform key, or any harness | Metered per token. Context caching is billed automatically. |
+| OpenRouter | `moonshotai/kimi-k3.1-pro` $2 / $10 | Any OpenAI-compatible harness | Provider prices can change without notice. |
+
+- When a plan pays for itself: a Kimi Code plan at $P a month matches P / 10 million K3.1 Pro output tokens at the API's $10 per M, or P / 20 million on High-Speed. Read the current tier prices on the Kimi Code site before deciding.
+- Run repo-aware agent work through Kimi Code on a plan for daily use, under an OS sandbox (see Governance).
+- Use a metered key for fast, small, occasional calls.
+
 ## Sources
 
 - https://platform.kimi.ai/docs/models
 - https://platform.kimi.ai/docs/pricing/chat-k3
 - https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/customization/agents.md
+- https://platform.kimi.ai/docs/guide/product-plans (Kimi Code is subscription-based and separate from the API Platform; retrieved 2026-10-24)
+- https://www.kimi.ai/code (Kimi Code plan tiers)
+- https://openrouter.ai/api/v1/models (OpenRouter prices; retrieved 2026-10-24)

@@ -24,9 +24,23 @@ Retired on 2026-09-10 together with `deepseek-v4-flash-vision-exp`. Both names a
 - Routing policy: plan, plan-check, and review on Pro; day-to-day coding and bulk work on V4.1 Flash.
 - Retired ids: `deepseek-chat` and `deepseek-reasoner` (2026-07-24), `deepseek-v4-flash` and `deepseek-v4-flash-vision-exp` (2026-09-10, still routed). Update any pack or config still referencing them to `deepseek-flash` or `deepseek-v4-pro` directly.
 
+## Access routes
+
+Prices as of 2026-10-24.
+
+| Route | What you pay | Tool | Limits, per the vendor |
+|---|---|---|---|
+| Direct API | `deepseek-flash` $0.30 / $1.20 per million input/output tokens at peak, $0.15 / $0.60 off-peak; `deepseek-v4-pro` $1.32 / $3.96 peak, $0.66 / $1.98 off-peak | Any OpenAI- or Anthropic-compatible harness | Metered per token. Concurrency limit 2,500 (Flash) and 500 (Pro). |
+| OpenRouter | `deepseek/deepseek-v4.1-flash` $0.02 / $1.00; `deepseek/deepseek-v4.1-flash-1017` $0.15 / $0.60; `deepseek/deepseek-v4-pro` $0.209 / $0.418 | Any OpenAI-compatible harness, such as pi | Provider prices can change without notice. The alias's $0.02 input price is far under DeepSeek's own list. |
+
+- No subscription plan with a vendor coding CLI was found for DeepSeek on 2026-10-24, so every route is metered.
+- Pick the route by the job's shape. Input-heavy reads (reviews of large diffs, triage of long transcripts) cost least on the OpenRouter alias while its input price holds. Output-heavy work costs least on DeepSeek's own API off-peak or on the dated `-1017` id.
+- Set a spend cap on the OpenRouter key; an agent loop on a cheap model still runs all night.
+
 ## Sources
 
 - https://api-docs.deepseek.com/api/list-models/
 - https://api-docs.deepseek.com/quick_start/pricing
 - https://api-docs.deepseek.com/news/news260910/
 - https://api-docs.deepseek.com/updates/
+- https://openrouter.ai/api/v1/models (OpenRouter prices; retrieved 2026-10-24)

@@ -26,6 +26,19 @@ Two generations back, 1M-token context, $1.25 / $2.50 per million tokens, kept l
 - Route mechanical edits, code-generation subagents, and bulk work to Grok Build 0.1 to hold spend down; it is half of 4.6's price on input and a third on output. Within 4.6, use the reasoning_effort parameter to trade quality for latency on lower-stakes work, and expect the fast variant to cost double.
 - Routing policy: plan, plan-check, and review on Grok 4.6; code day-to-day on Grok 4.6, dropping to Grok Build 0.1 for mechanical and bulk work; migrate any remaining Grok 4.5 or 4.3 references off as soon as practical.
 
+## Access routes
+
+Prices as of 2026-10-24.
+
+| Route | What you pay | Tool | Limits, per the vendor |
+|---|---|---|---|
+| Plan | The X Subscription: Plus $8/month, Premium $30 (4x usage), Super $100 (15x), Ultra $200 (50x) | Grok Build (`grok`) signs in through a browser on first launch, or takes an `XAI_API_KEY` | Each paid seat gets a weekly pool for eligible first-party usage across supported Grok and Cursor surfaces. xAI's pricing pages do not say whether Grok Build draws on that pool. |
+| Direct API | Grok 4.6 $2 / $6 per million input/output tokens ($4 / $12 past 200K prompt tokens); Grok Build 0.1 $1 / $2 | Grok Build with an API key, or any harness | Metered per token. |
+| OpenRouter | `x-ai/grok-4.6` $2 / $6; `x-ai/grok-build-0.1` $1 / $2 | Any OpenAI-compatible harness | Provider prices can change without notice. |
+
+- Treat Grok Build on an API key as the documented route, and check the live usage view before assuming a subscription covers agent work.
+- Use a metered key for fast, small, occasional calls; Grok Build 0.1 at $2 per M output is cheap enough that a plan rarely matters for light use.
+
 ## Sources
 
 - https://docs.x.ai/developers/models
@@ -36,3 +49,6 @@ Two generations back, 1M-token context, $1.25 / $2.50 per million tokens, kept l
 - https://docs.x.ai/developers/models/grok-4.3
 - https://docs.x.ai/developers/pricing
 - https://docs.x.ai/build/overview
+- https://docs.x.ai/x-subscription/pricing (retrieved 2026-10-24)
+- https://docs.x.ai/x-subscription/usage-limits (retrieved 2026-10-24)
+- https://openrouter.ai/api/v1/models (OpenRouter prices; retrieved 2026-10-24)
