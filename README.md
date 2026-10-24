@@ -172,7 +172,8 @@ dispute. Each works without the other; together they close a loop.
 
 - **`esc` only.** An org wants its rules in every repo's instruction files, signed and
   drift-checked. Nothing here needs a panel. The model packs under `examples/packs/`
-  (`anthropic-models`, `openai-models`, `zai-models`) carry per-vendor model guidance
+  (`anthropic-models`, `openai-models`, `google-models`, `kimi-models`, `deepseek-models`,
+  `zai-models`) carry per-vendor model guidance
   with prices, the reason behind each status, and the condition that would reverse it;
   copy one into your pack repo and pin it.
 - **Balancewheel only.** You want a review panel and a scoreboard for your own agent,
@@ -233,7 +234,7 @@ constraints:
 
 Shipped examples: `examples/packs/acme-org` is a complete org pack (rules, paved paths,
 a catalog, a skill, an MCP server, constraints); `anthropic-models`, `openai-models`,
-and `zai-models` are per-vendor model packs, each catalog entry carrying its price, the
+`google-models`, `kimi-models`, `deepseek-models`, and `zai-models` are per-vendor model packs, each catalog entry carrying its price, the
 reason for its status, and, where the status departs from the vendor's own default, the
 condition that would reverse it; `model-seats` governs how several models collaborate,
 by seat rather than by model.

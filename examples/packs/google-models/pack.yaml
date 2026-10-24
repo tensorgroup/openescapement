@@ -1,0 +1,33 @@
+schema: 1
+name: google-models
+version: 0.1.0
+description: Model selection guidance for Google's Gemini family. Gemini 4 Argon is the frontier model for planning and review; 3.8 Flash and 3.5 Flash-Lite cover day-to-day and bulk work. Prices are dated and move; bump the version when they do.
+
+rules:
+  - rules/model-selection.md
+
+catalog:
+  - name: Gemini 4 Argon (gemini-4-argon)
+    category: model
+    status: preferred
+    notes: Google's flagship reasoning model, generally available since 2026-10-13. Planning, plan-check, and review. 1,048,576-token context shared by input and output; thinking low, medium (default), or high. $2/$10 per 1M tokens through 2026-11-30, then $4/$20; Batch and Flex at half (2026-10-24). No explicit context caching. In the Antigravity CLI (agy) it is selected as gemini-4-argon-low, -medium, or -high, on paid Google AI Pro and Ultra plans.
+  - name: Gemini 3.8 Flash (gemini-3.8-flash)
+    category: model
+    status: allowed
+    notes: Day-to-day coding and lower-stakes review. $0.75/$3.75 per 1M tokens through 2026-12-31, then $1.50/$7.50 (2026-10-24).
+  - name: Gemini 3.5 Flash-Lite (gemini-3.5-flash-lite)
+    category: model
+    status: allowed
+    notes: Bulk and mechanical work at scale. $0.30/$2.50 per 1M tokens, no introductory period (2026-10-24).
+  - name: Gemini 3.1 Pro Preview (gemini-3.1-pro-preview)
+    category: model
+    status: review-required
+    notes: Still served with no shutdown date, but Argon replaces it for planning and review. Keep it only where a workload depends on explicit context caching, which Argon does not support. Reverses to banned when Google announces a shutdown date.
+  - name: Gemini 3.7 Flash (gemini-3.7-flash)
+    category: model
+    status: banned
+    notes: Deprecated 2026-10-08. Requests to it are served by gemini-3.8-flash, so a pin names a model that no longer does the work. Move the config to gemini-3.8-flash.
+  - name: Gemini 3 Pro Preview (gemini-3-pro-preview)
+    category: model
+    status: banned
+    notes: Shut down 2026-03-09. Any config still naming it must move to gemini-4-argon.

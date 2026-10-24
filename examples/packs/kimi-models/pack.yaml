@@ -1,0 +1,29 @@
+schema: 1
+name: kimi-models
+version: 0.1.0
+description: Model selection guidance for Moonshot AI's Kimi family. Kimi K3.1 Pro is the frontier model for planning and review; K3.1 Pro High-Speed serves fast reads. Kimi Code's permission rules are not enforcement in non-interactive runs, so this pack requires an OS sandbox for unattended sessions.
+
+rules:
+  - rules/model-selection.md
+
+catalog:
+  - name: Kimi K3.1 Pro (kimi-k3.1-pro)
+    category: model
+    status: preferred
+    notes: Moonshot's flagship, a post-trained K3 with a 1,048,576-token context and native vision. Planning, plan-check, and review. $2/$10 per 1M tokens, cache hits $0.20 (2026-10-24). In Kimi Code it appears as kimi-code/k3.1-pro.
+  - name: Kimi K3.1 Pro High-Speed (kimi-k3.1-pro-highspeed)
+    category: model
+    status: allowed
+    notes: The same model at about 2-3x the speed and double the price, $4/$20 per 1M tokens (2026-10-24). Fast reads and rapid iteration where latency matters more than cost. In Kimi Code it appears as kimi-code/k3.1-pro-highspeed.
+  - name: Kimi K3 (kimi-k3)
+    category: model
+    status: allowed
+    notes: The previous-generation flagship, $3/$15 per 1M tokens (2026-10-24), more than K3.1 Pro on both sides. Migrate pins to kimi-k3.1-pro.
+  - name: Kimi K2.7 Code (kimi-k2.7-code)
+    category: model
+    status: review-required
+    notes: The dedicated coding model, 256K context. The K2 series closes to new users on 2026-10-31 and retires by the end of December 2026; plan the move to kimi-k3.1-pro before then.
+  - name: Kimi K2.5 (kimi-k2.5)
+    category: model
+    status: banned
+    notes: Sunset 2026-08-31; the id no longer works. Any config still naming it must move to kimi-k3.1-pro.
