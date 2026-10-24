@@ -8,6 +8,10 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- `docs/agent-tools.md`: the agent tools an org governs (the vendor CLIs, plans
+  versus metered keys, OpenRouter, nodeterm, cc-switch, nono and `sandbox-exec`, ACP
+  per runtime), each with what it costs and the setting that matters for governance,
+  linked from the README. Per-user setup stays in Balancewheel.
 - `examples/packs/model-seats` 0.3.0: a lead-rotation rule (leads ordered per profile,
   containment verified both ways by attack, switch on an observed cap, return at a task
   boundary after the reset, one writable lead per worktree, every switch logged, leads

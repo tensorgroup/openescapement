@@ -175,7 +175,9 @@ dispute. Each works without the other; together they close a loop.
   (`anthropic-models`, `openai-models`, `google-models`, `kimi-models`, `deepseek-models`,
   `zai-models`) carry per-vendor model guidance
   with prices, the reason behind each status, and the condition that would reverse it;
-  copy one into your pack repo and pin it.
+  copy one into your pack repo and pin it. For the agent tools an org governs (the vendor
+  CLIs, plans versus metered keys, OpenRouter, sandboxes), see
+  [docs/agent-tools.md](docs/agent-tools.md).
 - **Balancewheel only.** You want a review panel and a scoreboard for your own agent,
   and there is no org policy to ship. It installs once per machine, under the home
   directory only, and nothing in it needs `esc`.
