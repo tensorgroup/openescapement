@@ -27,7 +27,8 @@ tagged releases begin.
 - `examples/packs/google-models` 0.1.0 (Gemini 4 Argon preferred for planning and
   review, the Flash tiers by role, agy as the plan route, the deprecated 3.7 Flash and
   retired 3 Pro Preview banned by name), `examples/packs/kimi-models` 0.1.0 (K3.1 Pro
-  preferred, High-Speed for fast reads, K2.5 banned, an OS sandbox required for
+  preferred, High-Speed for fast reads, K3 and K2.7 Code review-required for existing
+  pins, K2.5 banned, an OS sandbox required for
   unattended Kimi Code runs), and `examples/packs/deepseek-models` 0.1.0 (V4.1 Flash
   preferred for second opinions and triage under its DeepSeek id and OpenRouter's alias,
   OpenRouter's `-1017` id allowed where results must match DeepSeek's own API, a spend
@@ -38,7 +39,7 @@ tagged releases begin.
   `deepseek/deepseek-v4.1-flash-1017` is the 2026-10-17 release DeepSeek's own API
   serves, with DeepSeek's weekday peak schedule. V4.1 Flash gains fast second opinions
   and triage as a role.
-- Portal Kimi guidance: Kimi K3.1 Pro (frontier; planning, plan-check, review) and
+- Portal Kimi guidance: Kimi K3.1 Pro (frontier; planning, plan-check, review, coding) and
   K3.1 Pro High-Speed (fast reads, bulk) added; K3 moves to legacy; the K2 series'
   end of life (closed to new users 2026-10-31, retired by end of December 2026) noted.
   A governance bullet says Kimi Code's permission rules are not enforcement in `-p`
@@ -51,9 +52,12 @@ tagged releases begin.
   deprecation. The routing example and every Google starter now route to Argon.
 - Portal model guidance: every vendor note gains an Access routes section (plan plus
   the vendor's own CLI, direct API, OpenRouter) with prices dated 2026-10-24, the
-  vendor's stated plan limits, and break-even arithmetic for each plan it recommends.
+  vendor's stated plan limits, and break-even arithmetic for each plan whose price
+  is published (Kimi's note gives the formula, since the Kimi Code plan prices could not
+  be read on 2026-10-24).
   Google's names agy as a route to Claude Opus 5.5 and Sonnet 5.5 on the Google plan.
-  `TestEveryVendorNoteHasAccessRoutes` requires the section, before Sources.
+  `TestEveryVendorNoteHasAccessRoutes` requires it as a level-2 heading after Governance
+  and before Sources.
 - `examples/packs/model-seats` 0.2.0: a decision-model routing rule (pilot status).
   A decision model's typed answers advise the model tier, reasoning effort, and review
   depth per task. The rule is raise-only until calibrated on the org's own outcomes,

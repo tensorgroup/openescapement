@@ -6,7 +6,7 @@ Moonshot AI's Kimi ships one flagship line (K3.1 Pro and its High-Speed variant)
 
 ### Kimi K3.1 Pro (kimi-k3.1-pro) - frontier
 
-The first model of the K3.1 series and Moonshot's most capable flagship: a post-trained version of K3 with substantially more post-training compute, 3T-class, with native visual understanding and a 1,048,576-token context window. Moonshot reports gains over K3 in coding, agentic work, and knowledge work; open weights are due by 2026-11-04. $2 / $10 per million input/output tokens (cache hits $0.20), cheaper than K3 on both sides. Recommended roles: planning, plan-check, and review. In Kimi Code it appears as `kimi-code/k3.1-pro` (observed in a Kimi Code 2.3.1 configuration on 2026-10-24; the CLI docs still show `kimi-code/k3`).
+The first model of the K3.1 series and Moonshot's most capable flagship: a post-trained version of K3 with substantially more post-training compute, 3T-class, with native visual understanding and a 1,048,576-token context window. Moonshot reports gains over K3 in coding, agentic work, and knowledge work; open weights are due by 2026-11-04. $2 / $10 per million input/output tokens (cache hits $0.20), cheaper than K3 on both sides. Recommended roles: planning, plan-check, review, and day-to-day coding. In Kimi Code it appears as `kimi-code/k3.1-pro` (observed in a Kimi Code 2.3.1 configuration on 2026-10-24; the CLI docs still show `kimi-code/k3`).
 
 ### Kimi K3.1 Pro High-Speed (kimi-k3.1-pro-highspeed) - fast
 
@@ -61,7 +61,7 @@ Prices as of 2026-10-24.
 - https://platform.kimi.ai/docs/pricing/chat-k3
 - https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/customization/agents.md
 - https://platform.kimi.ai/docs/guide/product-plans (Kimi Code is subscription-based and separate from the API Platform; retrieved 2026-10-24)
-- https://www.kimi.ai/code (Kimi Code plan tiers)
+- https://www.kimi.ai/code (Kimi Code plan tiers; not retrievable on 2026-10-24)
 - https://openrouter.ai/api/v1/models (OpenRouter prices; retrieved 2026-10-24)
 - https://platform.kimi.ai/docs/guide/kimi-k3-1-pro-quickstart (retrieved 2026-10-24)
 - https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/reference/kimi-command.md (`-p` runs use the `auto` permission mode; retrieved 2026-10-24)

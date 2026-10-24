@@ -57,7 +57,7 @@ Prices as of 2026-10-24.
 | Direct API | GPT-6 Astra $10 / $50; GPT-6 Sol $2 / $10; GPT-6 Luna $0.10 / $0.50 per million input/output tokens | Codex CLI with an API key, or any harness | Metered per token. |
 | OpenRouter | `openai/gpt-6-astra` $10 / $50; `openai/gpt-6-sol` $2 / $10; `openai/gpt-6-luna` $0.10 / $0.50 | Any OpenAI-compatible harness | Provider prices can change without notice. |
 
-- When a plan pays for itself, counting output tokens only: Plus at $20 matches 2M GPT-6 Sol output tokens a month ($20 / $10 per M). Pro at $100 matches 2M GPT-6 Astra output tokens ($100 / $50 per M), and Pro at $200 matches 4M. Input tokens push the real break-even earlier.
+- When a plan pays for itself, counting output tokens only: Plus at $20 matches 2M GPT-6 Sol output tokens a month ($20 / $10 per M). Pro at $100 matches 2M GPT-6 Astra output tokens ($100 / $50 per M), Pro at $200 matches 4M, and Pro at $500 matches 10M. Input tokens push the real break-even earlier.
 - Run repo-aware agent work through Codex CLI on a plan for daily use; Astra-heavy review is where the plan saves most, since Astra is the most expensive model per token.
 - Use a metered key for fast, small, occasional calls, and for any job on an account the GPT-6 rollout has not reached (the API serves GPT-6 Sol and Luna to direct keys).
 

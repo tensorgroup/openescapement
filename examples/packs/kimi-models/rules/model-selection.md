@@ -4,7 +4,7 @@ Kimi K3.1 Pro is the model for judgment: plans, plan checks, and reviews. Its Hi
 
 | Model | ID (API) | ID (Kimi Code) | $/1M tokens (in/out), 2026-10-24 | Use for |
 |---|---|---|---|---|
-| Kimi K3.1 Pro | `kimi-k3.1-pro` | `kimi-code/k3.1-pro` | $2 / $10 | Planning, plan-check, review. |
+| Kimi K3.1 Pro | `kimi-k3.1-pro` | `kimi-code/k3.1-pro` | $2 / $10 | Planning, plan-check, review, day-to-day coding. |
 | Kimi K3.1 Pro High-Speed | `kimi-k3.1-pro-highspeed` | `kimi-code/k3.1-pro-highspeed` | $4 / $20 | Fast reads, rapid iteration. |
 | Kimi K3 | `kimi-k3` | `kimi-code/k3` | $3 / $15 | Existing pins only; migrate to K3.1 Pro. |
 | Kimi K2.7 Code | `kimi-k2.7-code` | | not recorded; no new work goes to it | Existing pins only; the K2 series retires by the end of December 2026. |
