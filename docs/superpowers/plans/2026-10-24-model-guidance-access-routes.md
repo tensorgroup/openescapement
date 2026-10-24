@@ -99,7 +99,7 @@
 **Files:**
 - Modify: `internal/guidance/models/deepseek.md` (and `models.yaml` only if the sheet changes a status)
 
-- [ ] **Step 1: Update the V4.1 Flash section:** re-verified list prices; the OpenRouter ids `deepseek/deepseek-v4.1-flash` (the alias to use) and `deepseek/deepseek-v4.1-flash-1017` (dated, priced higher on 2026-10-24) with their prices as provider prices; recommended roles gain "fast second opinions and triage" if consistent with the sheet.
+- [ ] **Step 1: Update the V4.1 Flash section:** re-verified list prices; the OpenRouter ids `deepseek/deepseek-v4.1-flash` (the alias to use) and `deepseek/deepseek-v4.1-flash-1017` (dated, priced higher on 2026-10-24; superseded: -1017 is the 2026-10-17 release with weekday peak pricing, not a dated snapshot of the alias) with their prices as provider prices; recommended roles gain "fast second opinions and triage" if consistent with the sheet.
 - [ ] **Step 2: Run** `go test ./...` — expect PASS.
 - [ ] **Step 3: Commit** `feat(guidance): deepseek v4.1 flash through openrouter`.
 
@@ -113,7 +113,7 @@
 - Consumes: Tasks 1, 3, 4, 5.
 - Produces: three packs at `version: 0.1.0`, `schema: 1`, shaped like `examples/packs/zai-models` (a model table with id, price with date, use-for; "Rules of thumb" bullets; a catalog with `preferred` / `allowed` / `banned` entries and notes).
 
-- [ ] **Step 1: Write the three packs.** Google: Gemini 4 Argon `preferred` for planning and review, the Flash tiers by role, retired previews `banned` by name if the sheet lists any; a rule line that agy is the plan route. Kimi: K3.1 Pro `preferred` for planning and review, High-Speed for fast reads, K2.5 `banned` (sunset 2026-08-31); the Kimi Code `-p` sandbox rule from Task 4 as a rule line. DeepSeek: V4.1 Flash `preferred` for fast, cheap second opinions and triage, named by both ids — `deepseek-flash` on DeepSeek's own API and `deepseek/deepseek-v4.1-flash` on OpenRouter — so direct-API users get the right one; the dated `-1017` snapshot `allowed`; "set a spend cap on the OpenRouter key".
+- [ ] **Step 1: Write the three packs.** Google: Gemini 4 Argon `preferred` for planning and review, the Flash tiers by role, retired previews `banned` by name if the sheet lists any; a rule line that agy is the plan route. Kimi: K3.1 Pro `preferred` for planning and review, High-Speed for fast reads, K2.5 `banned` (sunset 2026-08-31); the Kimi Code `-p` sandbox rule from Task 4 as a rule line. DeepSeek: V4.1 Flash `preferred` for fast, cheap second opinions and triage, named by both ids — `deepseek-flash` on DeepSeek's own API and `deepseek/deepseek-v4.1-flash` on OpenRouter — so direct-API users get the right one; the dated `-1017` snapshot `allowed` (superseded: -1017 is the 2026-10-17 release with weekday peak pricing, not a snapshot); "set a spend cap on the OpenRouter key".
 - [ ] **Step 2: Run** `go test ./... -run TestEveryExamplePackSyncs -v` — expect PASS for all packs, new ones included.
 - [ ] **Step 3: Render each new pack once into a temp repo** (`esc init` / `esc sync` against the pack path, per `examples/README.md`) and read the managed block in `AGENTS.md` by eye: no broken tables, no leftover template text.
 - [ ] **Step 4: Commit** `feat(packs): google, kimi, and deepseek model packs`.
