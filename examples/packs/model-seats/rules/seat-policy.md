@@ -26,10 +26,10 @@ Conduct rules the moderator enforces:
 - **Read-only seats.** External model seats never hold write access to a checkout.
   Verify by attempted write, on fresh and resumed sessions, before trusting a seat and
   again after any harness upgrade.
-- **OS-level enforcement.** Enforce read-only at the OS level. A seat's own permission
-  settings are not enforcement until an attempted write fails with an OS error on a fresh
-  and a resumed session. Vendor permission rules have been seen to ignore deny rules in
-  non-interactive mode, and only the kernel's refusal proves the write cannot happen.
+- **OS-level enforcement.** Enforce read-only access with an OS sandbox. A seat's own
+  permission settings enforce nothing, because vendor permission rules have been seen to
+  ignore deny rules in non-interactive mode. Prove the sandbox by attack: an attempted
+  write must fail with an OS error on a fresh and on a resumed session.
 - **Recorded moderator.** Record which lead moderated each panel, by resolved model id.
   A lenient moderator inflates every seat's confirmed rate, and an alias hides which model
   ruled.
@@ -40,10 +40,11 @@ Conduct rules the moderator enforces:
   by the model. A seat that does not return inside it is recorded as absent, left out
   of that panel's per-seat counts, and the panel proceeds on the rest; a timeout never
   drops a seat from the roster.
-- **Usage caps.** When a seat's model hits a plan usage cap, run that seat on its
+- **Usage caps.** When a review seat's model hits a plan usage cap, run that seat on its
   configured fallback model and score the run under the fallback's own id. Record the
   capped seat as absent (usage cap), because crediting one model with another's findings
-  corrupts the scoreboard the roster is decided from.
+  corrupts the scoreboard the roster is decided from. A capped lead follows the lead
+  rotation rule (`rules/lead-rotation.md`) instead.
 - **Evidence-cited policy changes.** Any change to seat assignments must cite the
   scoreboard (win share, confirmed-finding rate, unique catches) over a window, never
   one bad review, and state what would earn the role back. This block is versioned

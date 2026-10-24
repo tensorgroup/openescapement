@@ -12,7 +12,9 @@ tagged releases begin.
   versus metered keys, OpenRouter, nodeterm, cc-switch, nono and `sandbox-exec`, ACP
   per runtime), each with what it costs and the setting that matters for governance,
   linked from the README. Per-user setup stays in Balancewheel.
-- `examples/packs/model-seats` 0.3.0: a lead-rotation rule (leads ordered per profile,
+- `examples/packs/model-seats` 0.3.0: a lead-rotation rule that defines a profile (a
+  project's ordered leads, per-checkpoint seats, required seats, and minimum seat count)
+  and rotates leads within it (leads in profile order,
   containment verified both ways by attack, switch on an observed cap, return at a task
   boundary after the reset, one writable lead per worktree, every switch logged, leads
   scored from git, review findings, and the user's rating, with no composite score). The
@@ -22,7 +24,9 @@ tagged releases begin.
   profile's required seats and minimum, coverage-based misses, and full-roster audits.
   The catalog adds three trial seats (Google via agy, Kimi via Kimi Code under an OS
   sandbox, a fast metered DeepSeek seat via OpenRouter) and a Claude lead on a Google
-  plan, all review-required. The "planning lead" seat is renamed "planning seat" so
+  plan, all review-required. The usage-cap rule covers review seats; a capped lead
+  follows the lead-rotation rule. The ban on a writable seat names external review seats,
+  since the lead writes. The "planning lead" seat is renamed "planning seat" so
   "lead" has one meaning.
 - `examples/packs/google-models` 0.1.0 (Gemini 4 Argon preferred for planning and
   review, the Flash tiers by role, agy as the plan route, the deprecated 3.7 Flash and

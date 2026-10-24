@@ -15,10 +15,10 @@ catalog:
     status: preferred
     notes: Frames the brief, runs the seats, cross-examines disputes, verifies every surviving finding against the code, and writes the record, naming itself by resolved model id. The only seat that ever changes the checkout, under OS-level containment. Never outsources the ruling and never scores itself.
   - name: Claude lead on a non-Anthropic plan (reference roster, 2026-10, claude-opus-5-5 via agy on a Google AI plan)
-    category: lead
+    category: model-seat
     status: review-required
     notes: A Claude-family lead that does not draw on an Anthropic plan, so it can take over when that plan is capped. Lead quality not yet scored; compare it with first-party Claude Code on the same profile before ranking it in a lead order.
-  - name: Planning seat (reference roster, 2026-09, gpt-6-astra via a read-only Codex CLI profile)
+  - name: Planning seat (reference roster, 2026-09, gpt-6-astra via a read-only Codex CLI config file)
     category: model-seat
     status: preferred
     notes: First voice on plan, design, and decision targets; equal peer on code review. Full peer status from a fresh scoreboard on 2026-09-11 when the seat changed model generation. The previous occupant's demotion (wording disputes, conceded substance) was that model's trait and did not carry over; re-demote only on logged dispute evidence.
@@ -45,7 +45,7 @@ catalog:
   - name: Fast metered seat (trial, 2026-10, deepseek/deepseek-v4.1-flash via pi on OpenRouter)
     category: model-seat
     status: review-required
-    notes: On trial from 2026-10-24 with a fresh scoreboard. Triage of noisy panels, first-pass reads, and already-covered checks. Use the alias, not the dated -1017 snapshot, and set a spend cap on the OpenRouter key.
+    notes: On trial from 2026-10-24 with a fresh scoreboard. Triage of noisy panels, first-pass reads, and already-covered checks. Use the alias, which resolves to the 2026-09-10 release at a flat price. The -1017 id is the later 2026-10-17 release at DeepSeek's weekday peak schedule, so it is a different model, not a snapshot of the alias. Set a spend cap on the OpenRouter key.
   - name: Decision model for routing advice (reference, 2026-09, typesafe/jev-1.13 via OpenRouter's decisions API)
     category: decision-model
     status: review-required
@@ -62,7 +62,7 @@ catalog:
     category: model-seat
     status: banned
     notes: Panels without an accountable moderator and outcome logging produce rhetoric, not signal. Every panel is logged or it did not happen.
-  - name: A seat with write access to the checkout
+  - name: An external review seat with write access to the checkout
     category: model-seat
     status: banned
-    notes: External seats are enforced read-only at the OS level and verified by attack, on fresh and resumed sessions, after every harness upgrade. A seat that can write is a lead, governed by the lead-rotation rule. The lead's own vendor may still sit as a fresh blind session with none of the lead's conversation; only a seat that shares the lead's session is excluded, since that is the lead reviewing its own reasoning.
+    notes: External review seats are enforced read-only at the OS level and verified by attack, on fresh and resumed sessions, after every harness upgrade. Only the lead writes, under the containment the lead-rotation rule requires. The lead's own vendor may still sit as a fresh blind session with none of the lead's conversation; only a seat that shares the lead's session is excluded, since that is the lead reviewing its own reasoning.

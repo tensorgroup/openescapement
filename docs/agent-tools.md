@@ -71,7 +71,7 @@ configured before they report anything. Use it for that view. Keep the rest of i
 - **Routing, failover, and aggregation off.** These modes put a local proxy between the
   agent and the vendor. The usage view works without them.
 - **Provider management off for Codex.** Switching Codex providers in cc-switch migrates
-  Codex history and writes Codex profiles, which changes a seat or lead's configuration
+  Codex history and writes Codex CLI config files, which changes a seat or lead's configuration
   outside anything that verified it.
 - **Prompt, MCP, and skills sync off for any file `esc` or Balancewheel manages.** Two
   tools writing one file means one of them is always reporting drift it did not cause.
@@ -85,7 +85,7 @@ kernel refusing a write. Two backends do this on macOS:
   default profile denies credentials, keychains, browser data, shell history, and shell
   config files, so an agent under it cannot read `~/.ssh` even if talked into it. It also
   supports Linux.
-- **`sandbox-exec`** (Seatbelt, built into macOS) needs no install. A generated profile
+- **`sandbox-exec`** (Seatbelt, built into macOS) needs no install. A generated Seatbelt policy
   denies writes everywhere except the runtime's state and temp directories and, for a
   lead, the worktree and the repository's common git dir, where a linked worktree's
   index, objects, and refs live. The common git dir's `hooks` and `config` stay denied.
