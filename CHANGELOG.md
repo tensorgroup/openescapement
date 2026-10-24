@@ -8,6 +8,10 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- Portal DeepSeek guidance: V4.1 Flash list prices re-verified (2026-10-24); the
+  OpenRouter ids `deepseek/deepseek-v4.1-flash` (the alias to use) and the dated
+  `deepseek/deepseek-v4.1-flash-1017` are named with their provider prices; V4.1 Flash
+  gains fast second opinions and triage as a role.
 - Portal Kimi guidance: Kimi K3.1 Pro (frontier; planning, plan-check, review) and
   K3.1 Pro High-Speed (fast reads, bulk) added; K3 moves to legacy; the K2 series'
   end of life (closed to new users 2026-10-31, retired by end of December 2026) noted.
