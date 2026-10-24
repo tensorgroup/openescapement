@@ -144,7 +144,7 @@ vendors:
         roles: [planning, plan-check, review]
         status: current
         docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview]
-        verified: 2026-09-16
+        verified: 2026-10-24
         starter: examples/google/starter-gemini-3.1-pro-preview.md
       - id: gemini-3.8-flash
         name: Gemini 3.8 Flash
@@ -213,28 +213,28 @@ vendors:
         roles: [coding]
         status: current
         docs: [https://platform.kimi.ai/docs/models]
-        verified: 2026-08-02
+        verified: 2026-10-24
       - id: kimi-k2.7-code-highspeed
         name: Kimi K2.7 Code High-Speed
         tier: fast
         roles: [coding, bulk]
         status: current
         docs: [https://platform.kimi.ai/docs/models]
-        verified: 2026-08-02
+        verified: 2026-10-24
       - id: kimi-k2.6
         name: Kimi K2.6
         tier: mid
         roles: [coding, review]
         status: current
         docs: [https://platform.kimi.ai/docs/models]
-        verified: 2026-08-02
+        verified: 2026-10-24
       - id: kimi-k2.5
         name: Kimi K2.5
         tier: mid
         roles: [coding]
         status: legacy
         docs: [https://platform.kimi.ai/docs/models]
-        verified: 2026-08-02
+        verified: 2026-10-24
   - key: deepseek
     name: Deepseek
     models:

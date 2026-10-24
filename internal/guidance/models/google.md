@@ -1,6 +1,7 @@
 # Google
 
 Google's current lineup is led by Gemini 4 Argon, its flagship reasoning model (generally available since 2026-10-13), with Gemini 3.1 Pro Preview still served beside it, Gemini 3.8 Flash in the middle, and Gemini 3.5 Flash-Lite for fast, high-volume work. Gemini 3.7 Flash, Gemini 3.6 Flash, and the original Gemini 3 Pro Preview are held in this registry as legacy ids. The tiers fit an agentic SDLC cleanly: plan and review on Argon, implement day-to-day on 3.8 Flash, and run bulk work on Flash-Lite. Prices below are the Standard tier; Batch and Flex run at half. Refreshed 2026-10-24: Gemini 4 Argon added as the frontier choice; Gemini 3.7 Flash moved to legacy after Google deprecated it on 2026-10-08. Google has not named a replacement for 3.1 Pro Preview, so it stays current, behind Argon.
+
 ## Models
 
 ### Gemini 4 Argon (gemini-4-argon) - frontier
@@ -53,7 +54,7 @@ Prices as of 2026-10-24.
 
 - agy also serves Claude Opus 5.5 and Claude Sonnet 5.5 (thinking) on Google AI Pro (paid subscriptions, not trials) and Ultra. That makes the Google plan a second route to Claude-family models that does not draw on an Anthropic plan.
 - Gemini 4 Argon is on paid Pro and Ultra in agy, not on Free or Plus. Gemini 3.1 Pro is offered in agy only on Enterprise.
-- When a plan pays for itself, counting output tokens only: Pro at $20 matches 2M Argon output tokens a month at the introductory $10 per M, and 1M from 2026-12-01 at $20 per M. Ultra at $100 matches 10M, then 5M. Input tokens push the real break-even earlier.
+- When a plan pays for itself, counting output tokens only: Pro at $20 matches 2M Argon output tokens a month at the introductory $10 per M, and 1M from 2026-12-01 at $20 per M. Ultra at $100 matches 10M, then 5M. Ultra at $200 matches 20M, then 10M. Input tokens push the real break-even earlier.
 - Run repo-aware agent work through agy on a plan for daily use. Use a metered key for fast, small, occasional calls; the Batch tier halves the price for work that can wait.
 
 ## Sources

@@ -174,7 +174,8 @@ dispute. Each works without the other; together they close a loop.
   drift-checked. Nothing here needs a panel. The model packs under `examples/packs/`
   (`anthropic-models`, `openai-models`, `google-models`, `kimi-models`, `deepseek-models`,
   `zai-models`) carry per-vendor model guidance
-  with prices, the reason behind each status, and the condition that would reverse it;
+  with prices for the models they recommend, the reason behind each status, and the
+  condition that would reverse it;
   copy one into your pack repo and pin it. For the agent tools an org governs (the vendor
   CLIs, plans versus metered keys, OpenRouter, sandboxes), see
   [docs/agent-tools.md](docs/agent-tools.md).
@@ -236,8 +237,8 @@ constraints:
 
 Shipped examples: `examples/packs/acme-org` is a complete org pack (rules, paved paths,
 a catalog, a skill, an MCP server, constraints); `anthropic-models`, `openai-models`,
-`google-models`, `kimi-models`, `deepseek-models`, and `zai-models` are per-vendor model packs, each catalog entry carrying its price, the
-reason for its status, and, where the status departs from the vendor's own default, the
+`google-models`, `kimi-models`, `deepseek-models`, and `zai-models` are per-vendor model packs, each catalog entry carrying the
+reason for its status (and its price, where the pack recommends the model), and, where the status departs from the vendor's own default, the
 condition that would reverse it; `model-seats` governs how several models collaborate,
 by seat rather than by model.
 

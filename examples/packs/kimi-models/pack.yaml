@@ -17,8 +17,8 @@ catalog:
     notes: The same model at about 2-3x the speed and double the price, $4/$20 per 1M tokens (2026-10-24). Fast reads and rapid iteration where latency matters more than cost. In Kimi Code it appears as kimi-code/k3.1-pro-highspeed.
   - name: Kimi K3 (kimi-k3)
     category: model
-    status: allowed
-    notes: The previous-generation flagship, $3/$15 per 1M tokens (2026-10-24), more than K3.1 Pro on both sides. Migrate pins to kimi-k3.1-pro.
+    status: review-required
+    notes: The previous-generation flagship, for existing pins only. $3/$15 per 1M tokens (2026-10-24), more than K3.1 Pro on both sides, so no new work goes to it. Migrate pins to kimi-k3.1-pro.
   - name: Kimi K2.7 Code (kimi-k2.7-code)
     category: model
     status: review-required

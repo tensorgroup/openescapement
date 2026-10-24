@@ -7,7 +7,7 @@ Gemini 4 Argon is the model for judgment: plans, plan checks, and reviews. The F
 | Gemini 4 Argon | `gemini-4-argon` | $2 / $10 through 2026-11-30, then $4 / $20; Batch and Flex half | Planning, plan-check, review. Set the thinking level explicitly. |
 | Gemini 3.8 Flash | `gemini-3.8-flash` | $0.75 / $3.75 through 2026-12-31, then $1.50 / $7.50 | Day-to-day coding, lower-stakes review. |
 | Gemini 3.5 Flash-Lite | `gemini-3.5-flash-lite` | $0.30 / $2.50 | Bulk and mechanical work at scale. |
-| Gemini 3.1 Pro Preview | `gemini-3.1-pro-preview` | see the catalog | Only workloads that need explicit context caching. |
+| Gemini 3.1 Pro Preview | `gemini-3.1-pro-preview` | $2 / $12 for prompts up to 200K tokens, $4 / $18 above | Only workloads that need explicit context caching. |
 
 Rules of thumb:
 

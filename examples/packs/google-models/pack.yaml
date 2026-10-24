@@ -22,7 +22,7 @@ catalog:
   - name: Gemini 3.1 Pro Preview (gemini-3.1-pro-preview)
     category: model
     status: review-required
-    notes: Still served with no shutdown date, but Argon replaces it for planning and review. Keep it only where a workload depends on explicit context caching, which Argon does not support. Reverses to banned when Google announces a shutdown date.
+    notes: Still served with no shutdown date, but Argon replaces it for planning and review. Keep it only where a workload depends on explicit context caching, which Argon does not support. $2/$12 per 1M tokens for prompts up to 200K tokens, $4/$18 above (2026-10-24). Reverses to banned when Google announces a shutdown date.
   - name: Gemini 3.7 Flash (gemini-3.7-flash)
     category: model
     status: banned

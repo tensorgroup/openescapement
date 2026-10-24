@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go 1.24 tests (`go test ./...`), markdown, YAML.
 
-**Spec:** `../balancewheel/docs/superpowers/specs/2026-10-24-profiles-lead-rotation-cockpit-design.md` (build-order step 1; sections "Seats added in this round", "The sandbox", "Lead rotation", "Jev", "Third-party tools"). Also read this repo's `docs/pack-authoring.md` (the committed style rule for every rule file and catalog note) and `AGENTS.md`.
+**Spec:** [Balancewheel](https://github.com/tensorgroup/balancewheel), `docs/superpowers/specs/2026-10-24-profiles-lead-rotation-cockpit-design.md` (build-order step 1; sections "Seats added in this round", "The sandbox", "Lead rotation", "Jev", "Third-party tools"). Also read this repo's `docs/pack-authoring.md` (the committed style rule for every rule file and catalog note) and `AGENTS.md`.
 
 ## Global Constraints
 
@@ -67,7 +67,7 @@
 ### Task 3: Google — Gemini 4 Argon
 
 **Files:**
-- Modify: `internal/guidance/models/models.yaml` (google vendor), `internal/guidance/models/google.md`, `internal/guidance/models/examples/google/model-routing.md`, and every Google starter that routes planning or review to `gemini-3.1-pro-preview`: `starter-gemini-3.8-flash.md`, `starter-gemini-3.7-flash.md`, `starter-gemini-3.5-flash-lite.md`, `starter-gemini-3.1-pro-preview.md`
+- Modify: `internal/guidance/models/models.yaml` (google vendor), `internal/guidance/models/google.md`, `internal/guidance/models/examples/google/model-routing.md`, and every Google starter that routes planning or review to `gemini-3.1-pro-preview`: `starter-gemini-3.8-flash.md`, `starter-gemini-3.7-flash.md` (deleted in the review fix pass, since 3.7 Flash is legacy), `starter-gemini-3.5-flash-lite.md`, `starter-gemini-3.1-pro-preview.md`
 - Create: `internal/guidance/models/examples/google/starter-gemini-4-argon.md`
 
 **Interfaces:**
