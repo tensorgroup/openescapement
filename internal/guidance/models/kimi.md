@@ -18,15 +18,15 @@ The previous-generation flagship: 2.8 trillion parameters, a 1M-token context wi
 
 ### Kimi K2.7 Code (kimi-k2.7-code) - mid
 
-The dedicated coding model, 256K context, tuned to follow instructions reliably in long contexts and land more coding tasks successfully than the general-purpose line. Recommended role: coding. Part of the K2 series, which closes to newly registered users on 2026-10-31 and retires by the end of December 2026.
+The dedicated coding model, 256K context, tuned to follow instructions reliably in long contexts and land more coding tasks successfully than the general-purpose line. $0.95 / $4.00 per million input/output tokens (cache hits $0.19). Recommended role: coding. Part of the K2 series, which closes to newly registered users on 2026-10-31 and retires by the end of December 2026.
 
 ### Kimi K2.7 Code High-Speed (kimi-k2.7-code-highspeed) - fast
 
-A high-speed variant of K2.7 Code, about 180 tokens/s and up to roughly 260 tokens/s in short-context runs, for rapid iterative coding and high-volume edits. Recommended roles: coding and bulk. Same K2-series end of life as K2.7 Code.
+A high-speed variant of K2.7 Code, about 180 tokens/s and up to roughly 260 tokens/s in short-context runs, for rapid iterative coding and high-volume edits. $1.90 / $8.00 per million tokens (cache hits $0.38). Recommended roles: coding and bulk. Same K2-series end of life as K2.7 Code.
 
 ### Kimi K2.6 (kimi-k2.6) - mid
 
-A general multimodal model (vision and text, thinking and non-thinking modes) for dialogue and broader agent tasks outside the dedicated coding line. Recommended roles: coding and review. Same K2-series end of life as K2.7 Code.
+A general multimodal model (vision and text, thinking and non-thinking modes) for dialogue and broader agent tasks outside the dedicated coding line. $0.95 / $4.00 per million tokens (cache hits $0.16). Recommended roles: coding and review. Same K2-series end of life as K2.7 Code.
 
 ### Kimi K2.5 (kimi-k2.5) - legacy
 
@@ -48,7 +48,7 @@ Prices as of 2026-10-24.
 | Route | What you pay | Tool | Limits, per the vendor |
 |---|---|---|---|
 | Plan + vendor CLI | Kimi Code plan, subscription-based; tiers and prices are on the Kimi Code site, which this note could not read on 2026-10-24 | Kimi Code CLI (`kimi`) | One subscription covers desktop, CLI, and IDE. The Kimi Code API is separate from the Kimi API Platform, and keys are not interchangeable. |
-| Direct API | K3.1 Pro $2 / $10; K3.1 Pro High-Speed $4 / $20; K3 $3 / $15 per million input/output tokens (cache hits $0.20 on K3.1) | Kimi Code with an API Platform key, or any harness | Metered per token. Context caching is billed automatically. |
+| Direct API | K3.1 Pro $2 / $10; K3.1 Pro High-Speed $4 / $20; K3 $3 / $15; K2.7 Code $0.95 / $4.00; K2.7 Code High-Speed $1.90 / $8.00; K2.6 $0.95 / $4.00 per million input/output tokens (cache hits $0.20 on K3.1) | Kimi Code with an API Platform key, or any harness | Metered per token. Context caching is billed automatically. |
 | OpenRouter | `moonshotai/kimi-k3.1-pro` $2 / $10 | Any OpenAI-compatible harness | Provider prices can change without notice. |
 
 - When a plan pays for itself: a Kimi Code plan at $P a month matches P / 10 million K3.1 Pro output tokens at the API's $10 per M, or P / 20 million on High-Speed. Read the current tier prices on the Kimi Code site before deciding.
@@ -59,6 +59,7 @@ Prices as of 2026-10-24.
 
 - https://platform.kimi.ai/docs/models
 - https://platform.kimi.ai/docs/pricing/chat-k3
+- https://platform.kimi.ai/docs/pricing/chat (K2-series prices: K2.7 Code, K2.7 Code High-Speed, K2.6; retrieved 2026-10-24)
 - https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/customization/agents.md
 - https://platform.kimi.ai/docs/guide/product-plans (Kimi Code is subscription-based and separate from the API Platform; retrieved 2026-10-24)
 - https://www.kimi.ai/code (Kimi Code plan tiers; not retrievable on 2026-10-24)

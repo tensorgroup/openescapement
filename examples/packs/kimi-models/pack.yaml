@@ -22,7 +22,7 @@ catalog:
   - name: Kimi K2.7 Code (kimi-k2.7-code)
     category: model
     status: review-required
-    notes: The dedicated coding model, 256K context. The K2 series closes to new users on 2026-10-31 and retires by the end of December 2026; plan the move to kimi-k3.1-pro before then.
+    notes: The dedicated coding model, 256K context. $0.95/$4.00 per 1M tokens, cache hits $0.19 (2026-10-24). The K2 series closes to new users on 2026-10-31 and retires by the end of December 2026; plan the move to kimi-k3.1-pro before then.
   - name: Kimi K2.5 (kimi-k2.5)
     category: model
     status: banned

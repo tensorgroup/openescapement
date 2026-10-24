@@ -32,7 +32,7 @@ tagged releases begin.
   review, the Flash tiers by role, agy as the plan route, the deprecated 3.7 Flash and
   retired 3 Pro Preview banned by name), `examples/packs/kimi-models` 0.1.0 (K3.1 Pro
   preferred, High-Speed for fast reads, K3 and K2.7 Code review-required for existing
-  pins, K2.5 banned, an OS sandbox required for
+  pins, every model priced, K2.5 banned, an OS sandbox required for
   unattended Kimi Code runs), and `examples/packs/deepseek-models` 0.1.0 (V4.1 Flash
   preferred for second opinions and triage under its DeepSeek id and OpenRouter's alias,
   OpenRouter's `-1017` id allowed where results must match DeepSeek's own API, a spend
@@ -45,7 +45,8 @@ tagged releases begin.
   and triage as a role.
 - Portal Kimi guidance: Kimi K3.1 Pro (frontier; planning, plan-check, review, coding) and
   K3.1 Pro High-Speed (fast reads, bulk) added; K3 moves to legacy; the K2 series'
-  end of life (closed to new users 2026-10-31, retired by end of December 2026) noted.
+  end of life (closed to new users 2026-10-31, retired by end of December 2026) noted,
+  with K2.7 Code, K2.7 Code High-Speed, and K2.6 list prices.
   A governance bullet says Kimi Code's permission rules are not enforcement in `-p`
   runs (auto permission mode, deny rules ignored in a 2026-10-24 test, fail-open hooks)
   and that an OS sandbox is.
