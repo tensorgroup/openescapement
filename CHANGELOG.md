@@ -8,6 +8,15 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- `examples/packs/openai-models` 0.3.0 and the portal's OpenAI guidance: GPT-6.1 Sol
+  (`gpt-6.1-sol`, released 2026-09-29, $2/$10, cached input $0.10) takes the coding
+  role, as OpenAI's featured models and Codex's recommendation now name it. It rejects
+  `none` and `minimal` reasoning effort, which the pack and its starter call out. GPT-6
+  Sol stays current (OpenAI has not deprecated it) as the fallback while GPT-6.1 Sol
+  rolls out to Codex accounts; the GPT-5.6 tiers stay the fallback behind it. The
+  registry adds GPT-6.1 Sol with a starter, every OpenAI starter and the routing
+  example re-point coding to it, and GPT-5.5's 2026-10-14 Codex retirement is now
+  past tense.
 - `docs/agent-tools.md`: the agent tools an org governs (the vendor CLIs, plans
   versus metered keys, OpenRouter, nodeterm, cc-switch, nono and `sandbox-exec`, ACP
   per runtime), each with what it costs and the setting that matters for governance,
