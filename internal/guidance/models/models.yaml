@@ -270,13 +270,20 @@ vendors:
   - key: grok
     name: Grok
     models:
+      - id: grok-4.7
+        name: Grok 4.7
+        tier: frontier
+        roles: [planning, plan-check, review, coding]
+        status: current
+        docs: [https://docs.x.ai/developers/models, https://docs.x.ai/developers/models/grok-4.7, https://x.ai/news/grok-4-7]
+        verified: 2026-10-24
       - id: grok-4.6
         name: Grok 4.6
         tier: frontier
         roles: [planning, plan-check, review, coding]
-        status: current
+        status: legacy
         docs: [https://docs.x.ai/developers/models, https://docs.x.ai/developers/models/grok-4.6, https://x.ai/news/grok-4-6]
-        verified: 2026-09-16
+        verified: 2026-10-24
       - id: grok-build-0.1
         name: Grok Build 0.1
         tier: fast

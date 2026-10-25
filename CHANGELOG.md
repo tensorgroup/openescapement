@@ -8,6 +8,11 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- Portal Grok guidance: Grok 4.7 (`grok-4.7`, announced 2026-09-21, $2/$6, the same as
+  4.6) is the frontier choice for planning, plan-check, review, and coding, as xAI's
+  model guide now names it for every text role. Grok 4.6 moves to legacy. The note
+  records the Batch API (supported on both, 20% off), Grok 4.7 Fast (Cursor and Grok
+  Build only, at double the rate), and the SpaceXSI name on xAI's docs.
 - `examples/packs/openai-models` 0.3.0 and the portal's OpenAI guidance: GPT-6.1 Sol
   (`gpt-6.1-sol`, released 2026-09-29, $2/$10, cached input $0.10) takes the coding
   role, as OpenAI's featured models and Codex's recommendation now name it. It rejects
