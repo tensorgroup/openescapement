@@ -1,6 +1,6 @@
 schema: 1
 name: model-seats
-version: 0.3.0
+version: 0.4.0
 description: Governance for multi-model agent collaboration. Which seat holds which duty, with what oversight, decided from logged dispute outcomes rather than vibes. Seats are named by role; the model behind each is a config detail that changes. Copy and adapt. The catalog's reference roster is a dated example, not a recommendation; replace it with yours.
 
 rules:
@@ -8,6 +8,7 @@ rules:
   - rules/panel-protocol.md
   - rules/decision-model-routing.md
   - rules/lead-rotation.md
+  - rules/explanation-style.md
 
 catalog:
   - name: Moderator seat (the lead, the agent the user works in)
@@ -26,14 +27,14 @@ catalog:
     category: model-seat
     status: preferred
     notes: Peer on every target kind at cents per review, so cost is never the reason to skip it. Its previous stealth preview id was retired by the provider within weeks, which is why policy names the seat and config names the model.
-  - name: Blind same-vendor seat (reference roster, 2026-09, claude-fable-5-1 in a fresh headless session)
+  - name: Blind same-vendor seat (reference roster, 2026-11, claude-opus-5-5 in a fresh headless session)
     category: model-seat
     status: preferred
-    notes: The moderator's own model family, run with none of the moderator's conversation, so its round-1 agreement is an independent signal. Scored as a peer; the moderator must not favor it.
-  - name: On-demand second same-vendor seat (reference roster, 2026-09, claude-opus-5-5)
+    notes: The moderator's own model family, run with none of the moderator's conversation, so its round-1 agreement is an independent signal. Scored as a peer; the moderator must not favor it. Moved from claude-fable-5-1 on 2026-11-11 on cost. Fable costs twice as much, and the reference user's panels found Opus 5.5 plus the planning seat as good in practice. A new model starts a fresh scoreboard. Reverse it when Fable's escalation runs show confirmed unique catches that this seat missed on the same targets.
+  - name: Reserved escalation seat (reference roster, 2026-11, claude-fable-5-2 in a fresh headless session)
     category: model-seat
-    status: review-required
-    notes: Dropped from the reference roster's default panel on its previous occupant's scoreboard (claude-opus-4-8, one unique catch in its first thirteen findings, and a refuted finding). Re-pointed to claude-opus-5-5 on 2026-09-22 when 4.8 went legacy; a new model generation starts a fresh scoreboard, the same rule the planning seat followed. Convene it when a high-stakes target warrants a second blind read from the same family. Re-promotion criterion, five consecutive panels in which it lands at least one confirmed unique catch. The pattern is the point; substitute your own numbers.
+    status: reserved
+    notes: Joins only deep panels and debugging that is stuck (a failed first fix, a recurring bug, or seats that still disagree after cross-examination), or when the user asks for it. The most capable same-vendor model at twice the price of the default, so it runs only on a deliberate escalation. Each run records its reason and is scored like every other seat, so the scoreboard shows whether the escalation earns its price.
   - name: Google peer seat (trial, 2026-10, gemini-4-argon-high via agy on a Google AI plan)
     category: model-seat
     status: review-required

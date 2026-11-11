@@ -8,6 +8,25 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- A fifth catalog status, `reserved`: allowed, but held back for a deliberate
+  escalation, such as a frontier model too expensive to run by default. The entry's
+  notes say what earns the escalation. It renders between Preferred and Allowed in
+  the managed block and in `GOVERNANCE.md`. Packs that use it need this version of
+  `esc`; older binaries reject the status as invalid.
+- `examples/packs/anthropic-models` 0.5.0 and the portal's Anthropic guidance: Claude
+  Opus 5.5 is now `preferred` for all work, planning and review included, starting at
+  effort `medium`. Claude Fable 5.2 (`claude-fable-5-2`, released 2026-11-09, $8/$40)
+  is `reserved`: used only when a person asks, when the task is very hard or very
+  high-stakes, or when the work is stuck, after Opus 5.5's effort has been raised.
+  The reason is cost (twice Opus 5.5), and the reversal condition is logged review
+  outcomes in which Fable catches what Opus 5.5 at high effort misses. Fable 5.1 moves
+  to legacy; the Fable starter moves to 5.2.
+- `examples/packs/model-seats` 0.4.0: the blind same-vendor seat moves to Opus 5.5
+  with a fresh scoreboard; Fable 5.2 becomes a `reserved` escalation seat for deep
+  panels and stuck debugging; a cost-order rule fills default panels from the
+  cheapest seats that do the job; and a new `explanation-style` rule asks for
+  explanations in ASD-STE100 (Simplified Technical English) style. The on-demand
+  Opus seat entry is folded into the blind seat.
 - Portal Grok guidance: Grok 4.7 (`grok-4.7`, announced 2026-09-21, $2/$6, the same as
   4.6) is the frontier choice for planning, plan-check, review, and coding, as xAI's
   model guide now names it for every text role. Grok 4.6 moves to legacy. The note

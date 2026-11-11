@@ -14,6 +14,7 @@ The **lead** is the agent the user works in for a project; the lead is the moder
 | Planning seat | first voice on plan, design, and decision targets; equal peer on code review | read-only access, always |
 | Peer seats | independent review on every target kind | read-only access, always |
 | On-demand seats | convened for high-stakes targets or when a second blind read from a family is worth the wall-clock | scored like every other seat when they run |
+| Reserved seats | join deep panels and stuck debugging only, on a recorded reason | the most expensive model; never in a default panel; scored like every other seat when they run |
 
 Conduct rules the moderator enforces:
 
@@ -45,6 +46,7 @@ Conduct rules the moderator enforces:
   capped seat as absent (usage cap), because crediting one model with another's findings
   corrupts the scoreboard the roster is decided from. A capped lead follows the lead
   rotation rule (`rules/lead-rotation.md`) instead.
+- **Cost order.** Fill the default panel from the cheapest seats that do the job. The default order is the lead's default model, then the planning seat from another vendor, then the peer seats. Escalate to a reserved seat only for a deep panel or stuck debugging, because a cross-vendor check usually adds more than a more expensive model from the same vendor.
 - **Evidence-cited policy changes.** Any change to seat assignments must cite the
   scoreboard (win share, confirmed-finding rate, unique catches) over a window, never
   one bad review, and state what would earn the role back. This block is versioned
