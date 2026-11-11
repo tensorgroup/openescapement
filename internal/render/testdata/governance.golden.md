@@ -12,6 +12,7 @@ Active policy packs:
 | Tool / service | Category | Status | Notes | Pack |
 |---|---|---|---|---|
 | Tailscale | hosting-exposure | preferred | Org tailnet | acme-org |
+| Dedicated GPU host | compute | reserved | Escalate only | acme-org |
 | Lovable | app-hosting | allowed | POCs only | acme-org |
 | Cloudflare Tunnel | hosting-exposure | review-required | Ask #platform | acme-org |
 | Raw port forwarding | hosting-exposure | banned |  | acme-org |

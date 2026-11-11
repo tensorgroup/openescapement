@@ -28,10 +28,11 @@ var TargetFile = map[string]string{
 
 const notice = "> Managed by escapement. Do not edit. Run `esc diff` to see source. Team content goes outside this block."
 
-var statusOrder = []string{"preferred", "allowed", "review-required", "banned"}
+var statusOrder = []string{"preferred", "reserved", "allowed", "review-required", "banned"}
 
 var statusLabel = map[string]string{
 	"preferred":       "Preferred",
+	"reserved":        "Reserved",
 	"allowed":         "Allowed",
 	"review-required": "Review required",
 	"banned":          "Banned",

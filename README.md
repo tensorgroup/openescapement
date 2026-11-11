@@ -227,7 +227,7 @@ rules: [rules/secrets.md, rules/hosting.md]     # markdown, rendered to agent fi
 skills: [skills/acme-vault]                     # → .claude/skills/
 mcp:
   servers: { acme-paved-path: {command: npx, args: ["-y", "@acme/paved-path-mcp"]} }
-catalog:                                        # preferred/allowed/review-required/banned
+catalog:                                        # preferred/reserved/allowed/review-required/banned
   - {name: Tailscale, category: hosting-exposure, status: preferred}
   - {name: Raw port forwarding, category: hosting-exposure, status: banned}
 constraints:
@@ -252,7 +252,7 @@ by seat rather than by model.
 <!-- escapement:end -->
 ```
 
-The `catalog` renders twice: concise directives for agents, and a readable table in `GOVERNANCE.md` so humans always know what's preferred, allowed, and banned — without hand-maintaining a policy doc.
+The `catalog` renders twice: concise directives for agents, and a readable table in `GOVERNANCE.md` so humans always know what's preferred, allowed, and banned — without hand-maintaining a policy doc. `reserved` marks something allowed but held back for a deliberate escalation, such as a frontier model too expensive to run by default; its notes say what earns the escalation.
 
 | Command | What it does |
 |---|---|
