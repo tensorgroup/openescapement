@@ -1,6 +1,6 @@
 schema: 1
 name: model-seats
-version: 0.4.0
+version: 0.5.0
 description: Governance for multi-model agent collaboration. Which seat holds which duty, with what oversight, decided from logged dispute outcomes rather than vibes. Seats are named by role; the model behind each is a config detail that changes. Copy and adapt. The catalog's reference roster is a dated example, not a recommendation; replace it with yours.
 
 rules:
@@ -19,6 +19,10 @@ catalog:
     category: model-seat
     status: review-required
     notes: A Claude-family lead that does not draw on an Anthropic plan, so it can take over when that plan is capped. Lead quality not yet scored; compare it with first-party Claude Code on the same profile before ranking it in a lead order.
+  - name: Gemini lead on a Google AI plan (reference roster, 2026-11, gemini-4-neon-high via agy)
+    category: model-seat
+    status: review-required
+    notes: Third in the reference lead order. The first-party Claude lead runs while the Anthropic plan has quota, then the OpenAI lead, then this lead when both plans are capped. Runs with manual approval until the harness's hooks are verified. Lead quality not yet scored.
   - name: Planning seat (reference roster, 2026-09, gpt-6-astra via a read-only Codex CLI config file)
     category: model-seat
     status: preferred
@@ -35,10 +39,10 @@ catalog:
     category: model-seat
     status: reserved
     notes: Joins only deep panels and debugging that is stuck (a failed first fix, a recurring bug, or seats that still disagree after cross-examination), or when the user asks for it. The most capable same-vendor model at twice the price of the default, so it runs only on a deliberate escalation. Each run records its reason and is scored like every other seat, so the scoreboard shows whether the escalation earns its price.
-  - name: Google peer seat (trial, 2026-10, gemini-4-argon-high via agy on a Google AI plan)
+  - name: Google stand-in seat (reference roster, 2026-11, gemini-4-neon-high via agy on a Google AI plan)
     category: model-seat
     status: review-required
-    notes: On trial from 2026-10-24 with a fresh scoreboard. Peer on design, plan, and review. agy encodes the effort level in the model id, and agy writes a cache file into its working directory, so run it from the seat's own home with the reviewed repo added read-only.
+    notes: The stand-in seat. When the planning seat's plan or the Kimi seat's plan is capped, this seat runs in its place. It is scored under its own name, and the capped seat is recorded as absent (usage cap). It is a peer on design, plan, and review, with a fresh scoreboard from 2026-11-20. It replaces the 2026-10 trial seat on gemini-4-argon-high, which was paused on 2026-10-30 because Argon's quota on the plan ran out repeatedly. agy encodes the effort level in the model id. agy writes a cache file into its working directory, so run it from the seat's own home with the reviewed repo added read-only.
   - name: Kimi peer seat (trial, 2026-10, kimi-code/k3.1-pro via Kimi Code under an OS sandbox)
     category: model-seat
     status: review-required

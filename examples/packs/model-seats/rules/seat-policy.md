@@ -44,8 +44,10 @@ Conduct rules the moderator enforces:
 - **Usage caps.** When a review seat's model hits a plan usage cap, run that seat on its
   configured fallback model and score the run under the fallback's own id. Record the
   capped seat as absent (usage cap), because crediting one model with another's findings
-  corrupts the scoreboard the roster is decided from. A capped lead follows the lead
-  rotation rule (`rules/lead-rotation.md`) instead.
+  corrupts the scoreboard the roster is decided from. A profile may name a stand-in
+  seat from another plan instead; the stand-in runs in the capped seat's place under its
+  own name, and the capped seat is still recorded as absent (usage cap). A capped lead
+  follows the lead rotation rule (`rules/lead-rotation.md`) instead.
 - **Cost order.** Fill the default panel from the cheapest seats that do the job. The default order is the lead's default model, then the planning seat from another vendor, then the peer seats. Escalate to a reserved seat only for a deep panel or stuck debugging, because a cross-vendor check usually adds more than a more expensive model from the same vendor.
 - **Evidence-cited policy changes.** Any change to seat assignments must cite the
   scoreboard (win share, confirmed-finding rate, unique catches) over a window, never

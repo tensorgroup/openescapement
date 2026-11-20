@@ -8,6 +8,22 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- `examples/packs/google-models` 0.2.0 and the portal's Google guidance: the catalog adds
+  Gemini 4 Neon (`gemini-4-neon`, GA 2026-11-18, $3/$15), Gemini 4 Carbon
+  (`gemini-4-carbon`, GA 2026-11-10), and Gemini 4 Hydrogen (`gemini-4-hydrogen`, GA
+  2026-11-12, $1.50/$7.50), each with a starter. Neon is now the preferred pick for
+  planning, review, and agentic coding. Carbon is for the hardest deep work. Hydrogen is
+  for day-to-day coding, and Google names it the upgrade for 3.8 Flash. Argon stays
+  `current` in the registry (still served, no shutdown date) but drops from `preferred`
+  to `allowed` in the pack. Gemini 3.1 Pro Preview moves to legacy, because Google now
+  names Neon as its upgrade; it stays only for workloads that need explicit context
+  caching. Every Google starter and the routing example now route to Neon and Hydrogen.
+- `examples/packs/model-seats` 0.5.0: the Google seat entry moves from the 2026-10
+  `gemini-4-argon-high` trial to a 2026-11 stand-in seat on `gemini-4-neon-high` via agy.
+  It runs in place of the planning seat or the Kimi seat when their plans are capped,
+  is scored under its own name, and the capped seat is recorded absent (usage cap). The
+  Argon trial was paused on 2026-10-30 because its plan quota ran out repeatedly. The
+  seat policy's usage-cap rule now allows a stand-in seat from another plan.
 - A fifth catalog status, `reserved`: allowed, but held back for a deliberate
   escalation, such as a frontier model too expensive to run by default. The entry's
   notes say what earns the escalation. It renders between Preferred and Allowed in
