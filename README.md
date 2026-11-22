@@ -16,6 +16,14 @@
                         drift detection    └───────────────────────────────┘
 ```
 
+## Usage map
+
+An interactive map shows who uses `esc`, where each step happens, and how a rule pack travels from its author to every agent. Pick a person and walk their journeys step by step; the commands, flags, targets, portal routes, packages, model guidance and example packs on it are generated from the code.
+
+[![The OpenEscapement usage map](docs/usage-map/preview.png)](https://tensorgroup.github.io/openescapement/usage-map/)
+
+From a checkout, open `docs/usage-map/index.html` in a browser. After the code changes, regenerate it with `go run ./docs/usage-map/gen --open`.
+
 ## Why
 
 Every organization is adopting AI agents faster than it can govern them. The existing answers are policy PDFs nobody reads, or heavyweight compliance suites that fight how developers actually work.
