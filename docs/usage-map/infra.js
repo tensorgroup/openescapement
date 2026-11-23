@@ -1,27 +1,28 @@
 // docs/usage-map/infra.js — the hand-written layer of the usage map.
-// It holds what the code cannot show: who uses esc, where each step happens, how the places
-// connect, and the journeys people take. The generated layer (data.generated.js, from
+// It holds what the code cannot show: who uses esc, where each step happens, and how the
+// places connect. The people and their stories (the Why and Who tabs) are in stories-data.js,
+// checked by the generator. The generated layer (data.generated.js, from
 // `go run ./docs/usage-map/gen`) supplies commands, flags, exit codes, targets, portal
 // routes, packages, model guidance and example packs. Ids from the generated layer:
 // cmd:<name>, exit:<code>, target:<name>, route:<METHOD path>, pkg:<dir>, model:<id>,
 // pack:<name>. Status 'planned' marks what is designed or proposed but not built.
 window.USAGE_MAP_INFRA = {
   title: 'OpenEscapement Usage Map',
-  tagline: 'Who uses esc, where, and how a rule pack travels from an author to every agent',
+  tagline: 'Why it helps, who uses it, and how a rule pack travels to every agent',
   rootTitle: 'OpenEscapement',
+  repoUrl: 'https://github.com/tensorgroup/openescapement',
   generateCommand: 'go run ./docs/usage-map/gen --open',
   repoBlob: 'https://github.com/tensorgroup/openescapement/blob/main/',
   summary:
     'esc turns an organization\'s AI policy into versioned, signed rule packs. A pack author writes rules, skills, MCP servers and a model catalog in a pack repo and signs a git tag. In each governed repo, esc sync fetches that tag, verifies it, and writes the policy into the files coding agents already read: CLAUDE.md, AGENTS.md, GEMINI.md, GOVERNANCE.md, .claude/skills/ and .mcp.json. esc status finds drift and gates CI. The optional esc serve portal shows the whole fleet and can publish pack changes, but it never pushes into a repo. Dashed boxes are planned, not built.',
   howTo: [
-    'Start with the people at the top. Click one to see the journeys they take, then press ▶ to walk a journey step by step.',
+    'New here? Start with the Why and Who uses it tabs. Each story there links back to the boxes on this map.',
     'Click a box to see its connections and details. Click it again to zoom in; once more to zoom out to everything it connects to. Esc goes up one level.',
     'Scroll or pinch to zoom. Drag to pan. Text appears as you zoom in. Press / to search.',
     'Dashed boxes with a PLANNED tag are designed or proposed, not built.',
     '"Package imports" shows which Go package imports which, read from the code.',
   ],
   canvas: { w: 3600, h: 2500 },
-  flowsLabel: 'Journeys',
   derivedLabel: 'Package imports (generated)',
   legend: [
     { tone: 'status-preferred', label: 'preferred', color: '#16a34a' },
@@ -45,9 +46,9 @@ window.USAGE_MAP_INFRA = {
   clusters: [
     // ── Row A: people ────────────────────────────────────────────────────────
     {
-      id: 'people', title: 'Who uses it', subtitle: 'Seven kinds of user, each with their own journeys', tone: 'person',
+      id: 'people', title: 'Who uses it', subtitle: 'Seven kinds of user; their stories are on the Who uses it tab', tone: 'person',
       x: 40, y: 40, w: 3520, h: 240, cols: 7, nodeGap: 18,
-      desc: 'esc has three places of work (the pack repo, the governed repo, the portal) and different people in each. Click a person to see what they want and the journeys they take.',
+      desc: 'esc has three places of work (the pack repo, the governed repo, the portal) and different people in each. Click a person to see what they want and the stories they appear in.',
       nodes: [
         { id: 'p-dev', kind: 'persona', title: 'Developer', sub: 'Works in a governed repo',
           wants: 'Get the org\'s rules into the repo once, keep their own additions, and see at a glance when the files drift.',
@@ -292,148 +293,5 @@ window.USAGE_MAP_INFRA = {
     { from: 'pl-rules', to: 'targets', label: 'new target', kind: 'planned' },
     { from: 'pl-agentskills', to: 'targets', label: 'new target', kind: 'planned' },
     { from: 'pl-lint', to: 'pr-rules', label: 'checks', kind: 'planned' },
-  ],
-
-  flows: [
-    {
-      id: 'install', title: 'Install esc and verify it', persona: 'p-dev',
-      desc: 'Release binaries are signed. The installer checks the signature before it puts esc on the PATH.',
-      steps: [
-        { node: 'd-install', text: 'The installer downloads the release archive for this platform.', command: 'curl -sSfL https://raw.githubusercontent.com/tensorgroup/openescapement/main/install.sh | bash' },
-        { node: 'd-sign', text: 'It verifies the cosign signature on checksums.txt and the archive\'s sha256. ESC_SKIP_VERIFY=1 skips this, which is not recommended.' },
-        { node: 'd-verify', text: 'To check by hand, VERIFYING.md gives the cosign, sha256 and SLSA provenance commands.' },
-        { node: 'cmd:version', text: 'Confirm the install.', command: 'esc version' },
-      ],
-    },
-    {
-      id: 'onboard', title: 'Bring a repo under policy', persona: 'p-dev',
-      desc: 'Onboarding writes a config and nothing else until a human says yes. The README has a prompt an agent can run.',
-      steps: [
-        { node: 'p-agent', text: 'Optionally paste the README\'s setup prompt into your agent. It reads the existing instruction files and lists what a pack would overlap with.' },
-        { node: 'cmd:init', text: 'init scans for existing instruction files and writes .escapement/config.yaml. On a terminal it offers once to place the block marker; --yes declines and writes nothing else.', command: 'esc init' },
-        { node: 'gr-config', text: 'Point packs at the pack repo: a git source, a ref, and a trusted signer in allowed_signers. A local path needs trust: unsigned.' },
-        { node: 'cmd:render', text: 'Preview what will land, without writing.', command: 'esc render --stdout' },
-        { node: 'cmd:sync', text: 'Write the policy, then commit .escapement/, the rendered files and the lockfile on a branch.', command: 'esc sync' },
-      ],
-    },
-    {
-      id: 'sync', title: 'What esc sync does', persona: 'p-dev',
-      desc: 'One sync, step by step through the pipeline. Nothing is written after a verification or constraint failure.',
-      steps: [
-        { node: 'cmd:sync', text: 'The developer runs sync.', command: 'esc sync' },
-        { node: 'gr-config', text: 'esc reads the pinned packs from config.yaml.' },
-        { node: 's-fetch', text: 'It fetches each pinned ref with the system git, into the pack cache.' },
-        { node: 's-verify', text: 'It verifies the tag signature. A bad signature or a moved tag stops here with exit 3.' },
-        { node: 's-parse', text: 'It loads pack.yaml, the rule fragments, skills, catalog and constraints.' },
-        { node: 's-render', text: 'It composes and renders each target: managed blocks, GOVERNANCE.md, skills and the .mcp.json merge.' },
-        { node: 's-validate', text: 'It checks the pack constraints. A finding is exit 1 and nothing is written.' },
-        { node: 's-write', text: 'It writes atomically. A managed region someone edited by hand is skipped with a warning.' },
-        { node: 's-lock', text: 'It records every commit and hash in escapement.lock.' },
-        { node: 'gr-blocks', text: 'The next agent session reads the new rules.' },
-        { node: 's-report', text: 'If the pack asks for reporting and a token is set, a redacted report goes to the portal. This never changes the exit code.' },
-      ],
-    },
-    {
-      id: 'daily', title: 'Check for drift', persona: 'p-dev',
-      desc: 'Status has two separate axes: managed content esc owns, and local content it does not. A local amendment alone is never drift.',
-      steps: [
-        { node: 'cmd:status', text: 'See the state of every artifact.', command: 'esc status' },
-        { node: 'gr-lock', text: 'status compares each artifact on disk with its hash in the lockfile: in-sync, altered, stale, missing, orphan or occupied.' },
-        { node: 'cmd:diff', text: 'See the drift as a diff.', command: 'esc diff' },
-        { node: 'gr-blocks', text: 'A hand edit inside a managed block is drift. Move the change outside the block, or propose it to the pack.' },
-        { node: 'cmd:sync', text: 'Overwrite the managed region. --force never touches a local amendment.', command: 'esc sync --force' },
-      ],
-    },
-    {
-      id: 'ci', title: 'Gate pull requests in CI', persona: 'p-ci',
-      desc: 'One Action step makes drift visible on every pull request.',
-      steps: [
-        { node: 'ci-action', text: 'Add the Action to the repo\'s workflow once the pack is a git source.', command: '- uses: tensorgroup/openescapement@main' },
-        { node: 'ci-gate', text: 'It installs esc with go install and runs the check.', command: 'esc status --check' },
-        { node: 'exit:1', text: 'Drift or a constraint finding exits 1 and fails the job. Integrity problems are exit 3.' },
-        { node: 'ci-pr', text: 'The pull request cannot merge until the policy files match the pinned pack again.' },
-      ],
-    },
-    {
-      id: 'update', title: 'Move to a new policy version', persona: 'p-dev',
-      desc: 'Sync never jumps versions by itself. An update is an explicit, reviewable change.',
-      steps: [
-        { node: 'pr-tag', text: 'The pack author signs a new tag.' },
-        { node: 'gr-updatelog', text: 'If the pack declares update_check, esc notices the newer tag and logs it.' },
-        { node: 'cmd:diff', text: 'See what the new version would change.', command: 'esc diff --against v1.1.0' },
-        { node: 'cmd:update', text: 'Bump the pin in config and lock.', command: 'esc update --ref v1.1.0' },
-        { node: 'cmd:sync', text: 'Apply it.', command: 'esc sync' },
-        { node: 'ci-pr', text: 'Open a pull request. The policy change is a normal, reviewable diff.' },
-      ],
-    },
-    {
-      id: 'author', title: 'Write and release a pack', persona: 'p-author',
-      desc: 'An org\'s signature must cover the exact bytes an agent will execute, so external skills are vendored, not referenced.',
-      steps: [
-        { node: 'packs', text: 'Start from an example pack: acme-org for a baseline, or a model pack.' },
-        { node: 'pr-manifest', text: 'Edit pack.yaml: rules, skills, MCP servers, catalog, constraints, and optionally update_check and reporting.' },
-        { node: 'pr-rules', text: 'Write rule fragments in the committed style (docs/pack-authoring.md).' },
-        { node: 'cmd:pack-add-skill', text: 'Vendor an external skill with its provenance.', command: 'esc pack add-skill https://github.com/org/skills#subdir --ref v1.2.0' },
-        { node: 'pr-skills', text: 'The skill is copied byte-identical; sources.yaml records where it came from.' },
-        { node: 'cmd:pack-outdated', text: 'Check whether vendored skills are behind upstream; --check exits 1 for CI.', command: 'esc pack outdated --check' },
-        { node: 'pr-tag', text: 'Release with a signed tag. Repos get it only when they update and sync.', command: 'git tag -s v1.1.0 && git push --tags' },
-      ],
-    },
-    {
-      id: 'portal', title: 'See the fleet and publish from the portal', persona: 'p-admin',
-      desc: 'The portal turns many repos into one table and can publish a pack edit. It never pushes rules into a repo.',
-      steps: [
-        { node: 'cmd:serve', text: 'Start the portal. --demo seeds a fictional university to explore.', command: 'esc serve --demo' },
-        { node: 'route:GET /fleet', text: 'The fleet page shows each repo\'s policy state from the reports repos chose to send.' },
-        { node: 'route:GET /packs/{name}/edit', text: 'Edit a pack\'s rule fragment in the browser.' },
-        { node: 'route:POST /packs/{name}/publish', text: 'Publish validates, commits and tags in a server-side clone. Nothing is half-published.' },
-        { node: 'pr-tag', text: 'The result is an ordinary tag in the pack repo.' },
-        { node: 'cmd:sync', text: 'The change reaches a repo only when someone updates and syncs there.' },
-      ],
-    },
-    {
-      id: 'telemetry', title: 'Report to the portal', persona: 'p-admin',
-      desc: 'Reporting is opt-in, redacted by level, and never breaks a sync. No prompt content is collected.',
-      steps: [
-        { node: 'pr-manifest', text: 'The pack declares reporting with an amendments level (off, metrics or content) and an endpoint. A repo may only clamp it down.' },
-        { node: 'gr-config', text: 'The repo sets ESC_PORTAL_TOKEN in its environment. Without it, esc prints one warning and sends nothing.' },
-        { node: 's-report', text: 'After sync or status, esc redacts the report to the level and sends it.' },
-        { node: 'route:POST /api/v1/events', text: 'The portal stores the event in events.jsonl.' },
-        { node: 'gr-outbox', text: 'If the portal is down, the report waits in the outbox (at most 200 entries, 14 days) and is sent next time.' },
-        { node: 'route:GET /usage', text: 'Usage and fleet pages read the stored events.' },
-      ],
-    },
-    {
-      id: 'models', title: 'Curate model guidance', persona: 'p-admin',
-      desc: 'Which model, for what, and why: kept in the guidance registry and shipped through a pack catalog.',
-      steps: [
-        { node: 'models', text: 'The registry lists each vendor\'s models with tier, roles, status and the date it was verified.' },
-        { node: 'route:GET /models', text: 'The models pages show the registry in the portal.' },
-        { node: 'route:GET /models/{vendor}/adopt', text: 'Adopt a vendor\'s starter fragment into a pack.' },
-        { node: 'pack:anthropic-models', text: 'A model pack carries a catalog: each model preferred, reserved, allowed, review-required or banned, with the reason.' },
-        { node: 'pr-catalog', text: 'The catalog renders into the managed blocks and GOVERNANCE.md of every repo that pins the pack.' },
-      ],
-    },
-    {
-      id: 'balancewheel', title: 'Ship a seat policy from Balancewheel', persona: 'p-bw',
-      desc: 'Balancewheel earns a seat policy from logged panel outcomes; a pack is what that policy becomes for a team.',
-      steps: [
-        { node: 'p-bw', text: 'A Balancewheel panel logs which reviewer seat catches what, under the home directory.' },
-        { node: 'pack:model-seats', text: 'examples/packs/model-seats is that policy in pack form: seats named by role, models as a dated detail.' },
-        { node: 'pr-tag', text: 'The team copies it into its pack repo and signs a tag.' },
-        { node: 'cmd:sync', text: 'Each repo pins and syncs it like any other pack. Neither tool reads the other\'s state.' },
-      ],
-    },
-    {
-      id: 'future', title: 'Planned: fleet, live policy and audit', persona: 'p-auditor',
-      desc: 'Where the product is going. None of these steps exist yet.',
-      steps: [
-        { node: 'pl-fleet', text: 'esc fleet prints the portal\'s fleet table in a terminal.', command: 'esc fleet --json' },
-        { node: 'pl-mcp', text: 'An MCP server gives agents live policy; the static files stay the floor when it is down.' },
-        { node: 'pl-registry', text: 'A self-service registry with expiry becomes the shadow-IT map.' },
-        { node: 'pl-siem', text: 'Governance events go to the security team\'s syslog or SIEM.' },
-        { node: 'pl-review', text: 'Exceptions and an audit trail become evidence for SOC 2 and ISO 42001.' },
-      ],
-    },
   ],
 };

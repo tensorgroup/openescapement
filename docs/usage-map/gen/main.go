@@ -109,6 +109,17 @@ func main() {
 		fail(err)
 	}
 	fmt.Printf("usage map: %s\n", summary(out))
+	// The hand-written stories must point only at real places, people and map boxes.
+	findings, err := checkStoriesDir(filepath.Join(root, "docs", "usage-map"))
+	if err != nil {
+		fail(fmt.Errorf("stories check: %w", err))
+	}
+	for _, f := range findings {
+		fmt.Fprintf(os.Stderr, "stories-data.js: %s\n", f)
+	}
+	if len(findings) > 0 {
+		os.Exit(1)
+	}
 	if *open {
 		openPage(filepath.Join(root, "docs", "usage-map", "index.html"))
 	}

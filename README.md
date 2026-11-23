@@ -18,7 +18,7 @@
 
 ## Usage map
 
-An interactive map shows who uses `esc`, where each step happens, and how a rule pack travels from its author to every agent. Pick a person and walk their journeys step by step; the commands, flags, targets, portal routes, packages, model guidance and example packs on it are generated from the code.
+An interactive page shows OpenEscapement in three tabs. **Why** gives the benefits in a sentence or two each, and where each source of truth lives. **Who uses it** follows Windup Workshop, a fictional company, through a storyboard for each task: what each step stores, what it shares and with whom, and which place holds the truth. **How it's built** is the zoomable map; its commands, flags, targets, portal routes, packages, model guidance and example packs are generated from the code.
 
 [![The OpenEscapement usage map](docs/usage-map/preview.png)](https://tensorgroup.github.io/openescapement/usage-map/)
 
