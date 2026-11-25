@@ -230,9 +230,9 @@ h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
         <!-- repo -->
         <rect class="n-box" x="330" y="30" width="280" height="160" rx="14" style="stroke: var(--repo)"/>
         <text class="n-title" x="350" y="62">Your repo</text>
-        <text class="n-sub" x="350" y="82">a managed block in each file</text>
+        <text class="n-sub" x="350" y="82">managed blocks in instruction files</text>
         <text class="n-mono" x="350" y="110">CLAUDE.md · AGENTS.md · GEMINI.md</text>
-        <text class="n-mono" x="350" y="132">GOVERNANCE.md (for people)</text>
+        <text class="n-mono" x="350" y="132">GOVERNANCE.md (whole file)</text>
         <text class="n-mono" x="350" y="154">.claude/skills/ · .mcp.json</text>
         <text class="n-mono" x="350" y="176">.escapement/escapement.lock</text>
 
@@ -265,7 +265,7 @@ h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
   <section id="try" aria-labelledby="try-title">
     <p class="eyebrow">Try it · about 2 minutes</p>
     <h2 id="try-title">Run the shipped example, one step at a time</h2>
-    <p class="sub">The repo ships a service that a pack governs. You need git and Go. Select <b>Run</b> to see what the command prints. Every output here comes from a real run.</p>
+    <p class="sub">The repo ships a service that a pack governs. This page runs nothing: select <b>Show output</b> to see what each command printed in a real run. To run the commands yourself, you need git and Go.</p>
 
     <div class="stepper">
       <ol class="steps" id="steps"></ol>
@@ -281,7 +281,7 @@ h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
         <div class="meaning" id="step-meaning"></div>
         <div class="step-nav">
           <button class="btn" type="button" id="step-prev">← Back</button>
-          <button class="btn primary" type="button" id="step-run">Run</button>
+          <button class="btn primary" type="button" id="step-run">Show output</button>
           <button class="btn" type="button" id="step-next">Next →</button>
         </div>
       </div>
@@ -329,7 +329,7 @@ h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
   <section id="commands" aria-labelledby="cmd-title">
     <p class="eyebrow">Everyday commands</p>
     <h2 id="cmd-title">What to run, and what you see</h2>
-    <p class="sub">Run these at the root of a governed repo.</p>
+    <p class="sub">These need an installed <code>esc</code> (see the README's Install section). Run them at the root of a configured repo. For the version commands, use a real tag from your git pack in place of <code>v2.0.0</code>.</p>
     <div class="card cheat-wrap">
       <table class="cheat">
         <thead><tr><th scope="col">I want to…</th><th scope="col">Run</th><th scope="col">You see</th></tr></thead>
@@ -494,12 +494,12 @@ h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
     $('step-next').disabled = i === STEPS.length - 1;
     const prompt = s.cmd.split('\n').filter((l) => !l.startsWith('#')).map((l) => '$ ' + l);
     if (run) cancel = typeInto($('step-out'), s.hasPrompts ? s.out : prompt.concat(s.out), s.code);
-    else $('step-out').innerHTML = prompt.map(paint).join('\n') + '\n<span class="t-dim">Select Run to see the output.</span>';
+    else $('step-out').innerHTML = prompt.map(paint).join('\n') + '\n<span class="t-dim">Select Show output to see what it prints.</span>';
   }
   $('step-run').addEventListener('click', () => show(cur, true));
   $('step-prev').addEventListener('click', () => show(Math.max(0, cur - 1), false));
   $('step-next').addEventListener('click', () => show(Math.min(STEPS.length - 1, cur + 1), true));
-  $('step-copy').addEventListener('click', (e) => copy(STEPS[cur].cmd.split('\n').filter((l) => !l.startsWith('#')).join('\n'), e.currentTarget));
+  $('step-copy').addEventListener('click', (e) => copy(STEPS[cur].cmd, e.currentTarget));
   show(0, false);
 
   // ── the playground ──
@@ -551,10 +551,10 @@ h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
   // ── cheat sheet ──
   const CHEAT = [
     ['Start governing a repo', 'esc init', 'Initialized <repo>/.escapement/config.yaml, then the files it found. It writes no policy.'],
-    ['See the rules before they land', 'esc render --stdout', 'Each managed block. Nothing is written.'],
+    ['See the rules before they land', 'esc render --stdout', 'The Markdown each file will get. Skills and MCP entries are not shown.'],
     ['Write the rules into the repo', 'esc sync', 'Synced 1 pack(s), 6 artifact(s) applied, 0 skipped:'],
     ['Check for drift (CI)', 'esc status --check', 'All policy artifacts in sync. and exit 0, or Drift detected. and exit 1'],
-    ['See what changed', 'esc diff', 'A unified diff: actual (-) against expected (+). Exit 1 when they differ.'],
+    ['See what changed', 'esc diff', 'A unified diff of the Markdown files: actual (-) against expected (+). Exit 1 when they differ.'],
     ['Review a new pack version first', 'esc diff --against v2.0.0', 'The policy change, before you move the pin.'],
     ['Move to a new pack version', 'esc update --ref v2.0.0', 'Updated <source>: <old> → v2.0.0. Then esc diff, esc sync, and a PR.'],
     ['Undo a hand edit in a block', 'esc sync --force', 'The pack\'s block again. Your other text stays.'],

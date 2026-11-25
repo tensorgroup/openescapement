@@ -150,7 +150,9 @@ go install github.com/tensorgroup/openescapement/cmd/esc@latest
 ```
 
 Release binaries are cosign-signed with SLSA build-level-3 provenance. See
-[VERIFYING.md](VERIFYING.md). Check the install with `esc version`.
+[VERIFYING.md](VERIFYING.md). The installer needs [cosign](https://docs.sigstore.dev/cosign/system_config/installation/)
+to verify the download. It puts `esc` in `~/.local/bin` and says so when that directory is
+not on your `PATH`. Check the install with `esc version`.
 
 <a id="quickstart"></a>
 ## Quick start in your repo
@@ -187,7 +189,9 @@ below the file's title, and nothing is written now.
 instruction files it found as targets. Details:
 [docs/reference.md](docs/reference.md#adding-esc-to-a-repo-that-already-has-instruction-files).
 
-**2. Point the config at a pack.** Edit `.escapement/config.yaml`:
+**2. Point the config at a pack.** Edit `packs` in `.escapement/config.yaml`. Keep the
+`targets` list that `esc init` wrote: it names the files it found. This example repo has only
+`CLAUDE.md`:
 
 ```yaml
 schema: 1
@@ -208,7 +212,9 @@ empty `ref`, as in [`examples/governed-service`](examples/governed-service/.esca
 shows an example). Without a matching key, esc refuses the tag and exits 3. The tag must
 also match the `version` in the pack's `pack.yaml`.
 
-**3. Preview what will land.** Nothing is written.
+**3. Preview the Markdown that will land.** The preview shows the instruction files and
+`GOVERNANCE.md`, not skills or MCP entries; read those in the pack. If esc offers a pack
+update, answer `n` to keep your files as they are.
 
 ```sh
 esc render --stdout
@@ -229,7 +235,8 @@ esc status --check
 ```
 
 **5. Commit and gate it in CI.** Commit `.escapement/` (with its lockfile) and the rendered
-files. Then add the GitHub Action, so drift fails the build:
+files. A local pack directory does not exist in CI, so publish the pack to git with a signed tag
+and point the config at it first. Then add the GitHub Action, so drift fails the build:
 
 ```yaml
 - uses: tensorgroup/openescapement@main
@@ -260,7 +267,8 @@ the esc source checkout, if I have one, is at <path or "none">.
    subjects both will speak to, and a recommendation for each: keep mine, let the
    pack's rule stand, or take it to the pack as a PR.
 2. Run `esc init --yes`. It scaffolds `.escapement/config.yaml`, pre-fills `targets`
-   with the files it detected, and writes nothing else. If CLAUDE.md imports
+   with the files it detected, and adds a signer-file template and a `.gitignore`
+   under `.escapement/`. It writes nothing outside `.escapement/`. If CLAUDE.md imports
    AGENTS.md, set `targets` to `agents` plus `skills` and `mcp`, so the block lands
    once and the pack's skills and MCP servers still render.
 3. Point the config at my pack repo: a git source with a `ref` and a trusted signer in
@@ -292,10 +300,10 @@ matching prompt for a brand-new project; see
 | I want to… | Run | You see |
 |---|---|---|
 | Start governing a repo | `esc init` | `Initialized <repo>/.escapement/config.yaml` and the files it found |
-| See the rules before they land | `esc render --stdout` | each managed block, nothing written |
+| See the rules before they land | `esc render --stdout` | the Markdown each file will get (no skills or MCP entries) |
 | Write the rules into the repo | `esc sync` | `Synced 1 pack(s), 6 artifact(s) applied, 0 skipped:` |
 | Check for drift (CI) | `esc status --check` | `All policy artifacts in sync.` and exit 0, or `Drift detected.` and exit 1 |
-| See what changed | `esc diff` | a unified diff: actual (`-`) against expected (`+`); exit 1 when they differ |
+| See what changed | `esc diff` | a unified diff of the Markdown files: actual (`-`) against expected (`+`); exit 1 when they differ. Skills and MCP entries are left out; `esc status --check` covers them |
 | Review a new pack version first | `esc diff --against v2.0.0` | the policy change, before you move the pin |
 | Move to a new pack version | `esc update --ref v2.0.0` | `Updated <source>: <old> → v2.0.0`; then `esc diff`, `esc sync`, and a PR |
 | Undo a hand edit in a block | `esc sync --force` | the pack's block again; your other text stays |
@@ -330,7 +338,7 @@ stateDiagram-v2
 | `missing` | A file or its block is not there. | `esc sync` |
 | `stale` | The content came from an older pack state, or a pin is not synced yet. | `esc sync` |
 | `altered` | Someone edited the text inside the block. | `esc diff`, then move the edit out of the block or run `esc sync --force`. To change a rule, open a PR against the pack. |
-| `orphan` | A pack no longer provides a block or skill. | The next `esc sync` removes it. |
+| `orphan` | A pack no longer provides a block or skill. | `esc sync` removes it. If someone edited it or added files, sync keeps them and warns; review them first. |
 
 More detail: [local amendments](docs/reference.md#local-amendments) and
 [`--json` output for scripts](docs/reference.md#json-output---json).
