@@ -1,7 +1,9 @@
 # OpenEscapement — reference
 
 *Written 2026-11-24: these sections moved from the README, word for word, so the README can stay a short
-getting-started guide. The README links here. Headings are one level up from the README's.*
+getting-started guide. The README links here. Headings are one level up from the README's. Three
+facts were corrected in the move after a review against the code: the portal has five pages, `esc status`
+prints `+N lines local` (the portal says augmented), and `skipped[].cause` has a fifth value.*
 
 ## Contents
 
@@ -63,9 +65,9 @@ see [docs/cli-and-portal.md](cli-and-portal.md).
 esc serve --demo               # one binary, seeded fictional org, no setup
 ```
 
-Four pages: an overview of fleet posture, a fleet list of registered repos and their
+Five pages: an overview of fleet posture, a fleet list of registered repos and their
 drift status, rule-pack browsing with portal-side publishing (validate → commit → tag),
-and usage. The portal never pushes rules into repos — packs it publishes still reach a
+Models (vendor guidance and fragments to adopt; see below), and usage. The portal never pushes rules into repos — packs it publishes still reach a
 repo only when someone runs `esc sync` there, same as any other pack source.
 
 `esc serve --demo` resets its example data to pristine on every startup and prints `esc: demo data reset`, so the demo always shows current content. Anything you change during a demo (published pack versions, adopted starters, guidance edits) is discarded when you restart. Non-demo servers keep your data and only refresh guidance files you have not edited.
@@ -84,8 +86,9 @@ Content escapement does not own (text you add outside a managed block, extra
 `.mcp.json` server entries, files you add to a skill directory) is never
 touched by sync, and is reported on a second, independent axis: `local: none`
 or `local: amended`. An amendment alone is never drift and never changes an
-exit code. `esc status` calls a file with an in-sync managed block plus your
-own additions **augmented**; that's expected use, not a problem to fix.
+exit code. `esc status` shows your own additions next to `in sync` (for example
+`+11 lines local`); the admin portal calls that state **augmented**. That's expected
+use, not a problem to fix.
 
 `esc sync` leaves an artifact alone when its managed region was hand-edited,
 instead of overwriting it: it warns on stderr, records the skip, and still
@@ -141,7 +144,7 @@ structs:
 | `packs[]` | array | One entry per pinned pack: `source`, `ref`, `pinned` (resolved content hash), `latest` (omitted if unknown), `signed` |
 | `findings[]` | array | Every classified artifact, pack pin, or subsystem signal (see below) |
 | `collection` | object | `amendments` (`off` / `metrics` / `content`) and `source` (`default` / `pack` / `repo-override`): the resolved reporting level and where it came from |
-| `skipped[]` | array | `sync` only, always present (possibly `[]`); omitted entirely for `status`. What sync declined to write or remove: `subject`, `kind`, `cause`, `reason`, `expected_hash`, `actual_hash`. `cause` is the machine-readable discriminator (`hand-edited`, `orphan-dir-unmanaged`, `orphan-dir-edited`, `orphan-block-edited`); `reason` is prose for a human and nothing should branch on it |
+| `skipped[]` | array | `sync` only, always present (possibly `[]`); omitted entirely for `status`. What sync declined to write or remove: `subject`, `kind`, `cause`, `reason`, `expected_hash`, `actual_hash`. `cause` is the machine-readable discriminator (`hand-edited`, `orphan-dir-unmanaged`, `orphan-dir-edited`, `orphan-block-edited`, `unmanaged-dir-at-target`); `reason` is prose for a human and nothing should branch on it |
 
 Each `findings[]` entry carries `subject` (an artifact path, a pack source
 URL, or the literal `"update-check"`), `kind` (`block` / `file` / `dir` /

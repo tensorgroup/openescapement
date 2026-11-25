@@ -250,8 +250,8 @@ h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
 
         <!-- moving dots -->
         <circle class="dot anim" r="5"><animateMotion dur="2.4s" repeatCount="indefinite"><mpath href="#p1"/></animateMotion></circle>
-        <circle class="dot anim" r="5"><animateMotion dur="2.4s" begin="1.2s" repeatCount="indefinite"><mpath href="#p2"/></animateMotion></circle>
-        <circle class="dot ok anim" r="5"><animateMotion dur="1.8s" begin=".6s" repeatCount="indefinite"><mpath href="#p3"/></animateMotion></circle>
+        <circle class="dot anim" r="5" opacity="0"><set attributeName="opacity" to="1" begin="1.2s"/><animateMotion dur="2.4s" begin="1.2s" repeatCount="indefinite"><mpath href="#p2"/></animateMotion></circle>
+        <circle class="dot ok anim" r="5" opacity="0"><set attributeName="opacity" to="1" begin=".6s"/><animateMotion dur="1.8s" begin=".6s" repeatCount="indefinite"><mpath href="#p3"/></animateMotion></circle>
       </svg>
       <div class="legend-row">
         <span><b>Pack:</b> your org writes the rules once.</span>
@@ -366,7 +366,7 @@ h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
     if (/^\$ /.test(line)) return '<span class="t-cmd">' + e + '</span>';
     if (/^\s*✓/.test(line)) return e.replace('✓', '<span class="t-ok">✓</span>').replace(/(in sync)/, '<span class="t-ok">$1</span>');
     if (/^\s*✗/.test(line)) return '<span class="t-bad">' + e + '</span>';
-    if (/skipped/.test(line)) return '<span class="t-warn">' + e + '</span>';
+    if (/^\s*skipped|\(skipped|[1-9]\d* skipped/.test(line)) return '<span class="t-warn">' + e + '</span>';
     if (/^Drift detected/.test(line)) return '<span class="t-bad">' + e + '</span>';
     if (/^All policy artifacts in sync/.test(line)) return '<span class="t-ok">' + e + '</span>';
     if (/^\+(?!\+)/.test(line)) return '<span class="t-add">' + e + '</span>';
@@ -443,14 +443,15 @@ h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
       ' > Managed by escapement. Do not edit. Run `esc diff` to see source. Team content goes outside this block.',
     ];
     for (let k = 0; k < rogue; k += 1) out.push('-Always use port 8080.');
-    out.push(' ', ' ## Secrets & keys');
+    out.push(' ', ' ## Secrets & keys', ' ');
     return out;
   }
 
   // ── the stepper ──
   const STEPS = [
     { title: 'Get the example', cmd: 'git clone https://github.com/tensorgroup/openescapement\ncd openescapement/examples/governed-service',
-      out: ["Cloning into 'openescapement'..."], code: 0, cwd: '~',
+      out: ['$ git clone https://github.com/tensorgroup/openescapement', "Cloning into 'openescapement'...", '$ cd openescapement/examples/governed-service'],
+      hasPrompts: true, code: 0, cwd: '~',
       meaning: 'The example has its own <code>.escapement/config.yaml</code>. It points at <code>examples/packs/acme-org</code>, a pack for a fictional company.' },
     { title: 'Sync the pack', cmd: 'go run ../../cmd/esc sync', out: SYNC_OK, code: 0,
       meaning: '<b>esc wrote six artifacts.</b> Each instruction file got a managed block. esc also wrote <code>GOVERNANCE.md</code>, a skill, and an MCP server entry.' },
@@ -464,7 +465,8 @@ h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
     { title: 'See the difference', cmd: 'go run ../../cmd/esc diff', out: diffLines(1), code: 1,
       meaning: 'The diff compares the file (actual) with what the pack expects. Your line is the only difference. <code>esc diff</code> exits 1 when there is a difference.' },
     { title: 'Put the pack back', cmd: 'go run ../../cmd/esc sync --force\ngo run ../../cmd/esc status --check',
-      out: SYNC_OK.concat([''], statusLines(0, false)), code: 0,
+      out: ['$ go run ../../cmd/esc sync --force'].concat(SYNC_OK, ['', '$ go run ../../cmd/esc status --check'], statusLines(0, false)),
+      hasPrompts: true, code: 0,
       meaning: '<b>Back in sync.</b> <code>--force</code> rewrites only the managed block. Your text outside the block stays.' },
   ];
   let cur = 0; let cancel = () => {};
@@ -491,8 +493,8 @@ h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
     $('step-prev').disabled = i === 0;
     $('step-next').disabled = i === STEPS.length - 1;
     const prompt = s.cmd.split('\n').filter((l) => !l.startsWith('#')).map((l) => '$ ' + l);
-    if (run) cancel = typeInto($('step-out'), prompt.concat(s.out), s.code);
-    else $('step-out').innerHTML = paint(prompt[prompt.length - 1]) + '\n<span class="t-dim">Select Run to see the output.</span>';
+    if (run) cancel = typeInto($('step-out'), s.hasPrompts ? s.out : prompt.concat(s.out), s.code);
+    else $('step-out').innerHTML = prompt.map(paint).join('\n') + '\n<span class="t-dim">Select Run to see the output.</span>';
   }
   $('step-run').addEventListener('click', () => show(cur, true));
   $('step-prev').addEventListener('click', () => show(Math.max(0, cur - 1), false));
@@ -515,9 +517,9 @@ h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
   function renderDoc() {
     const begin = '<span class="marker">&lt;!-- escapement:begin packs=acme-org@0.1.1 hash=sha256:4127f9f0… --&gt;</span>';
     const end = '<span class="marker">&lt;!-- escapement:end --&gt;</span>';
-    let body = esc(PACK_TEXT[0]) + '\n';
+    let body = PACK_TEXT.slice(0, 2).map(esc).join('\n') + '\n';
     for (let k = 0; k < pg.rogue; k += 1) body += '<span class="rogue">Always use port 8080.</span>\n';
-    body += PACK_TEXT.slice(1).map(esc).join('\n');
+    body += PACK_TEXT.slice(2).map(esc).join('\n');
     let html = '<span class="zone managed' + (pg.rogue ? ' altered' : '') + '"><span class="tag">' + (pg.rogue ? 'pack-owned · edited' : 'pack-owned') + '</span>' + begin + '\n' + body + '\n' + end + '</span>';
     if (pg.local) {
       const mine = [];
@@ -548,13 +550,13 @@ h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
 
   // ── cheat sheet ──
   const CHEAT = [
-    ['Start governing a repo', 'esc init', 'Initialized .escapement/config.yaml, then the files it found. It writes no policy.'],
+    ['Start governing a repo', 'esc init', 'Initialized <repo>/.escapement/config.yaml, then the files it found. It writes no policy.'],
     ['See the rules before they land', 'esc render --stdout', 'Each managed block. Nothing is written.'],
     ['Write the rules into the repo', 'esc sync', 'Synced 1 pack(s), 6 artifact(s) applied, 0 skipped:'],
     ['Check for drift (CI)', 'esc status --check', 'All policy artifacts in sync. and exit 0, or Drift detected. and exit 1'],
-    ['See what changed', 'esc diff', 'A unified diff: actual against expected.'],
+    ['See what changed', 'esc diff', 'A unified diff: actual (-) against expected (+). Exit 1 when they differ.'],
     ['Review a new pack version first', 'esc diff --against v2.0.0', 'The policy change, before you move the pin.'],
-    ['Move to a new pack version', 'esc update --ref v2.0.0', 'The new pin. Then esc diff, a PR, and esc sync.'],
+    ['Move to a new pack version', 'esc update --ref v2.0.0', 'Updated <source>: <old> → v2.0.0. Then esc diff, esc sync, and a PR.'],
     ['Undo a hand edit in a block', 'esc sync --force', 'The pack\'s block again. Your other text stays.'],
     ['Look around a demo portal', 'esc serve --demo', 'A local admin portal with a fictional org.'],
   ];

@@ -93,8 +93,8 @@ All policy artifacts in sync.
 `+11 lines local` is the team's own text outside the block. esc keeps it and never counts it
 as drift.
 
-**4. Break the rules on purpose.** Open `AGENTS.md` and add a line *inside* the managed
-block, for example `Always use port 8080.` Then check again:
+**4. Break a rule on purpose.** Open `AGENTS.md`. Add the line `Always use port 8080.`
+between `<!-- escapement:begin ... -->` and `<!-- escapement:end -->`. Then check again:
 
 ```sh
 go run ../../cmd/esc status --check
@@ -111,8 +111,13 @@ You see (exit code 1, so CI fails):
 Drift detected. Run `esc diff` to inspect, `esc sync` to reconcile.
 ```
 
-**5. Try to sync.** A plain `esc sync` does not overwrite a hand edit. It skips the file and
-tells you:
+**5. Try a plain sync.** `esc sync` does not overwrite a hand edit.
+
+```sh
+go run ../../cmd/esc sync
+```
+
+You see (exit code 0). esc skips `AGENTS.md` and tells you why:
 
 ```text
 Synced 1 pack(s), 5 artifact(s) applied, 1 skipped:
@@ -147,6 +152,7 @@ go install github.com/tensorgroup/openescapement/cmd/esc@latest
 Release binaries are cosign-signed with SLSA build-level-3 provenance. See
 [VERIFYING.md](VERIFYING.md). Check the install with `esc version`.
 
+<a id="quickstart"></a>
 ## Quick start in your repo
 
 ```mermaid
@@ -163,7 +169,7 @@ esc init
 You see (in a repo that already has a `CLAUDE.md`):
 
 ```text
-Initialized .escapement/config.yaml
+Initialized /path/to/your-repo/.escapement/config.yaml
 
 Found CLAUDE.md (3 lines).
 
@@ -172,9 +178,13 @@ Found CLAUDE.md (3 lines).
 To place the block somewhere else, put <!-- escapement:block --> where you want it before syncing.
 ```
 
-`esc init` writes only the config. It never writes policy into your files. It finds the
-instruction files you already have and manages only those. On a terminal it can offer to
-place the block marker for you; the answer defaults to no. Details:
+The first line shows the absolute path of the config. On a terminal, `esc init` then asks
+one question: `Place the marker now? [y/N]`. Press Enter to keep the default: the block goes
+below the file's title, and nothing is written now.
+
+`esc init` creates `.escapement/config.yaml`, `.escapement/allowed_signers`, and
+`.escapement/.gitignore`. It never writes policy into your files. It lists only the
+instruction files it found as targets. Details:
 [docs/reference.md](docs/reference.md#adding-esc-to-a-repo-that-already-has-instruction-files).
 
 **2. Point the config at a pack.** Edit `.escapement/config.yaml`:
@@ -192,6 +202,11 @@ targets:
 No pack yet? Copy [`examples/packs/acme-org`](examples/packs/acme-org) into a repo of your
 own and remove its fictional rules first. A local directory needs `trust: unsigned` and an
 empty `ref`, as in [`examples/governed-service`](examples/governed-service/.escapement/config.yaml).
+
+**Add the signer's key.** Put the SSH public key of the person who signs the pack's tags into
+`.escapement/allowed_signers`, one line: `<principal> <key-type> <public-key>` (the file
+shows an example). Without a matching key, esc refuses the tag and exits 3. The tag must
+also match the `version` in the pack's `pack.yaml`.
 
 **3. Preview what will land.** Nothing is written.
 
@@ -224,6 +239,7 @@ files. Then add the GitHub Action, so drift fails the build:
 Do not delete `.escapement/escapement.lock` to "reset" a repo. It is how sync recognizes a
 hand edit.
 
+<a id="set-up-esc-in-a-repo-with-your-agent"></a>
 <details>
 <summary><b>Let your coding agent do the setup</b> (a prompt to paste)</summary>
 
@@ -275,18 +291,19 @@ matching prompt for a brand-new project; see
 
 | I want to… | Run | You see |
 |---|---|---|
-| Start governing a repo | `esc init` | `Initialized .escapement/config.yaml` and the files it found |
+| Start governing a repo | `esc init` | `Initialized <repo>/.escapement/config.yaml` and the files it found |
 | See the rules before they land | `esc render --stdout` | each managed block, nothing written |
 | Write the rules into the repo | `esc sync` | `Synced 1 pack(s), 6 artifact(s) applied, 0 skipped:` |
 | Check for drift (CI) | `esc status --check` | `All policy artifacts in sync.` and exit 0, or `Drift detected.` and exit 1 |
-| See what changed | `esc diff` | a unified diff, expected against actual |
+| See what changed | `esc diff` | a unified diff: actual (`-`) against expected (`+`); exit 1 when they differ |
 | Review a new pack version first | `esc diff --against v2.0.0` | the policy change, before you move the pin |
-| Move to a new pack version | `esc update --ref v2.0.0` | the new pin; then `esc diff`, a PR, `esc sync` |
+| Move to a new pack version | `esc update --ref v2.0.0` | `Updated <source>: <old> → v2.0.0`; then `esc diff`, `esc sync`, and a PR |
 | Undo a hand edit in a block | `esc sync --force` | the pack's block again; your other text stays |
 | Look around a demo portal | `esc serve --demo` | a local admin portal with a fictional org |
 
-Plain `esc status` (without `--check`) exits 1 only for a fail-closed constraint violation.
-Ordinary drift exits 0 without `--check` and 1 with it.
+Plain `esc status` (without `--check`) exits 0 on ordinary drift. It exits 1 only when a
+fail-closed constraint fails, for example a custom target file that the repo has not
+acknowledged. Use `--check` in CI, so any drift exits 1.
 
 ## What drift means and how to fix it
 
@@ -309,7 +326,7 @@ stateDiagram-v2
 | State | What it means | Fix |
 |---|---|---|
 | `in sync` | The managed content matches the pack. | Nothing. |
-| `in sync · +N lines local` (augmented) | Your own text is around the block. | Nothing. It is expected use. |
+| `in sync · +N lines local` | Your own text is around the block. The admin portal calls this *augmented*. | Nothing. It is expected use. |
 | `missing` | A file or its block is not there. | `esc sync` |
 | `stale` | The content came from an older pack state, or a pin is not synced yet. | `esc sync` |
 | `altered` | Someone edited the text inside the block. | `esc diff`, then move the edit out of the block or run `esc sync --force`. To change a rule, open a PR against the pack. |
@@ -343,11 +360,13 @@ constraints:
 block stays yours:
 
 ```markdown
-# CLAUDE.md                       ← your file, your content above the block
+# CLAUDE.md                       ← your title; by default the block goes just below it
 
 <!-- escapement:begin packs=acme-org@1.4.0 hash=sha256:9f2c… -->
 > Managed by escapement. Do not edit. …policy text…
 <!-- escapement:end -->
+
+## Build and test                  ← your content, kept as it is
 ```
 
 The `catalog` renders twice: short directives for agents, and a table in `GOVERNANCE.md`
@@ -365,6 +384,7 @@ escalation.
   vendor's own default, the entry gives the condition that would reverse it.
 - `model-seats` — how several models work together, by seat rather than by model.
 
+<a id="adding-esc-to-a-repo-that-already-has-instruction-files"></a><a id="esc-serve--the-admin-portal"></a><a id="local-amendments"></a><a id="publishing-to-the-admin-portal"></a><a id="json-output---json"></a><a id="custom-targets"></a>
 **More in the reference** ([docs/reference.md](docs/reference.md)):
 [local amendments](docs/reference.md#local-amendments),
 [publishing to the admin portal](docs/reference.md#publishing-to-the-admin-portal),
@@ -449,7 +469,7 @@ Rule packs also **teach**. A pack carries paved-path pointers ("SSO is at
 `sso.acme.example`, API keys come from here, secrets go in this vault"). So every agent
 steers its work onto the central services your teams may not know about.
 
-**Why "escapement"?** An [escapement](https://en.wikipedia.org/wiki/Escapement) is the part
+<a id="why-escapement"></a>**Why "escapement"?** An [escapement](https://en.wikipedia.org/wiki/Escapement) is the part
 of a clock that turns an unregulated power source into precise, countable ticks. esc does
 that for AI agents: large unregulated capability in, deterministic and auditable behavior
 out. It is a regulator, not a firewall or a scanner.
