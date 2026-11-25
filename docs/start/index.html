@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Get started with OpenEscapement</title>
+<meta name="description" content="Try esc step by step: sync a rule pack, check for drift, and see what each command prints.">
+<!-- docs/start/index.html — the interactive getting-started guide, linked from the README.
+     Written 2026-11-24. Self-contained: no external requests. Every terminal output on this page
+     was captured from a real esc run on examples/governed-service; long temp paths are shortened.
+     Update the outputs here when esc's output format changes. -->
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f5f2; --ground: #ecebe6; --surface: #ffffff; --ink: #16150b; --ink-2: #4b4a42; --ink-3: #85837a;
+  --line: #d6d3cc; --accent: #009ec4; --accent-ink: #00718d; --focus: #009ec4; --warn: #b45309;
+  --ok: #15803d; --bad: #dc2626;
+  --author: #7c3aed; --repo: #0d9488; --ci: #16a34a; --core: #0891b2; --person: #db2777;
+  --term-bg: #16181d; --term-ink: #e6e8ec; --term-dim: #8b93a1; --term-ok: #4ade80; --term-bad: #f87171; --term-warn: #fbbf24; --term-cmd: #7dd3fc;
+  --shadow: 0 10px 30px rgba(22, 21, 11, .10);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f1115; --ground: #14171d; --surface: #1a1e26; --ink: #eef0f3; --ink-2: #b5bac4; --ink-3: #7d8491;
+    --line: #2c323d; --accent: #38bdf8; --accent-ink: #7dd3fc; --focus: #38bdf8; --warn: #fbbf24;
+    --ok: #4ade80; --bad: #f87171;
+    --term-bg: #0b0d11; --shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1115; --ground: #14171d; --surface: #1a1e26; --ink: #eef0f3; --ink-2: #b5bac4; --ink-3: #7d8491;
+  --line: #2c323d; --accent: #38bdf8; --accent-ink: #7dd3fc; --focus: #38bdf8; --warn: #fbbf24;
+  --ok: #4ade80; --bad: #f87171;
+  --term-bg: #0b0d11; --shadow: 0 10px 30px rgba(0, 0, 0, .45);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+a { color: var(--accent-ink); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* top bar */
+.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 10px max(16px, env(safe-area-inset-left, 0px)); background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.brand { font-weight: 700; font-size: 15px; white-space: nowrap; }
+.brand span { color: var(--ink-3); font-weight: 400; }
+.top nav { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; align-items: center; }
+.top nav a, .iconbtn {
+  font-size: 13px; color: var(--ink-2); text-decoration: none; padding: 6px 10px; border-radius: 99px;
+  border: 1px solid transparent; background: none; cursor: pointer; font-family: inherit;
+}
+.top nav a:hover, .iconbtn:hover { border-color: var(--line); color: var(--ink); }
+
+main { max-width: 1080px; margin: 0 auto; padding: 0 16px 80px; }
+section { padding-top: 48px; }
+h1 { font-size: clamp(28px, 5vw, 42px); line-height: 1.15; margin: 36px 0 12px; letter-spacing: -.02em; }
+h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
+.lede { font-size: 18px; color: var(--ink-2); max-width: 46em; margin: 0 0 8px; }
+.sub { color: var(--ink-2); margin: 0 0 20px; max-width: 48em; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-ink); margin: 0 0 4px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
+
+/* hero diagram */
+.hero-fig { margin-top: 24px; padding: 12px; overflow-x: auto; }
+.hero-fig svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.n-box { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+.n-title { fill: var(--ink); font-weight: 700; font-size: 15px; }
+.n-sub { fill: var(--ink-3); font-size: 12px; }
+.n-mono { fill: var(--ink-2); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.edge { stroke: var(--ink-3); stroke-width: 1.5; fill: none; stroke-dasharray: 5 5; }
+.edge-label { fill: var(--accent-ink); font-size: 12.5px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.dot { fill: var(--accent); }
+.dot.ok { fill: var(--ok); }
+.chip { font-size: 12px; }
+.legend-row { display: flex; gap: 18px; flex-wrap: wrap; color: var(--ink-2); font-size: 13px; padding: 4px 8px 6px; }
+.legend-row b { color: var(--ink); }
+
+/* terminal */
+.term {
+  background: var(--term-bg); color: var(--term-ink); border-radius: 12px; padding: 0; overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--line) 50%, #000);
+}
+.term-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: color-mix(in srgb, var(--term-bg) 80%, #fff 6%); }
+.term-bar i { width: 10px; height: 10px; border-radius: 50%; background: #4b5563; display: inline-block; }
+.term-bar span { margin-left: 8px; font-size: 12px; color: var(--term-dim); }
+.term pre { margin: 0; padding: 14px 16px; font-size: 13px; line-height: 1.55; overflow-x: auto; min-height: 9em; white-space: pre; }
+.t-cmd { color: var(--term-cmd); }
+.t-ok { color: var(--term-ok); }
+.t-bad { color: var(--term-bad); }
+.t-warn { color: var(--term-warn); }
+.t-dim { color: var(--term-dim); }
+.t-add { color: var(--term-ok); }
+.t-del { color: var(--term-bad); }
+.exit { display: inline-block; margin-top: 4px; font-size: 12px; padding: 1px 8px; border-radius: 99px; }
+.exit.ok { background: color-mix(in srgb, var(--term-ok) 18%, transparent); color: var(--term-ok); }
+.exit.bad { background: color-mix(in srgb, var(--term-bad) 20%, transparent); color: var(--term-bad); }
+
+/* stepper */
+.stepper { display: grid; grid-template-columns: 240px 1fr; gap: 18px; }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.steps button {
+  width: 100%; text-align: left; display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); cursor: pointer; font: inherit; font-size: 14px;
+}
+.steps button .num {
+  flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 12px; font-weight: 700; background: var(--ground); color: var(--ink-2);
+}
+.steps button[aria-current="step"] { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.steps button[aria-current="step"] .num { background: var(--accent); color: #fff; }
+.steps button.done .num { background: color-mix(in srgb, var(--ok) 25%, var(--ground)); color: var(--ok); }
+.step-body { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.cmdline { display: flex; align-items: stretch; gap: 8px; }
+.cmdline pre {
+  flex: 1; margin: 0; padding: 10px 14px; border-radius: 10px; background: var(--ground); border: 1px solid var(--line);
+  font-size: 13.5px; overflow-x: auto; color: var(--ink);
+}
+.btn {
+  font: inherit; font-size: 13.5px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); cursor: pointer; white-space: nowrap;
+}
+.btn:hover { border-color: var(--ink-3); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.05); }
+.btn[disabled] { opacity: .5; cursor: default; }
+.meaning { padding: 12px 14px; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); border-radius: 0 10px 10px 0; color: var(--ink-2); }
+.meaning b { color: var(--ink); }
+.step-nav { display: flex; gap: 8px; justify-content: space-between; flex-wrap: wrap; }
+
+/* playground */
+.play { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+.file { padding: 0; overflow: hidden; }
+.file-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.file-head b { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.badge { font-size: 12px; padding: 2px 10px; border-radius: 99px; font-weight: 600; }
+.badge.ok { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
+.badge.bad { background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad); }
+.doc { margin: 0; padding: 12px 14px; font-size: 12.5px; line-height: 1.6; overflow-x: auto; }
+.doc .zone { display: block; border-radius: 6px; padding: 2px 8px; margin: 2px -8px; }
+.doc .managed { background: color-mix(in srgb, var(--accent) 9%, transparent); border-left: 3px solid var(--accent); }
+.doc .managed.altered { background: color-mix(in srgb, var(--bad) 10%, transparent); border-left-color: var(--bad); }
+.doc .marker { color: var(--ink-3); }
+.doc .mine { color: var(--ok); font-weight: 600; }
+.doc .rogue { color: var(--bad); font-weight: 600; }
+.doc .tag { float: right; font-size: 11px; color: var(--ink-3); font-family: ui-sans-serif, system-ui, sans-serif; }
+.controls { display: flex; flex-direction: column; gap: 14px; }
+.btn-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn-group-label { font-size: 12px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; margin: 0 0 6px; }
+
+/* cheat sheet */
+.cheat { width: 100%; border-collapse: collapse; font-size: 14px; }
+.cheat-wrap { overflow-x: auto; }
+.cheat th, .cheat td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.cheat th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); }
+.cheat td code { white-space: nowrap; }
+.copy {
+  font: inherit; font-size: 12px; padding: 2px 8px; margin-left: 6px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink-2);
+}
+.copy.done { color: var(--ok); border-color: var(--ok); }
+
+.foot { margin-top: 56px; color: var(--ink-3); font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+.stepper > *, .play > *, .step-body > *, .controls > * { min-width: 0; }
+.cmdline pre { min-width: 0; }
+.file, .term { max-width: 100%; }
+@media (max-width: 820px) {
+  .stepper, .play { grid-template-columns: 1fr; }
+  .steps { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+  .steps li { flex: none; }
+  .steps button { width: auto; }
+  .steps button .label { display: none; }
+  .steps button[aria-current="step"] .label { display: inline; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">OpenEscapement <span>· Get started</span></div>
+  <nav aria-label="Site">
+    <a href="#try">Try it</a>
+    <a href="#playground">Drift playground</a>
+    <a href="#commands">Commands</a>
+    <a href="../usage-map/">Usage map</a>
+    <a href="https://github.com/tensorgroup/openescapement">GitHub</a>
+    <button class="iconbtn" id="theme" type="button" aria-label="Switch light or dark theme">◐</button>
+  </nav>
+</header>
+
+<main>
+  <section aria-labelledby="hero-title" style="padding-top:0">
+    <h1 id="hero-title">Your AI rules, in every repo, checked in CI.</h1>
+    <p class="lede"><code>esc</code> writes your organization's rules into the files that coding agents read every session. It writes them from one signed rule pack. A CI check fails when a repo drifts from the pack.</p>
+
+    <div class="card hero-fig" role="img" aria-label="Diagram: a rule pack flows through esc sync into the repo's instruction files. Coding agents read those files. esc status --check runs in CI and passes when the repo is in sync.">
+      <svg viewBox="0 0 960 300" aria-hidden="true">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-3)"/>
+          </marker>
+        </defs>
+        <!-- paths -->
+        <path id="p1" class="edge" d="M210,110 L330,110" marker-end="url(#arrow)"/>
+        <path id="p2" class="edge" d="M610,110 L730,110" marker-end="url(#arrow)"/>
+        <path id="p3" class="edge" d="M470,190 L470,232" marker-end="url(#arrow)"/>
+        <text class="edge-label" x="270" y="98" text-anchor="middle">esc sync</text>
+        <text class="edge-label" x="670" y="98" text-anchor="middle">read</text>
+        <text class="edge-label" x="482" y="216">esc status --check</text>
+
+        <!-- pack -->
+        <rect class="n-box" x="20" y="50" width="190" height="120" rx="14" style="stroke: var(--author)"/>
+        <text class="n-title" x="40" y="82">Rule pack</text>
+        <text class="n-sub" x="40" y="102">a git repo, signed tag</text>
+        <text class="n-mono" x="40" y="130">pack.yaml</text>
+        <text class="n-mono" x="40" y="150">rules/*.md · skills/</text>
+
+        <!-- repo -->
+        <rect class="n-box" x="330" y="30" width="280" height="160" rx="14" style="stroke: var(--repo)"/>
+        <text class="n-title" x="350" y="62">Your repo</text>
+        <text class="n-sub" x="350" y="82">a managed block in each file</text>
+        <text class="n-mono" x="350" y="110">CLAUDE.md · AGENTS.md · GEMINI.md</text>
+        <text class="n-mono" x="350" y="132">GOVERNANCE.md (for people)</text>
+        <text class="n-mono" x="350" y="154">.claude/skills/ · .mcp.json</text>
+        <text class="n-mono" x="350" y="176">.escapement/escapement.lock</text>
+
+        <!-- agents -->
+        <rect class="n-box" x="730" y="50" width="210" height="120" rx="14" style="stroke: var(--person)"/>
+        <text class="n-title" x="750" y="82">Coding agents</text>
+        <text class="n-sub" x="750" y="102">read the files every session</text>
+        <text class="n-mono" x="750" y="130">Claude Code · Codex</text>
+        <text class="n-mono" x="750" y="150">Gemini · others</text>
+
+        <!-- CI -->
+        <rect class="n-box" x="360" y="236" width="220" height="52" rx="12" style="stroke: var(--ci)"/>
+        <text class="n-title" x="380" y="267">CI</text>
+        <text class="n-mono" x="410" y="267" style="fill: var(--ok)">exit 0 = in sync</text>
+
+        <!-- moving dots -->
+        <circle class="dot anim" r="5"><animateMotion dur="2.4s" repeatCount="indefinite"><mpath href="#p1"/></animateMotion></circle>
+        <circle class="dot anim" r="5"><animateMotion dur="2.4s" begin="1.2s" repeatCount="indefinite"><mpath href="#p2"/></animateMotion></circle>
+        <circle class="dot ok anim" r="5"><animateMotion dur="1.8s" begin=".6s" repeatCount="indefinite"><mpath href="#p3"/></animateMotion></circle>
+      </svg>
+      <div class="legend-row">
+        <span><b>Pack:</b> your org writes the rules once.</span>
+        <span><b>Sync:</b> esc writes them into each repo.</span>
+        <span><b>Check:</b> CI fails when the repo drifts.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── Try it ───────── -->
+  <section id="try" aria-labelledby="try-title">
+    <p class="eyebrow">Try it · about 2 minutes</p>
+    <h2 id="try-title">Run the shipped example, one step at a time</h2>
+    <p class="sub">The repo ships a service that a pack governs. You need git and Go. Select <b>Run</b> to see what the command prints. Every output here comes from a real run.</p>
+
+    <div class="stepper">
+      <ol class="steps" id="steps"></ol>
+      <div class="step-body">
+        <div class="cmdline">
+          <pre id="step-cmd" class="mono"></pre>
+          <button class="btn" type="button" id="step-copy">Copy</button>
+        </div>
+        <div class="term">
+          <div class="term-bar"><i></i><i></i><i></i><span id="step-cwd">examples/governed-service</span></div>
+          <pre id="step-out" aria-live="polite"></pre>
+        </div>
+        <div class="meaning" id="step-meaning"></div>
+        <div class="step-nav">
+          <button class="btn" type="button" id="step-prev">← Back</button>
+          <button class="btn primary" type="button" id="step-run">Run</button>
+          <button class="btn" type="button" id="step-next">Next →</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── Playground ───────── -->
+  <section id="playground" aria-labelledby="pg-title">
+    <p class="eyebrow">Drift playground</p>
+    <h2 id="pg-title">Edit a file and see what esc says</h2>
+    <p class="sub">The pack owns the text inside the managed block. You own the text outside it. Make a change, then run a command. The output follows the real rules of esc.</p>
+
+    <div class="play">
+      <div class="card file">
+        <div class="file-head"><b>AGENTS.md</b><span class="badge ok" id="pg-badge">in sync</span></div>
+        <pre class="doc mono" id="pg-doc" aria-live="polite"></pre>
+      </div>
+      <div class="controls">
+        <div>
+          <p class="btn-group-label">1 · Change the file</p>
+          <div class="btn-group">
+            <button class="btn" type="button" data-act="local">Add a line outside the block</button>
+            <button class="btn" type="button" data-act="inside">Edit inside the block</button>
+          </div>
+        </div>
+        <div>
+          <p class="btn-group-label">2 · Run a command</p>
+          <div class="btn-group">
+            <button class="btn" type="button" data-act="status"><code>esc status --check</code></button>
+            <button class="btn" type="button" data-act="diff"><code>esc diff</code></button>
+            <button class="btn" type="button" data-act="sync"><code>esc sync</code></button>
+            <button class="btn" type="button" data-act="force"><code>esc sync --force</code></button>
+          </div>
+        </div>
+        <div class="btn-group"><button class="btn" type="button" data-act="reset">Reset</button></div>
+        <div class="term">
+          <div class="term-bar"><i></i><i></i><i></i><span>terminal</span></div>
+          <pre id="pg-out" aria-live="polite"></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── Commands ───────── -->
+  <section id="commands" aria-labelledby="cmd-title">
+    <p class="eyebrow">Everyday commands</p>
+    <h2 id="cmd-title">What to run, and what you see</h2>
+    <p class="sub">Run these at the root of a governed repo.</p>
+    <div class="card cheat-wrap">
+      <table class="cheat">
+        <thead><tr><th scope="col">I want to…</th><th scope="col">Run</th><th scope="col">You see</th></tr></thead>
+        <tbody id="cheat"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <p class="foot">OpenEscapement is Apache-2.0. The outputs on this page come from <code>esc</code> runs on <code>examples/governed-service</code> (temp paths shortened). Full detail: the <a href="https://github.com/tensorgroup/openescapement#readme">README</a> and the <a href="https://github.com/tensorgroup/openescapement/blob/main/docs/reference.md">reference</a>.</p>
+</main>
+
+<script>
+(() => {
+  'use strict';
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+  // ── theme toggle (same key style as the usage map) ──
+  const root = document.documentElement;
+  try { const t = localStorage.getItem('esc-start-theme'); if (t) root.setAttribute('data-theme', t); } catch (e) {}
+  $('theme').addEventListener('click', () => {
+    const cur = root.getAttribute('data-theme');
+    const dark = cur ? cur === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const next = dark ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('esc-start-theme', next); } catch (e) {}
+  });
+  if (reduce) document.querySelectorAll('svg .anim').forEach((n) => n.remove());
+
+  // ── colour one output line ──
+  function paint(line) {
+    const e = esc(line);
+    if (/^\$ /.test(line)) return '<span class="t-cmd">' + e + '</span>';
+    if (/^\s*✓/.test(line)) return e.replace('✓', '<span class="t-ok">✓</span>').replace(/(in sync)/, '<span class="t-ok">$1</span>');
+    if (/^\s*✗/.test(line)) return '<span class="t-bad">' + e + '</span>';
+    if (/skipped/.test(line)) return '<span class="t-warn">' + e + '</span>';
+    if (/^Drift detected/.test(line)) return '<span class="t-bad">' + e + '</span>';
+    if (/^All policy artifacts in sync/.test(line)) return '<span class="t-ok">' + e + '</span>';
+    if (/^\+(?!\+)/.test(line)) return '<span class="t-add">' + e + '</span>';
+    if (/^-(?!-)/.test(line)) return '<span class="t-del">' + e + '</span>';
+    if (/^(diff |index |---|\+\+\+|@@|=====)/.test(line)) return '<span class="t-dim">' + e + '</span>';
+    if (/^\s+`esc/.test(line)) return '<span class="t-dim">' + e + '</span>';
+    return e;
+  }
+  function exitTag(code) {
+    if (code === null || code === undefined) return '';
+    return '\n<span class="exit ' + (code === 0 ? 'ok' : 'bad') + '">exit ' + code + '</span>';
+  }
+
+  // Types lines into a <pre>. Returns a cancel function.
+  function typeInto(pre, lines, code) {
+    let cancelled = false;
+    if (reduce) { pre.innerHTML = lines.map(paint).join('\n') + exitTag(code); return () => {}; }
+    pre.innerHTML = '';
+    let i = 0;
+    const step = () => {
+      if (cancelled) return;
+      if (i >= lines.length) { pre.innerHTML += exitTag(code); return; }
+      pre.innerHTML += (i ? '\n' : '') + paint(lines[i]);
+      i += 1;
+      setTimeout(step, i === 1 ? 260 : 55);
+    };
+    step();
+    return () => { cancelled = true; };
+  }
+
+  // ── real outputs ──
+  const SYNC_OK = [
+    'Synced 1 pack(s), 6 artifact(s) applied, 0 skipped:',
+    '  block      CLAUDE.md',
+    '  block      AGENTS.md',
+    '  block      GEMINI.md',
+    '  file       GOVERNANCE.md',
+    '  dir        .claude/skills/esc-acme-org-acme-vault',
+    '  json-keys  .mcp.json',
+  ];
+  const SYNC_SKIP = [
+    'Synced 1 pack(s), 5 artifact(s) applied, 1 skipped:',
+    '  block      CLAUDE.md',
+    '  block      AGENTS.md  (skipped, see warning below)',
+    '  block      GEMINI.md',
+    '  file       GOVERNANCE.md',
+    '  dir        .claude/skills/esc-acme-org-acme-vault',
+    '  json-keys  .mcp.json',
+    '  skipped AGENTS.md: managed block was hand-edited (hash mismatch)',
+    '    `esc diff` to inspect · `esc sync --force` to overwrite',
+  ];
+  const OTHERS = [
+    '  ✓ GEMINI.md            in sync',
+    '  ✓ GOVERNANCE.md        in sync',
+    '  ✓ .claude/skills/esc-acme-org-acme-vault in sync',
+    '  ✓ .mcp.json            in sync',
+  ];
+  function statusLines(local, altered) {
+    const suffix = local ? '  ·  +' + local + ' lines local' : '';
+    const agents = altered
+      ? ['  ✗ AGENTS.md            altered: managed block was hand-edited (hash mismatch)' + suffix,
+         '                         `esc diff` to inspect · `esc sync --force` to overwrite']
+      : ['  ✓ AGENTS.md            in sync' + suffix];
+    return ['  ✓ CLAUDE.md            in sync  ·  +11 lines local'].concat(agents, OTHERS,
+      [altered ? 'Drift detected. Run `esc diff` to inspect, `esc sync` to reconcile.' : 'All policy artifacts in sync.']);
+  }
+  function diffLines(rogue) {
+    const out = [
+      'diff --git actual/AGENTS.md expected/AGENTS.md',
+      '--- actual/AGENTS.md',
+      '+++ expected/AGENTS.md',
+      '@@ -1,' + (5 + rogue) + ' +1,5 @@',
+      ' <!-- escapement:begin packs=acme-org@0.1.1 hash=sha256:4127f9f0… -->',
+      ' > Managed by escapement. Do not edit. Run `esc diff` to see source. Team content goes outside this block.',
+    ];
+    for (let k = 0; k < rogue; k += 1) out.push('-Always use port 8080.');
+    out.push(' ', ' ## Secrets & keys');
+    return out;
+  }
+
+  // ── the stepper ──
+  const STEPS = [
+    { title: 'Get the example', cmd: 'git clone https://github.com/tensorgroup/openescapement\ncd openescapement/examples/governed-service',
+      out: ["Cloning into 'openescapement'..."], code: 0, cwd: '~',
+      meaning: 'The example has its own <code>.escapement/config.yaml</code>. It points at <code>examples/packs/acme-org</code>, a pack for a fictional company.' },
+    { title: 'Sync the pack', cmd: 'go run ../../cmd/esc sync', out: SYNC_OK, code: 0,
+      meaning: '<b>esc wrote six artifacts.</b> Each instruction file got a managed block. esc also wrote <code>GOVERNANCE.md</code>, a skill, and an MCP server entry.' },
+    { title: 'Check for drift', cmd: 'go run ../../cmd/esc status --check', out: statusLines(0, false), code: 0,
+      meaning: '<b>Exit 0: CI passes.</b> <code>+11 lines local</code> is the team\'s own text outside the block. esc keeps it and never counts it as drift.' },
+    { title: 'Edit inside the block', cmd: '# add "Always use port 8080." inside the managed block of AGENTS.md\ngo run ../../cmd/esc status --check',
+      out: statusLines(0, true), code: 1,
+      meaning: '<b>Exit 1: CI fails.</b> The pack owns the text inside the block. To change a rule, change the pack, not the file.' },
+    { title: 'Try a plain sync', cmd: 'go run ../../cmd/esc sync', out: SYNC_SKIP, code: 0,
+      meaning: '<b>esc does not overwrite a hand edit.</b> It skips the file and tells you. Exit 0 means esc applied what it could, not that the repo is in sync.' },
+    { title: 'See the difference', cmd: 'go run ../../cmd/esc diff', out: diffLines(1), code: 1,
+      meaning: 'The diff compares the file (actual) with what the pack expects. Your line is the only difference. <code>esc diff</code> exits 1 when there is a difference.' },
+    { title: 'Put the pack back', cmd: 'go run ../../cmd/esc sync --force\ngo run ../../cmd/esc status --check',
+      out: SYNC_OK.concat([''], statusLines(0, false)), code: 0,
+      meaning: '<b>Back in sync.</b> <code>--force</code> rewrites only the managed block. Your text outside the block stays.' },
+  ];
+  let cur = 0; let cancel = () => {};
+  const stepsEl = $('steps');
+  STEPS.forEach((s, i) => {
+    const li = document.createElement('li');
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.innerHTML = '<span class="num">' + (i + 1) + '</span><span class="label">' + esc(s.title) + '</span>';
+    b.setAttribute('aria-label', 'Step ' + (i + 1) + ': ' + s.title);
+    b.addEventListener('click', () => show(i, true));
+    li.appendChild(b); stepsEl.appendChild(li);
+  });
+  function show(i, run) {
+    cancel(); cur = i;
+    const s = STEPS[i];
+    [...stepsEl.querySelectorAll('button')].forEach((b, k) => {
+      if (k === i) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+      b.classList.toggle('done', k < i);
+    });
+    $('step-cmd').textContent = s.cmd;
+    $('step-cwd').textContent = s.cwd || 'examples/governed-service';
+    $('step-meaning').innerHTML = s.meaning;
+    $('step-prev').disabled = i === 0;
+    $('step-next').disabled = i === STEPS.length - 1;
+    const prompt = s.cmd.split('\n').filter((l) => !l.startsWith('#')).map((l) => '$ ' + l);
+    if (run) cancel = typeInto($('step-out'), prompt.concat(s.out), s.code);
+    else $('step-out').innerHTML = paint(prompt[prompt.length - 1]) + '\n<span class="t-dim">Select Run to see the output.</span>';
+  }
+  $('step-run').addEventListener('click', () => show(cur, true));
+  $('step-prev').addEventListener('click', () => show(Math.max(0, cur - 1), false));
+  $('step-next').addEventListener('click', () => show(Math.min(STEPS.length - 1, cur + 1), true));
+  $('step-copy').addEventListener('click', (e) => copy(STEPS[cur].cmd.split('\n').filter((l) => !l.startsWith('#')).join('\n'), e.currentTarget));
+  show(0, false);
+
+  // ── the playground ──
+  const pg = { local: 0, rogue: 0 };
+  const PACK_TEXT = [
+    '> Managed by escapement. Do not edit. Run `esc diff`',
+    '> to see source. Team content goes outside this block.',
+    '',
+    '## Secrets & keys',
+    '- Never write API keys, tokens, or credentials inline.',
+    '- Keep secrets in the org vault.',
+    '…',
+  ];
+  const LOCAL_LINES = ['Deploy on Fridays only after noon.', 'Ask #payments before changing the ledger.', 'Run make lint before every push.'];
+  function renderDoc() {
+    const begin = '<span class="marker">&lt;!-- escapement:begin packs=acme-org@0.1.1 hash=sha256:4127f9f0… --&gt;</span>';
+    const end = '<span class="marker">&lt;!-- escapement:end --&gt;</span>';
+    let body = esc(PACK_TEXT[0]) + '\n';
+    for (let k = 0; k < pg.rogue; k += 1) body += '<span class="rogue">Always use port 8080.</span>\n';
+    body += PACK_TEXT.slice(1).map(esc).join('\n');
+    let html = '<span class="zone managed' + (pg.rogue ? ' altered' : '') + '"><span class="tag">' + (pg.rogue ? 'pack-owned · edited' : 'pack-owned') + '</span>' + begin + '\n' + body + '\n' + end + '</span>';
+    if (pg.local) {
+      const mine = [];
+      for (let k = 0; k < pg.local; k += 1) mine.push(LOCAL_LINES[k % LOCAL_LINES.length]);
+      html += '<span class="zone"><span class="tag">yours</span>' + mine.map((l) => '<span class="mine">' + esc(l) + '</span>').join('\n') + '</span>';
+    } else {
+      html += '<span class="zone"><span class="tag">yours</span><span class="marker">(nothing yet)</span></span>';
+    }
+    $('pg-doc').innerHTML = html;
+    const badge = $('pg-badge');
+    badge.className = 'badge ' + (pg.rogue ? 'bad' : 'ok');
+    badge.textContent = pg.rogue ? 'altered' : (pg.local ? 'in sync · +' + pg.local + ' local' : 'in sync');
+  }
+  let pgCancel = () => {};
+  function pgRun(cmd, lines, code) { pgCancel(); pgCancel = typeInto($('pg-out'), ['$ ' + cmd].concat(lines), code); }
+  document.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => {
+    const a = b.dataset.act;
+    if (a === 'local') { pg.local += 1; renderDoc(); pgRun('# you added a line after the block', ['(your own text: esc keeps it and does not count it as drift)'], null); }
+    if (a === 'inside') { pg.rogue += 1; renderDoc(); pgRun('# you added a line inside the managed block', ['(the pack owns this text: esc reports it as altered)'], null); }
+    if (a === 'status') pgRun('esc status --check', statusLines(pg.local, pg.rogue > 0), pg.rogue ? 1 : 0);
+    if (a === 'diff') pgRun('esc diff', pg.rogue ? diffLines(pg.rogue) : [], pg.rogue ? 1 : 0);
+    if (a === 'sync') pgRun('esc sync', pg.rogue ? SYNC_SKIP : SYNC_OK, 0);
+    if (a === 'force') { pg.rogue = 0; renderDoc(); pgRun('esc sync --force', SYNC_OK, 0); }
+    if (a === 'reset') { pg.local = 0; pg.rogue = 0; renderDoc(); pgCancel(); $('pg-out').innerHTML = '<span class="t-dim">Change the file, then run a command.</span>'; }
+  }));
+  renderDoc();
+  $('pg-out').innerHTML = '<span class="t-dim">Change the file, then run a command.</span>';
+
+  // ── cheat sheet ──
+  const CHEAT = [
+    ['Start governing a repo', 'esc init', 'Initialized .escapement/config.yaml, then the files it found. It writes no policy.'],
+    ['See the rules before they land', 'esc render --stdout', 'Each managed block. Nothing is written.'],
+    ['Write the rules into the repo', 'esc sync', 'Synced 1 pack(s), 6 artifact(s) applied, 0 skipped:'],
+    ['Check for drift (CI)', 'esc status --check', 'All policy artifacts in sync. and exit 0, or Drift detected. and exit 1'],
+    ['See what changed', 'esc diff', 'A unified diff: actual against expected.'],
+    ['Review a new pack version first', 'esc diff --against v2.0.0', 'The policy change, before you move the pin.'],
+    ['Move to a new pack version', 'esc update --ref v2.0.0', 'The new pin. Then esc diff, a PR, and esc sync.'],
+    ['Undo a hand edit in a block', 'esc sync --force', 'The pack\'s block again. Your other text stays.'],
+    ['Look around a demo portal', 'esc serve --demo', 'A local admin portal with a fictional org.'],
+  ];
+  const tb = $('cheat');
+  CHEAT.forEach(([want, cmd, see]) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + esc(want) + '</td><td><code>' + esc(cmd) + '</code><button class="copy" type="button" aria-label="Copy ' + esc(cmd) + '">Copy</button></td><td>' + esc(see) + '</td>';
+    tr.querySelector('.copy').addEventListener('click', (e) => copy(cmd, e.currentTarget));
+    tb.appendChild(tr);
+  });
+
+  // ── copy helper ──
+  function copy(text, btn) {
+    const done = () => { const t = btn.textContent; btn.textContent = 'Copied'; btn.classList.add('done'); setTimeout(() => { btn.textContent = t; btn.classList.remove('done'); }, 1400); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, () => {});
+  }
+})();
+</script>
+</body>
+</html>

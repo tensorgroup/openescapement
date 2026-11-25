@@ -4,39 +4,132 @@
 
 **Deterministic governance for your AI usage.**
 
-`esc` ships your organization's AI policy as versioned, signed **rule packs**, rendered directly into the files coding agents already read — `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.claude/skills/`, `.mcp.json` — plus a human-readable `GOVERNANCE.md`. Think **Dependabot-meets-dotfiles for AI policy**: one policy source, synced everywhere, drift-detected, reviewable in every PR.
+`esc` puts your organization's AI rules into the files that coding agents already read:
+`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.claude/skills/`, and `.mcp.json`. It also writes a
+`GOVERNANCE.md` for people. The rules come from a signed, versioned **rule pack**. One pack
+syncs to every repo, and CI tells you when a repo drifts from it.
 
+**[Interactive guide](https://tensorgroup.github.io/openescapement/start/)** ·
+**[Usage map](https://tensorgroup.github.io/openescapement/usage-map/)** ·
+[Reference](docs/reference.md) · [CLI and portal](docs/cli-and-portal.md) ·
+[Writing packs](docs/pack-authoring.md)
+
+```mermaid
+flowchart LR
+  pack["Rule pack<br/>(git repo, signed tag)"] -- "esc sync" --> repo
+  subgraph repo["Your repo"]
+    files["CLAUDE.md · AGENTS.md · GEMINI.md<br/>managed block<br/>GOVERNANCE.md · skills · .mcp.json"]
+  end
+  files -- "read every session" --> agents["Coding agents<br/>Claude Code · Codex · Gemini"]
+  repo -- "esc status --check" --> ci{"CI"}
+  ci -- "exit 0" --> pass["in sync"]
+  ci -- "exit 1" --> fail["drift: the build fails"]
 ```
-┌──────────────────┐   git + signed tags   ┌───────────────────────────────┐
-│  policy-packs    │ ────────────────────► │  your repo                    │
-│  (one repo,      │      esc sync         │  CLAUDE.md   ◄ managed block  │
-│   your org's     │                       │  AGENTS.md   ◄ managed block  │
-│   rules)         │      esc status       │  GOVERNANCE.md  (for humans)  │
-└──────────────────┘ ◄──────────────────── │  .claude/skills/  .mcp.json   │
-                        drift detection    └───────────────────────────────┘
+
+## Contents
+
+- [Try it in 2 minutes](#try-it-in-2-minutes)
+- [Install](#install)
+- [Quick start in your repo](#quick-start-in-your-repo)
+- [Everyday commands](#everyday-commands)
+- [What drift means and how to fix it](#what-drift-means-and-how-to-fix-it)
+- [How it works](#how-it-works)
+- [Independently, or with Balancewheel](#independently-or-with-balancewheel)
+- [Security model](#security-model) · [Why](#why) · [Status](#status--roadmap) · [Development](#development)
+
+## Try it in 2 minutes
+
+The repo ships an example service that a pack governs. You need git and Go. You do not need
+a pack repo.
+
+[![The interactive guide: try esc in the browser](docs/start/preview.png)](https://tensorgroup.github.io/openescapement/start/)
+
+**1. Get the example.**
+
+```sh
+git clone https://github.com/tensorgroup/openescapement
+cd openescapement/examples/governed-service
 ```
 
-## Usage map
+**2. Sync the pack into the repo.**
 
-An interactive map shows who uses `esc`, where each step happens, and how a rule pack travels from its author to every agent. Pick a person and walk their journeys step by step; the commands, flags, targets, portal routes, packages, model guidance and example packs on it are generated from the code.
+```sh
+go run ../../cmd/esc sync
+```
 
-[![The OpenEscapement usage map](docs/usage-map/preview.png)](https://tensorgroup.github.io/openescapement/usage-map/)
+You see:
 
-From a checkout, open `docs/usage-map/index.html` in a browser. After the code changes, regenerate it with `go run ./docs/usage-map/gen --open`.
+```text
+Synced 1 pack(s), 6 artifact(s) applied, 0 skipped:
+  block      CLAUDE.md
+  block      AGENTS.md
+  block      GEMINI.md
+  file       GOVERNANCE.md
+  dir        .claude/skills/esc-acme-org-acme-vault
+  json-keys  .mcp.json
+```
 
-## Why
+esc wrote a managed block into each instruction file. It also wrote `GOVERNANCE.md`, a skill,
+and an MCP server entry.
 
-Every organization is adopting AI agents faster than it can govern them. The existing answers are policy PDFs nobody reads, or heavyweight compliance suites that fight how developers actually work.
+**3. Check the repo against the pack.**
 
-But something changed with AI agents: for the first time, the "workers" being governed **natively read instruction files**. A rule written into `CLAUDE.md` isn't a policy document someone might read — it's literal text the agent consumes *every session*. Policy distribution channels that enforce themselves. OpenEscapement is built on that wedge:
+```sh
+go run ../../cmd/esc status --check
+```
 
-> Make compliance easier than non-compliance. Ship the rules where the work happens. Give leadership one view of what's deployed.
+You see (exit code 0):
 
-And rule packs don't just constrain — they **teach**. A pack carries paved-path pointers ("SSO is at `sso.acme.example`, API keys come from here, secrets go in this vault"), so every agent becomes an ambassador for the central services your teams didn't know existed. Every vibe-coded POC gets steered onto the paved road automatically.
+```text
+  ✓ CLAUDE.md            in sync  ·  +11 lines local
+  ✓ AGENTS.md            in sync
+  ✓ GEMINI.md            in sync
+  ✓ GOVERNANCE.md        in sync
+  ✓ .claude/skills/esc-acme-org-acme-vault in sync
+  ✓ .mcp.json            in sync
+All policy artifacts in sync.
+```
 
-## Why "escapement"?
+`+11 lines local` is the team's own text outside the block. esc keeps it and never counts it
+as drift.
 
-An [escapement](https://en.wikipedia.org/wiki/Escapement) is the mechanism in a clock that converts an unregulated power source into precise, countable ticks. That is exactly what this does for AI agents: enormous unregulated capability in, deterministic and auditable behavior out. Not a firewall, not a scanner — a regulator.
+**4. Break the rules on purpose.** Open `AGENTS.md` and add a line *inside* the managed
+block, for example `Always use port 8080.` Then check again:
+
+```sh
+go run ../../cmd/esc status --check
+```
+
+You see (exit code 1, so CI fails):
+
+```text
+  ✓ CLAUDE.md            in sync  ·  +11 lines local
+  ✗ AGENTS.md            altered: managed block was hand-edited (hash mismatch)
+                         `esc diff` to inspect · `esc sync --force` to overwrite
+  ✓ GEMINI.md            in sync
+  ...
+Drift detected. Run `esc diff` to inspect, `esc sync` to reconcile.
+```
+
+**5. Try to sync.** A plain `esc sync` does not overwrite a hand edit. It skips the file and
+tells you:
+
+```text
+Synced 1 pack(s), 5 artifact(s) applied, 1 skipped:
+  ...
+  skipped AGENTS.md: managed block was hand-edited (hash mismatch)
+    `esc diff` to inspect · `esc sync --force` to overwrite
+```
+
+**6. Put the pack's text back.**
+
+```sh
+go run ../../cmd/esc diff           # shows your line as the only difference
+go run ../../cmd/esc sync --force   # writes the pack's block again
+go run ../../cmd/esc status --check # All policy artifacts in sync.
+```
+
+`--force` changes only the managed block. Your text outside the block stays.
 
 ## Install
 
@@ -51,71 +144,88 @@ curl -sSfL https://raw.githubusercontent.com/tensorgroup/openescapement/main/ins
 go install github.com/tensorgroup/openescapement/cmd/esc@latest
 ```
 
-Release binaries are cosign-signed with SLSA build-level-3 provenance — see
-[VERIFYING.md](VERIFYING.md).
+Release binaries are cosign-signed with SLSA build-level-3 provenance. See
+[VERIFYING.md](VERIFYING.md). Check the install with `esc version`.
 
-## Quickstart
+## Quick start in your repo
 
-```sh
-cd your-repo
-esc init                       # scaffold .escapement/config.yaml
-# point it at a pack (see examples/packs/acme-org for a complete starter):
-#   packs:
-#     - source: github.com/your-org/policy-packs//org
-#       ref: v1.0.0
-esc sync                       # fetch → verify → render → write
-esc status --check             # 0 = in sync; 1 = drift (add to CI)
+```mermaid
+flowchart LR
+  a["esc init"] --> b["edit<br/>.escapement/config.yaml"] --> c["esc render --stdout"] --> d["esc sync"] --> e["esc status --check"] --> f["commit + CI"]
 ```
 
-Try it right now with the shipped example — no pack repo needed:
+**1. Make the config.** Run this at the root of the repo.
 
 ```sh
-git clone https://github.com/tensorgroup/openescapement && cd openescapement/examples/governed-service
-go run ../../cmd/esc sync && go run ../../cmd/esc status
+esc init
 ```
 
-### Adding `esc` to a repo that already has instruction files
+You see (in a repo that already has a `CLAUDE.md`):
 
-Most first contact isn't a blank repo, it's one with a hand-written `CLAUDE.md` or
-`AGENTS.md` already in place. `esc init` handles that case explicitly:
+```text
+Initialized .escapement/config.yaml
 
-- **Detects** what's already there (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`,
-  `GOVERNANCE.md`, `.mcp.json`, `.claude/skills/`) and pre-fills `targets` in the
-  generated config with exactly what it found. A repo with `AGENTS.md` and no
-  `GEMINI.md` doesn't get `GEMINI.md` conjured into existence by its first sync.
-  Nothing detected leaves `targets` empty, which still means all targets.
-- **Explains**, in the same vocabulary `esc status` uses, what the first `esc sync`
-  will do to each detected file: your content is preserved byte for byte and
-  reported as a local amendment. A file that already carries a managed block or the
-  placeholder marker is told that instead of promised an insert it won't get.
-- **Offers**, once, to place the managed-block marker (`<!-- escapement:block -->`),
-  on a TTY. One question, defaulting to no: say no and nothing is written, and the
-  block lands at the top of each file, below any frontmatter and title, at first
-  sync. Say yes and you pick a position once, above the title (but still below any
-  frontmatter) or at the end of the file, and it applies to every eligible file.
-  Declining, an empty answer, Ctrl-D, and anything unrecognized all leave every file
-  untouched; the placeholder is the only way to override where the block lands.
+Found CLAUDE.md (3 lines).
 
-`esc init` never writes rendered policy, only the marker, and only when you ask it
-to. A getting-started command shouldn't put rules into your instruction files before
-you've seen them; `esc sync` is what writes policy, later, once you've reviewed the
-pack.
+`esc sync` will insert a managed block at the top of CLAUDE.md. Your current content is preserved byte for byte and reported as a local amendment.
 
-Guard rails: init never writes over a file with uncommitted changes, because git is
-what would restore it; that file is reported and left out of the offer, and the rest
-are still offered. In a directory that is not a git repository there is no undo at
-all, so the prompt says so and still requires an explicit yes rather than treating
-"no version control" as the safest case. A non-interactive run, including
-`esc init --yes`, never asks and never writes anything beyond the config scaffold.
+To place the block somewhere else, put <!-- escapement:block --> where you want it before syncing.
+```
 
-Once a pack is synced, run its `esc-reconcile` skill, if it ships one (the seeded
-demo pack does), to compare your existing rules against the pack's for duplicates or
-contradictions. That comparison is judgment work for an agent: a CLI heuristic would
-be wrong often enough to erode trust, and a model call would break `esc`'s
-no-network, single-dependency design, so the guidance ships as a skill instead of
-code in `esc` itself.
+`esc init` writes only the config. It never writes policy into your files. It finds the
+instruction files you already have and manages only those. On a terminal it can offer to
+place the block marker for you; the answer defaults to no. Details:
+[docs/reference.md](docs/reference.md#adding-esc-to-a-repo-that-already-has-instruction-files).
 
-### Set up `esc` in a repo with your agent
+**2. Point the config at a pack.** Edit `.escapement/config.yaml`:
+
+```yaml
+schema: 1
+packs:
+  - source: github.com/your-org/policy-packs//org   # a git repo and a path in it
+    ref: v1.0.0                                     # a signed tag
+allowed_signers_file: .escapement/allowed_signers  # who may sign the tag
+targets:
+  - claude
+```
+
+No pack yet? Copy [`examples/packs/acme-org`](examples/packs/acme-org) into a repo of your
+own and remove its fictional rules first. A local directory needs `trust: unsigned` and an
+empty `ref`, as in [`examples/governed-service`](examples/governed-service/.escapement/config.yaml).
+
+**3. Preview what will land.** Nothing is written.
+
+```sh
+esc render --stdout
+```
+
+You see each file's managed block, starting with:
+
+```text
+===== CLAUDE.md =====
+> Managed by escapement. Do not edit. Run `esc diff` to see source. Team content goes outside this block.
+```
+
+**4. Write it, and check it.**
+
+```sh
+esc sync
+esc status --check
+```
+
+**5. Commit and gate it in CI.** Commit `.escapement/` (with its lockfile) and the rendered
+files. Then add the GitHub Action, so drift fails the build:
+
+```yaml
+- uses: tensorgroup/openescapement@main
+  # runs `esc status --check` — policy drift fails the build
+```
+
+Do not delete `.escapement/escapement.lock` to "reset" a repo. It is how sync recognizes a
+hand edit.
+
+<details>
+<summary><b>Let your coding agent do the setup</b> (a prompt to paste)</summary>
 
 Installing the binary is the whole install; the judgment is per repo. Paste this into
 the coding agent you already use, from the root of the repo to govern (fill in the
@@ -156,71 +266,57 @@ the esc source checkout, if I have one, is at <path or "none">.
 ```
 
 If you also run a per-user review panel, the sibling project's README carries the
-matching prompt for a brand-new project; see the next section.
+matching prompt for a brand-new project; see
+[Independently, or with Balancewheel](#independently-or-with-balancewheel).
 
-### Independently, or with Balancewheel
+</details>
 
-`esc` governs the repo. What configures *your* agent lives in your home directory:
-the user-level `~/.claude/CLAUDE.md`, `~/.claude/skills/`, per-user wrappers and
-credentials. `esc` never writes any of that. What it keeps under your home directory
-is its own: a pack cache in the OS cache directory (`ESC_CACHE_DIR` overrides it) and,
-for `esc serve`, its data under `~/.escapement/server`. Its one look at your agent's
-configuration is a read: `esc status` notices a pack-provided skill whose name also exists under
-`~/.claude/skills` and reports it as an informational `duplicate`, which never changes
-an exit code. Your agent reads both the user-level file and the repo's file, so a
-pack rule and a personal rule can disagree on the same subject. In a governed repo
-the pack's rule is the org's call; adjust your own rule or open a PR against the pack
-rather than editing the managed block: the edit reports as drift, `esc status --check`
-fails, and `esc sync` declines to overwrite it until someone runs `--force`.
+## Everyday commands
 
-The sibling project [Balancewheel](https://github.com/tensorgroup/balancewheel) is
-that per-user layer done deliberately: a moderated multi-model review panel, with
-other vendors' CLI agents as read-only peer seats and a scoreboard that logs every
-dispute. Each works without the other; together they close a loop.
+| I want to… | Run | You see |
+|---|---|---|
+| Start governing a repo | `esc init` | `Initialized .escapement/config.yaml` and the files it found |
+| See the rules before they land | `esc render --stdout` | each managed block, nothing written |
+| Write the rules into the repo | `esc sync` | `Synced 1 pack(s), 6 artifact(s) applied, 0 skipped:` |
+| Check for drift (CI) | `esc status --check` | `All policy artifacts in sync.` and exit 0, or `Drift detected.` and exit 1 |
+| See what changed | `esc diff` | a unified diff, expected against actual |
+| Review a new pack version first | `esc diff --against v2.0.0` | the policy change, before you move the pin |
+| Move to a new pack version | `esc update --ref v2.0.0` | the new pin; then `esc diff`, a PR, `esc sync` |
+| Undo a hand edit in a block | `esc sync --force` | the pack's block again; your other text stays |
+| Look around a demo portal | `esc serve --demo` | a local admin portal with a fictional org |
 
-- **`esc` only.** An org wants its rules in every repo's instruction files, signed and
-  drift-checked. Nothing here needs a panel. The model packs under `examples/packs/`
-  (`anthropic-models`, `openai-models`, `google-models`, `kimi-models`, `deepseek-models`,
-  `zai-models`) carry per-vendor model guidance
-  with prices for the models they recommend, the reason behind each status, and the
-  condition that would reverse it;
-  copy one into your pack repo and pin it. For the agent tools an org governs (the vendor
-  CLIs, plans versus metered keys, OpenRouter, sandboxes), see
-  [docs/agent-tools.md](docs/agent-tools.md).
-- **Balancewheel only.** You want a review panel and a scoreboard for your own agent,
-  and there is no org policy to ship. It installs once per machine, under the home
-  directory only, and nothing in it needs `esc`.
-- **Both.** The panel's log is where a seat policy earns its numbers (which model holds
-  which seat, on what evidence), and a rule pack is what that policy becomes once it
-  applies to more than one person. Install balancewheel once per machine, then `esc` in
-  each repo; that order is a recommendation, not a dependency, since neither reads the
-  other's state. `examples/packs/model-seats` is that policy in pack form: seats named
-  by role, the substance bar, mandatory logging, and evidence-cited demotion with
-  re-promotion criteria, with the models behind the seats a dated config detail.
+Plain `esc status` (without `--check`) exits 1 only for a fail-closed constraint violation.
+Ordinary drift exits 0 without `--check` and 1 with it.
 
-### `esc serve` — the admin portal
+## What drift means and how to fix it
 
-For what the CLI, the pack repo, and the portal each do, and what a server adds,
-see [docs/cli-and-portal.md](docs/cli-and-portal.md).
+`esc status` reports two things for each file. The **managed** state says whether the
+pack's content is correct. The **local** state says whether you added your own content
+around it. Your own content is never drift.
 
-```sh
-esc serve --demo               # one binary, seeded fictional org, no setup
+```mermaid
+stateDiagram-v2
+  direction LR
+  [*] --> missing: file or block not there
+  missing --> in_sync: esc sync
+  in_sync --> altered: hand edit inside the block
+  altered --> in_sync: esc sync --force (or move the edit out of the block)
+  in_sync --> stale: the pack or its pin changed
+  stale --> in_sync: esc sync
+  in_sync --> in_sync: text added outside the block ("+N lines local")
 ```
 
-Four pages: an overview of fleet posture, a fleet list of registered repos and their
-drift status, rule-pack browsing with portal-side publishing (validate → commit → tag),
-and usage. The portal never pushes rules into repos — packs it publishes still reach a
-repo only when someone runs `esc sync` there, same as any other pack source.
+| State | What it means | Fix |
+|---|---|---|
+| `in sync` | The managed content matches the pack. | Nothing. |
+| `in sync · +N lines local` (augmented) | Your own text is around the block. | Nothing. It is expected use. |
+| `missing` | A file or its block is not there. | `esc sync` |
+| `stale` | The content came from an older pack state, or a pin is not synced yet. | `esc sync` |
+| `altered` | Someone edited the text inside the block. | `esc diff`, then move the edit out of the block or run `esc sync --force`. To change a rule, open a PR against the pack. |
+| `orphan` | A pack no longer provides a block or skill. | The next `esc sync` removes it. |
 
-`esc serve --demo` resets its example data to pristine on every startup and prints `esc: demo data reset`, so the demo always shows current content. Anything you change during a demo (published pack versions, adopted starters, guidance edits) is discarded when you restart. Non-demo servers keep your data and only refresh guidance files you have not edited.
-
-Outside `--demo`, `esc serve` prints a fresh random bearer token on every start unless you pass `esc serve --token <token>` to set it explicitly (the same token repos need in `ESC_PORTAL_TOKEN` to publish to this server's ingest endpoint). `--demo` always disables auth, regardless of `--token`.
-
-The portal is server-rendered with a strict CSP; its one third-party asset, htmx, is
-vendored and embedded (pinned by SHA-256 in `internal/portal/web/HTMX-VENDOR.md`), never
-fetched at runtime, and every interaction still works with JavaScript disabled.
-
-The portal's **Models** section is curated, sourced guidance on each vendor's models (Anthropic, OpenAI, Google, Kimi, Deepseek, Grok): what each model class is good at, which roles it suits (planning, review, coding, bulk), how to govern it, and example rule-pack fragments to adopt. Every claim carries a source. The guidance ships embedded and is seeded to `<data-dir>/guidance/` on first run. Files you have not edited are refreshed to the latest embedded content on later runs, so upgrades reach you automatically; any file you edit by hand or from the portal is never overwritten. To restore a shipped file, delete it and restart. Raw HTML in guidance or fragment markdown is dropped by the safe renderer; write markdown.
+More detail: [local amendments](docs/reference.md#local-amendments) and
+[`--json` output for scripts](docs/reference.md#json-output---json).
 
 ## How it works
 
@@ -243,14 +339,8 @@ constraints:
   forbidden_patterns: ["ignore (the )?governance"]
 ```
 
-Shipped examples: `examples/packs/acme-org` is a complete org pack (rules, paved paths,
-a catalog, a skill, an MCP server, constraints); `anthropic-models`, `openai-models`,
-`google-models`, `kimi-models`, `deepseek-models`, and `zai-models` are per-vendor model packs, each catalog entry carrying the
-reason for its status (and its price, where the pack recommends the model), and, where the status departs from the vendor's own default, the
-condition that would reverse it; `model-seats` governs how several models collaborate,
-by seat rather than by model.
-
-`esc sync` renders packs into a **managed block** inside your existing files — everything outside the block stays yours:
+`esc sync` renders the pack into a **managed block** in your files. Everything outside the
+block stays yours:
 
 ```markdown
 # CLAUDE.md                       ← your file, your content above the block
@@ -260,190 +350,109 @@ by seat rather than by model.
 <!-- escapement:end -->
 ```
 
-The `catalog` renders twice: concise directives for agents, and a readable table in `GOVERNANCE.md` so humans always know what's preferred, allowed, and banned — without hand-maintaining a policy doc. `reserved` marks something allowed but held back for a deliberate escalation, such as a frontier model too expensive to run by default; its notes say what earns the escalation.
+The `catalog` renders twice: short directives for agents, and a table in `GOVERNANCE.md`
+for people. `reserved` means allowed but held back for a deliberate escalation, such as a
+frontier model that costs too much to run by default. Its notes say what earns the
+escalation.
 
-| Command | What it does |
-|---|---|
-| `esc init` | Scaffold config in a repo |
-| `esc sync` | Fetch pinned packs, verify, render, write, lock |
-| `esc status --check` | Classify drift (altered / missing / stale / constraint-violated); non-zero exit for CI |
-| `esc diff` | Unified diff of expected vs actual |
-| `esc diff --against v2.0.0` | Review policy changes before updating a pin |
-| `esc update --ref v2.0.0` | Bump the pin (then `esc diff`, PR, `esc sync`) |
-| `esc render --stdout` | Preview without writing |
+**Shipped example packs** (in [`examples/packs/`](examples/packs)):
 
-Plain `esc status` (no `--check`) exits 1 when a fail-closed constraint violation
-exists, for example an unacknowledged custom target file. Ordinary drift and
-orphaned managed blocks still exit 0 without `--check` and 1 with it; orphans are
-self-healing, since the next sync removes the stale block.
+- `acme-org` — a complete org pack: rules, paved paths, a catalog, a skill, an MCP server,
+  and constraints.
+- `anthropic-models`, `openai-models`, `google-models`, `kimi-models`, `deepseek-models`,
+  `zai-models` — per-vendor model guidance. Each catalog entry gives the reason for its status
+  and its price where the pack recommends the model. Where the status differs from the
+  vendor's own default, the entry gives the condition that would reverse it.
+- `model-seats` — how several models work together, by seat rather than by model.
 
-### Local amendments
+**More in the reference** ([docs/reference.md](docs/reference.md)):
+[local amendments](docs/reference.md#local-amendments),
+[publishing to the admin portal](docs/reference.md#publishing-to-the-admin-portal),
+[JSON output](docs/reference.md#json-output---json),
+[custom targets](docs/reference.md#custom-targets) (govern files such as
+`.github/copilot-instructions.md`), and
+[`esc serve`, the admin portal](docs/reference.md#esc-serve--the-admin-portal)
+(`esc serve --demo` runs it with a fictional org and no setup).
 
-Content escapement does not own (text you add outside a managed block, extra
-`.mcp.json` server entries, files you add to a skill directory) is never
-touched by sync, and is reported on a second, independent axis: `local: none`
-or `local: amended`. An amendment alone is never drift and never changes an
-exit code. `esc status` calls a file with an in-sync managed block plus your
-own additions **augmented**; that's expected use, not a problem to fix.
+## Independently, or with Balancewheel
 
-`esc sync` leaves an artifact alone when its managed region was hand-edited,
-instead of overwriting it: it warns on stderr, records the skip, and still
-exits 0. **Exit 0 from `esc sync` no longer asserts the repo matches
-policy**: it asserts that everything escapement was willing to apply was
-applied. Gate compliance on `esc status --check`, which exits 1 on any
-artifact that is not in sync. Run `esc sync --force` to overwrite a
-hand-edited managed region and converge; `--force` only touches content
-escapement owns and never overwrites a local amendment.
+`esc` governs the **repo**. Your own agent configuration lives in your **home directory**:
+`~/.claude/CLAUDE.md`, `~/.claude/skills/`, your wrappers and credentials. `esc` never
+writes any of that. Under your home directory it keeps only its own state: a pack cache in
+the OS cache directory (`ESC_CACHE_DIR` overrides it) and, for `esc serve`, its data under
+`~/.escapement/server`. Its one look at your agent configuration is a read: `esc status`
+reports a pack skill whose name also exists under `~/.claude/skills` as an informational
+`duplicate`. That never changes an exit code.
 
-If a pack manifest declares `reporting: { amendments: metrics, endpoint:
-https://... }` (or `amendments: content`), a repo publishes local amendments
-to that endpoint at that level on every `esc sync` and `esc status`; a
-repo's own `.escapement/config.yaml` can lower the level via
-`report_amendments: metrics` or `off`, but never raise it above what the
-pack declared. With no `reporting` block, or a `reporting` block with no
-`endpoint`, nothing is ever sent anywhere. This governs only what leaves the
-repo: your own `esc status` always shows your amendments in full, including
-content, on your own machine, regardless of the resolved level; see JSON
-output below.
+Your agent reads both your user-level file and the repo's file, so the two can disagree on
+the same subject. In a governed repo, the pack's rule is the org's call. Change your own rule,
+or open a PR against the pack. Do not edit the managed block: the edit reports as drift,
+`esc status --check` fails, and `esc sync` does not overwrite it until someone runs `--force`.
 
-#### Publishing to the admin portal
+The sibling project [Balancewheel](https://github.com/tensorgroup/balancewheel) is that
+per-user layer: a moderated multi-model review panel, with other vendors' CLI agents as
+read-only peer seats and a scoreboard that logs every dispute.
 
-Set `ESC_PORTAL_TOKEN` in the environment (never in config, so it can never
-be committed) to authenticate publishes. Publishing is always non-fatal: it
-runs after the lockfile is written and all normal output is printed, so a
-telemetry outage never changes a command's exit code or suppresses its
-output. An unset token with an endpoint configured is one stderr warning and
-a skipped publish, not a failure. Anything that could not be sent queues to
-the gitignored `.escapement/outbox.jsonl` (capped at 200 entries or 14 days,
-oldest evicted first, every drop reported on stderr) and flushes oldest-first
-on the next successful publish.
-
-What leaves the repo depends on the resolved `reporting.amendments` level:
-
-| Level | What leaves the repo |
-|---|---|
-| `off` (default, or no `reporting` block) | Nothing. Nothing is sent, ever. |
-| `metrics` | Repo identity, pack pins, and every artifact's `managed`/`local` state, counts, hashes, and item names (e.g. which `.mcp.json` keys or skill-directory files were added). Never amendment content, alteration diffs, or free-text detail/reason prose. |
-| `content` | Everything `metrics` sends, plus full amendment text and alteration diffs. |
-
-### JSON output (`--json`)
-
-`esc status --json` and `esc sync --json` print one JSON document (schema 1)
-to stdout instead of human-readable output: the contract a separate
-consumer (a portal, a dashboard, a script) can parse without reading Go
-structs:
-
-| Field | Type | Meaning |
-|---|---|---|
-| `schema` | int | Document schema version |
-| `command` | string | `"status"` or `"sync"` |
-| `packs[]` | array | One entry per pinned pack: `source`, `ref`, `pinned` (resolved content hash), `latest` (omitted if unknown), `signed` |
-| `findings[]` | array | Every classified artifact, pack pin, or subsystem signal (see below) |
-| `collection` | object | `amendments` (`off` / `metrics` / `content`) and `source` (`default` / `pack` / `repo-override`): the resolved reporting level and where it came from |
-| `skipped[]` | array | `sync` only, always present (possibly `[]`); omitted entirely for `status`. What sync declined to write or remove: `subject`, `kind`, `cause`, `reason`, `expected_hash`, `actual_hash`. `cause` is the machine-readable discriminator (`hand-edited`, `orphan-dir-unmanaged`, `orphan-dir-edited`, `orphan-block-edited`); `reason` is prose for a human and nothing should branch on it |
-
-Each `findings[]` entry carries `subject` (an artifact path, a pack source
-URL, or the literal `"update-check"`), `kind` (`block` / `file` / `dir` /
-`json-keys` for artifacts, or `pack` / `update-check` / `constraint`),
-`managed` (the drift state), `local` (`none` / `amended`), `detail`, and
-optional `amendment` / `alteration` objects.
-
-Two things worth knowing before you parse this:
-
-- **`subject` is not unique within `findings[]`.** A constraint-violation
-  finding reuses an artifact's path, so key on `(subject, kind)`, not
-  `subject` alone.
-- **`--json` skips the interactive update check** on both commands, which
-  for `status` also skips the update-log append: a consumer polling only
-  `esc status --json` will never see a pack's `latest` field advance.
-  `esc sync --json` still records a check entry every time, since sync
-  always calls the recorder regardless of `--json`.
-
-`amendment.content` and `alteration.diff` are both omitted for `.mcp.json`
-(kind `json-keys`) and for skill directories (kind `dir`): a whole-file
-`.mcp.json` diff would ship a user's own *unowned* MCP server entries into a
-document a publisher forwards upstream, and a directory's alteration hashes
-are a whole-tree pair with no single-file diff to show. Local surfaces
-(`esc status`, `esc status --json`, `esc sync --json`) always report
-complete local truth, amendment content included, no matter what the
-resolved reporting level is. The level governs only what a publisher sends
-onward, never what your own machine shows you.
-
-See `docs/superpowers/specs/2026-08-05-local-amendment-model-design.md` §5
-for the full field-level rationale.
-
-There's also a GitHub Action:
-
-```yaml
-- uses: tensorgroup/openescapement@main
-  # runs `esc status --check` — policy drift fails the build
+```mermaid
+flowchart LR
+  subgraph home["Your home directory: Balancewheel"]
+    panel["review panel"] --> log["metrics log<br/>(the evidence)"]
+  end
+  subgraph pack["Pack repo"]
+    ms["model-seats pack"]
+  end
+  subgraph repo["Each repo: esc"]
+    block["managed block"]
+  end
+  log -- "bw pack export" --> ms
+  ms -- "esc sync" --> block
 ```
 
-### Custom targets
-
-A pack may define extra managed-block markdown targets in `pack.yaml` under
-`custom_targets`, so an org can govern files like
-`.github/copilot-instructions.md` or `QWEN.md` without waiting for an esc
-release:
-
-```yaml
-custom_targets:
-  - name: copilot
-    file: .github/copilot-instructions.md
-    doc: https://docs.github.com/en/copilot/customizing-copilot
-    description: Repository custom instructions for GitHub Copilot.
-```
-
-`name` matches `^[a-z][a-z0-9-]{0,31}$` and is used in fragment `targets:`;
-`file` is a clean relative `.md` path of at most two segments, ASCII only, not
-in a control directory. A fragment reaches a custom target only when it names
-it explicitly; a fragment with no `targets:` goes to built-in files only.
-
-**Single owner:** a custom target belongs to the one pack that defines it.
-Only that pack's fragments render into it. Two packs declaring the same name
-or file is an error and sync refuses. If an org and a team need to co-write
-one file, put the fragments in the same pack.
-
-A custom target renders only if its file is listed in the repo's
-`.escapement/config.yaml`:
-
-```yaml
-allow_custom_target_files:
-  - .github/copilot-instructions.md
-```
-
-Pinning a pack grants it write access to a known, fixed set of files. Custom
-targets would let a pack choose new paths, so the acknowledgment list keeps a
-repo's write surface enumerable from the repo's own config. Filename rules
-alone are not enough because markdown transcludes (one instruction file can
-pull in another), so a file the pack does not name directly could still change
-what an agent reads. Without the acknowledgment, sync fails closed and names
-the file to add.
-
-Recommended layout: an org base pack plus team packs, each able to contribute
-its own custom targets, with the repo acknowledging every file it wants
-written:
-
-```yaml
-packs:
-  - {source: git@github.com:acme/esc-org-base, ref: v2.1.0}      # org floor
-  - {source: git@github.com:acme-payments/esc-team, ref: v0.3.0} # team additions
-targets: []                                                       # optional filter
-allow_custom_target_files:
-  - .github/copilot-instructions.md                               # org base's target
-  - PAYMENTS-AGENTS.md                                            # team's target
-```
+- **`esc` only.** An org wants its rules in every repo, signed and drift-checked. Nothing
+  here needs a panel. Copy a model pack from `examples/packs/` into your pack repo and pin it.
+  For the agent tools an org governs (vendor CLIs, plans against metered keys, OpenRouter,
+  sandboxes), see [docs/agent-tools.md](docs/agent-tools.md).
+- **Balancewheel only.** You want a review panel and a scoreboard for your own agent, and
+  there is no org policy to ship. It installs once per machine, under the home directory
+  only, and needs nothing from `esc`.
+- **Both.** The panel's log is the evidence for a seat policy (which model holds which seat).
+  A rule pack is that policy once it applies to more than one person. Install Balancewheel
+  once per machine, then `esc` in each repo. That order is a recommendation, not a
+  dependency: neither reads the other's state. `examples/packs/model-seats` is that policy in
+  pack form: seats named by role, the substance bar, mandatory logging, and evidence-cited
+  demotion with re-promotion criteria. The models behind the seats are a dated config detail.
 
 ## Security model
 
-This tool writes instructions that agents execute — its distribution channel is a high-value target, and it is designed fail-closed:
+`esc` writes instructions that agents execute. That makes its distribution channel a
+high-value target, so it fails closed:
 
-- **Signed packs.** Sources are signature-verified (`git verify-tag` against an SSH `allowed_signers` trust root) before a byte is used. Unsigned sources require an explicit, greppable `trust: unsigned` in config.
+- **Signed packs.** esc verifies each source's signature (`git verify-tag` against an SSH `allowed_signers` trust root) before it uses a byte. An unsigned source needs an explicit, greppable `trust: unsigned` in config.
 - **Hash-pinned lockfile.** `.escapement/escapement.lock` records resolved commit SHAs and content hashes. A moved tag or tampered fetch fails loudly (exit 3) before any write. It also carries what sync last wrote, which is how `esc sync` recognizes a hand-edited managed region and declines to overwrite it: deleting the lockfile erases that history, so the next sync treats every artifact as never-synced and overwrites every hand-edit. Don't delete it to "reset" a repo.
-- **Explicit updates only.** Sync never auto-jumps versions. Policy changes arrive as reviewable diffs in normal PRs — your existing review, changelog, and notification machinery.
+- **Explicit updates only.** Sync never jumps versions by itself. Policy changes arrive as reviewable diffs in normal PRs.
 - **No standing write path.** No daemon, no server pushing into repos. Only `esc`, run by someone with write access, changes policy files.
-- **Merge constraints.** Packs can bound the final merged file (max size, forbidden patterns like "ignore the governance section"), validated before writing.
-- **Provenance everywhere.** Every managed block carries pack names, versions, and a content hash — any file on any machine audits back to its source.
+- **Merge constraints.** Packs can bound the final merged file (max size, forbidden patterns like "ignore the governance section"). esc checks them before it writes.
+- **Provenance everywhere.** Every managed block carries pack names, versions, and a content hash. Any file on any machine audits back to its source.
+
+## Why
+
+Organizations adopt AI agents faster than they can govern them. The usual answers are policy
+PDFs that nobody reads, or heavy compliance suites that fight how developers work.
+
+AI agents change this: the workers being governed **read instruction files natively**. A rule
+in `CLAUDE.md` is not a document someone might read. It is text the agent reads *every
+session*.
+
+> Make compliance easier than non-compliance. Ship the rules where the work happens. Give leadership one view of what's deployed.
+
+Rule packs also **teach**. A pack carries paved-path pointers ("SSO is at
+`sso.acme.example`, API keys come from here, secrets go in this vault"). So every agent
+steers its work onto the central services your teams may not know about.
+
+**Why "escapement"?** An [escapement](https://en.wikipedia.org/wiki/Escapement) is the part
+of a clock that turns an unregulated power source into precise, countable ticks. esc does
+that for AI agents: large unregulated capability in, deterministic and auditable behavior
+out. It is a regulator, not a firewall or a scanner.
 
 ## What this is not
 
