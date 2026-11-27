@@ -18,6 +18,11 @@ tagged releases begin.
   to `allowed` in the pack. Gemini 3.1 Pro Preview moves to legacy, because Google now
   names Neon as its upgrade; it stays only for workloads that need explicit context
   caching. Every Google starter and the routing example now route to Neon and Hydrogen.
+- `examples/packs/model-seats` 0.6.0: the reference roster's metered peer seat moves from
+  `glm-5.3-flash` to DeepSeek V4.1 Flash (`deepseek/deepseek-v4.1-flash` via pi on
+  OpenRouter, thinking medium). The author's scoreboard showed DeepSeek doing the same job
+  with far fewer timeouts and more unique catches. The 2026-10 DeepSeek trial entry is
+  folded into the seat.
 - `examples/packs/model-seats` 0.5.0: the Google seat entry moves from the 2026-10
   `gemini-4-argon-high` trial to a 2026-11 stand-in seat on `gemini-4-neon-high` via agy.
   It runs in place of the planning seat or the Kimi seat when their plans are capped,
