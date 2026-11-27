@@ -14,6 +14,7 @@ func testPacks() []*pack.Pack {
 			Catalog: []pack.CatalogEntry{
 				{Name: "Tailscale", Category: "hosting-exposure", Status: "preferred", Notes: "Org tailnet"},
 				{Name: "Lovable", Category: "app-hosting", Status: "allowed", Notes: "POCs only"},
+				{Name: "Dedicated GPU host", Category: "compute", Status: "reserved", Notes: "Escalate only"},
 				{Name: "Cloudflare Tunnel", Category: "hosting-exposure", Status: "review-required", Notes: "Ask #platform"},
 				{Name: "Raw port forwarding", Category: "hosting-exposure", Status: "banned"},
 			},
@@ -51,12 +52,14 @@ func TestComposeTargets(t *testing.T) {
 		t.Errorf("pack order wrong:\n%s", claude)
 	}
 	// Catalog rendered as directive text, grouped by status order.
-	for _, want := range []string{"**Preferred:** Tailscale", "**Banned:** Raw port forwarding"} {
+	for _, want := range []string{"**Preferred:** Tailscale", "**Reserved:** Dedicated GPU host", "**Banned:** Raw port forwarding"} {
 		if !strings.Contains(claude, want) {
 			t.Errorf("catalog text missing %q:\n%s", want, claude)
 		}
 	}
-	if strings.Index(claude, "Tailscale") > strings.Index(claude, "Raw port forwarding") {
+	if strings.Index(claude, "Tailscale") > strings.Index(claude, "Dedicated GPU host") ||
+		strings.Index(claude, "Dedicated GPU host") > strings.Index(claude, "Lovable") ||
+		strings.Index(claude, "Tailscale") > strings.Index(claude, "Raw port forwarding") {
 		t.Errorf("catalog status order wrong:\n%s", claude)
 	}
 	// Managed notice present.

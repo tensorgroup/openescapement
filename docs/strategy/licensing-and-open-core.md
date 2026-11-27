@@ -6,7 +6,7 @@
 
 | Option | For | Against | Verdict |
 |---|---|---|---|
-| **Apache-2.0** (chosen) | Explicit patent grant; the default for infra tools whose strategy is "become the standard" (Kubernetes, Terraform pre-BUSL, OpenTelemetry); zero friction in enterprise/university legal review — critical for the Caltech-shaped buyer | Permits closed-source forks and hosted copycats | ✅ **Recommended** |
+| **Apache-2.0** (chosen) | Explicit patent grant; the default for infra tools whose strategy is "become the standard" (Kubernetes, Terraform pre-BUSL, OpenTelemetry); zero friction in enterprise/university legal review — critical for university buyers | Permits closed-source forks and hosted copycats | ✅ **Recommended** |
 | MIT | Simplest, equally adoption-friendly | No patent grant — matters once a foundation or big co-contributor gets involved | Fine, but strictly weaker than Apache-2.0 here |
 | AGPL-3.0 | Blocks hosted copycats without reciprocity | Security-sensitive and university counsel routinely ban AGPL dependencies; kills the "adopted by a single team in an afternoon" motion; poisons the community-packs flywheel | ❌ Fights the strategy |
 | BUSL / FSL (source-available) | Strongest copycat protection | Not open source; forfeits the "open standard" thesis entirely — §8 of the product spec argues the openness *is* the moat | ❌ Contradicts the thesis |

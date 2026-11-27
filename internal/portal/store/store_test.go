@@ -22,10 +22,10 @@ func splitLines(s string) []string {
 func TestRegistryRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	r := Registry{
-		Org:         Org{Name: "Caltech (demo)"},
+		Org:         Org{Name: "Example Institute (demo)"},
 		Departments: []Department{{ID: "phys", Name: "Physics"}},
-		Teams:       []Team{{ID: "ligo", Name: "LIGO Ops", DeptID: "phys"}},
-		Repos:       []Repo{{ID: "r1", Name: "ligo-pipeline", TeamID: "ligo", Governed: true}},
+		Teams:       []Team{{ID: "obs", Name: "Observatory Ops", DeptID: "phys"}},
+		Repos:       []Repo{{ID: "r1", Name: "obs-pipeline", TeamID: "obs", Governed: true}},
 	}
 	if err := SaveRegistry(dir, r); err != nil {
 		t.Fatal(err)
@@ -35,14 +35,14 @@ func TestRegistryRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := s.Registry()
-	if got.Org.Name != "Caltech (demo)" || len(got.Repos) != 1 || got.Repos[0].Name != "ligo-pipeline" {
+	if got.Org.Name != "Example Institute (demo)" || len(got.Repos) != 1 || got.Repos[0].Name != "obs-pipeline" {
 		t.Fatalf("registry mismatch: %+v", got)
 	}
 }
 
 func TestStoreSaveRegistryPersistsAndUpdatesInMemory(t *testing.T) {
 	dir := t.TempDir()
-	r := Registry{Repos: []Repo{{ID: "r1", Name: "ligo-pipeline", TeamID: "ligo"}}}
+	r := Registry{Repos: []Repo{{ID: "r1", Name: "obs-pipeline", TeamID: "obs"}}}
 	if err := SaveRegistry(dir, r); err != nil {
 		t.Fatal(err)
 	}
@@ -51,12 +51,12 @@ func TestStoreSaveRegistryPersistsAndUpdatesInMemory(t *testing.T) {
 		t.Fatal(err)
 	}
 	updated := s.Registry()
-	updated.Repos[0].Remote = "github.com/acme/ligo-pipeline"
+	updated.Repos[0].Remote = "github.com/acme/obs-pipeline"
 	if err := s.SaveRegistry(updated); err != nil {
 		t.Fatal(err)
 	}
 	// In-memory copy reflects the change without a re-Open.
-	if got := s.Registry().Repos[0].Remote; got != "github.com/acme/ligo-pipeline" {
+	if got := s.Registry().Repos[0].Remote; got != "github.com/acme/obs-pipeline" {
 		t.Fatalf("in-memory remote = %q", got)
 	}
 	// On-disk copy reflects it too, across a fresh Open.
@@ -64,7 +64,7 @@ func TestStoreSaveRegistryPersistsAndUpdatesInMemory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := s2.Registry().Repos[0].Remote; got != "github.com/acme/ligo-pipeline" {
+	if got := s2.Registry().Repos[0].Remote; got != "github.com/acme/obs-pipeline" {
 		t.Fatalf("on-disk remote = %q", got)
 	}
 }
@@ -80,7 +80,7 @@ func TestStoreSaveRegistryFailureLeavesInMemoryUnchanged(t *testing.T) {
 		t.Skip("running as root bypasses the permission check this test relies on")
 	}
 	dir := t.TempDir()
-	orig := Registry{Repos: []Repo{{ID: "r1", Name: "ligo-pipeline", Remote: "orig-remote"}}}
+	orig := Registry{Repos: []Repo{{ID: "r1", Name: "obs-pipeline", Remote: "orig-remote"}}}
 	if err := SaveRegistry(dir, orig); err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestStoreSaveRegistryFailureLeavesInMemoryUnchanged(t *testing.T) {
 // is nondeterministic); its purpose is to fail under `go test -race`.
 func TestStoreRegistryConcurrentReadWriteIsRaceFree(t *testing.T) {
 	dir := t.TempDir()
-	r := Registry{Repos: []Repo{{ID: "r1", Name: "ligo-pipeline"}}}
+	r := Registry{Repos: []Repo{{ID: "r1", Name: "obs-pipeline"}}}
 	if err := SaveRegistry(dir, r); err != nil {
 		t.Fatal(err)
 	}
@@ -150,10 +150,10 @@ func TestStoreRegistryConcurrentReadWriteIsRaceFree(t *testing.T) {
 func TestRegistryTeamAndDept(t *testing.T) {
 	r := Registry{
 		Departments: []Department{{ID: "phys", Name: "Physics"}},
-		Teams:       []Team{{ID: "ligo", Name: "LIGO Ops", DeptID: "phys"}},
+		Teams:       []Team{{ID: "obs", Name: "Observatory Ops", DeptID: "phys"}},
 	}
-	team, dept := r.TeamAndDept("ligo")
-	if team.Name != "LIGO Ops" || dept != "Physics" {
+	team, dept := r.TeamAndDept("obs")
+	if team.Name != "Observatory Ops" || dept != "Physics" {
 		t.Fatalf("team=%+v dept=%q", team, dept)
 	}
 	if team, dept := r.TeamAndDept("nope"); team.Name != "" || dept != "" {
@@ -192,7 +192,7 @@ func TestEventsAppendRead(t *testing.T) {
 	ts := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
 	e1 := Event{TS: ts, Kind: "sync", RepoID: "r1", Drift: "in-sync",
 		Packs: []EventPack{{Name: "org-baseline", Version: "1.2.0", Signed: true}}}
-	e2 := Event{TS: ts.Add(time.Hour), Kind: "provider_usage", TeamID: "ligo",
+	e2 := Event{TS: ts.Add(time.Hour), Kind: "provider_usage", TeamID: "obs",
 		Model: "claude-sonnet-5", Tokens: &Tokens{Input: 1000, Output: 200, CostUSD: 0.42}}
 	for _, e := range []Event{e1, e2} {
 		if err := s.AppendEvent(e); err != nil {

@@ -1,21 +1,37 @@
 ## Choosing a Claude model
 
-Pick the model by the task, not by habit. Start at the top for anything that needs judgment. Step down for volume and speed. Treat every departure from the vendor's own default as a decision with a reason and a reversal condition.
+Start every task on Claude Opus 5.5 at effort `medium`. Raise effort when the task needs more. Escalate to Claude Fable 5.2 only for the reasons below, because it costs twice as much. Treat every departure from this order as a decision with a reason.
 
-| Model | ID | $/1M tokens (in/out) | Use for |
-|---|---|---|---|
-| Claude Fable 5.1 | `claude-fable-5-1` | $10 / $50 | The default for planning, design, review, debugging, and anything not simple. Thinking is always on. Requires 30-day data retention; its safety classifiers may refuse security-adjacent work. |
-| Claude Opus 4.8 | `claude-opus-4-8` | $5 / $25 | The Opus-tier choice when price or the retention requirement rules Fable out: everyday coding, agentic runs, planning behind a reviewed spec. |
-| Claude Sonnet 5 | `claude-sonnet-5` | $2 / $10 (the launch rate, made permanent in 2026-08) | Routine coding, high-volume pipelines, subagents, and executors working from a written plan with tests. |
-| Claude Haiku 4.5 | `claude-haiku-4-5` | $1 / $5 | High-volume simple tasks: classification, summarization, extraction. 200K context. |
-| Claude Opus 5 | `claude-opus-5` | $5 / $25 | Review required. Anthropic's recommended default; see below for why this pack does not follow it. |
-| Claude Fable 5 | `claude-fable-5` | $10 / $50 | Review required. Superseded by 5.1 at the same price; migrate pins, do not start new work on it. |
+| Model | ID | $/1M tokens (in/out) | Status | Use for |
+|---|---|---|---|---|
+| Claude Opus 5.5 | `claude-opus-5-5` | $4 / $20 | Preferred | The default for all work: planning, design, review, debugging, and coding. Start at effort `medium`. Thinking is always on. |
+| Claude Fable 5.2 | `claude-fable-5-2` | $8 / $40 | Reserved | Escalation only. See the escalation rules below. Default effort is `high`. Requires 30-day data retention; its safety classifiers may refuse security-adjacent work. |
+| Claude Sonnet 5.5 | `claude-sonnet-5-5` | $2 / $10 | Allowed | Routine coding, high-volume pipelines, subagents, and executors working from a written plan with tests. |
+| Claude Haiku 4.5 | `claude-haiku-4-5` | $1 / $5 | Allowed | High-volume simple tasks: classification, summarization, extraction. 200K context. |
+| Claude Fable 5.1 | `claude-fable-5-1` | $10 / $50 | Review required | Legacy; superseded by Fable 5.2 at a lower price. Migrate pins. |
+| Claude Opus 5 | `claude-opus-5` | $5 / $25 | Review required | Legacy; superseded by Opus 5.5 at a lower price. Migrate pins, do not start new work on it. |
+| Claude Opus 4.8 | `claude-opus-4-8` | $5 / $25 | Review required | Legacy; superseded by Opus 5.5. Migrate pins. |
+| Claude Fable 5 | `claude-fable-5` | $10 / $50 | Review required | Legacy; superseded by Fable 5.2. Migrate pins. |
+| Claude Sonnet 5 | `claude-sonnet-5` | $2 / $10 | Review required | Legacy; superseded by Sonnet 5.5 at the same price. Migrate pins. |
+
+Escalation to Fable 5.2:
+
+- Escalate in two steps. First raise Opus 5.5's effort to `high` or `xhigh`. Switch to Fable 5.2 only if that is not enough, because effort costs less than a model change.
+- Use Fable 5.2 when a person asks for it by name.
+- Use Fable 5.2 when the task is very hard or very high-stakes, and a wrong answer is expensive to undo.
+- Use Fable 5.2 when the work is stuck: a first fix failed, the same bug came back, or review seats keep disagreeing after cross-examination.
+- Record each escalation with its reason. Unrecorded escalations cannot show whether the reserved model earns its price.
+- Return to Opus 5.5 when the escalated task is done. An escalation covers one task, not the rest of the session.
+- Keep a second model from another vendor as the check on Opus 5.5's work. Cross-vendor review catches more than a more expensive model from the same vendor.
 
 Rules of thumb:
 
-- Start with Fable 5.1 for work where being wrong is expensive: plans, reviews, debugging, design. Keep a fallback model configured, because its classifiers can refuse.
-- Use Opus 4.8 when the task is Opus-shaped or when Fable's price or data-retention requirement is a constraint. It is the same request surface as 4.7 and the safe pin for autonomous runs.
-- Step down to Sonnet 5 or Haiku 4.5 when cost or latency matters more than peak capability: bulk jobs, mechanical edits, subagent fan-out, an executor behind a written plan and tests.
-- Opus 5 is review-required, not banned. Anthropic recommends it as the default; the maintainers found it weaker than Opus 4.8 in logged agentic use (2026-09) at the same price. The reversal condition is concrete: at least 10 logged reviews over 30 days in which Opus 5's confirmed-finding rate meets or beats Opus 4.8's. When the condition is met, record the evidence. Then flip the status.
+- Set effort explicitly on Opus 5.5. Its default is `medium`, one level below Opus 4.8 and Opus 5, so a pin moved over without an effort setting quietly thinks less.
+- Pin the `opus` alias to `claude-opus-5-5` in harness settings (Claude Code: `ANTHROPIC_DEFAULT_OPUS_MODEL`). An alias resolves to whatever the client maps it to, which can be a model you ruled out.
+- Pin the `sonnet` alias to `claude-sonnet-5-5` in harness settings (Claude Code: `ANTHROPIC_DEFAULT_SONNET_MODEL`), for the same reason.
+- Route a Fable 5.2 slot to Opus 5.5 while a plan's Fable usage cap is spent. Do not fall back to Opus 5, because Opus 5.5 supersedes it at a lower price.
+- Moving a pin from Opus 4.8 or Opus 5 to Opus 5.5 is not a drop-in swap. Thinking can no longer be disabled, and forced `tool_choice` (`any` or `tool`) returns a 400. Lower effort instead of disabling thinking, and use `auto` with `strict: true` tools.
+- Moving a pin from Sonnet 5 to Sonnet 5.5 is not a drop-in swap. `thinking: {type: "disabled"}` and forced `tool_choice` return a 400: send `{type: "between_tools"}` (effort `high` or below) where thinking must stay off, and use `auto` with `strict: true` tools. Re-run the effort sweep; start at `medium` for agentic coding.
+- Step down to Sonnet 5.5 or Haiku 4.5 when cost or latency matters more than peak capability: bulk jobs, mechanical edits, subagent fan-out, an executor behind a written plan and tests.
 - Use the exact model IDs in the table. Never guess or construct IDs, and never append date suffixes to them.
 - Model lineup and pricing change. This guidance is versioned and updated centrally; changes arrive through the pack, not by editing this block.

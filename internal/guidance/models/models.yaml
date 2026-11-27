@@ -2,30 +2,36 @@ vendors:
   - key: anthropic
     name: Anthropic
     models:
+      - id: claude-fable-5-2
+        name: Claude Fable 5.2
+        tier: frontier
+        roles: [planning, plan-check, review]
+        status: current
+        docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/models/fable-5-2/overview]
+        verified: 2026-11-11
+        starter: examples/anthropic/starter-claude-fable-5-2.md
+      - id: claude-opus-5-5
+        name: Claude Opus 5.5
+        tier: frontier
+        roles: [planning, plan-check, review, coding]
+        status: current
+        docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/models/opus-5-5/overview]
+        verified: 2026-11-11
+        starter: examples/anthropic/starter-claude-opus-5-5.md
       - id: claude-fable-5-1
         name: Claude Fable 5.1
         tier: frontier
         roles: [planning, plan-check, review]
-        status: current
-        docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/about-claude/models/choosing-a-model]
-        verified: 2026-09-16
-        starter: examples/anthropic/starter-claude-fable-5-1.md
-      - id: claude-opus-4-8
-        name: Claude Opus 4.8
-        tier: frontier
-        roles: [planning, plan-check, review, coding]
-        status: current
-        docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/about-claude/models/choosing-a-model]
-        verified: 2026-09-16
-        starter: examples/anthropic/starter-claude-opus-4-8.md
+        status: legacy
+        docs: [https://platform.claude.com/docs/en/about-claude/models/overview]
+        verified: 2026-11-11
       - id: claude-opus-5
         name: Claude Opus 5
         tier: frontier
         roles: [planning, plan-check, review]
-        status: current
-        docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/about-claude/models/choosing-a-model]
-        verified: 2026-09-16
-        starter: examples/anthropic/starter-claude-opus-5.md
+        status: legacy
+        docs: [https://platform.claude.com/docs/en/about-claude/models/overview]
+        verified: 2026-09-29
       - id: claude-fable-5
         name: Claude Fable 5
         tier: frontier
@@ -33,21 +39,35 @@ vendors:
         status: legacy
         docs: [https://platform.claude.com/docs/en/about-claude/models/overview]
         verified: 2026-09-16
+      - id: claude-opus-4-8
+        name: Claude Opus 4.8
+        tier: frontier
+        roles: [planning, plan-check, review, coding]
+        status: legacy
+        docs: [https://platform.claude.com/docs/en/about-claude/models/overview]
+        verified: 2026-09-22
+      - id: claude-sonnet-5-5
+        name: Claude Sonnet 5.5
+        tier: mid
+        roles: [coding, review]
+        status: current
+        docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://platform.claude.com/docs/en/models/sonnet-5-5/overview]
+        verified: 2026-09-29
+        starter: examples/anthropic/starter-claude-sonnet-5-5.md
       - id: claude-sonnet-5
         name: Claude Sonnet 5
         tier: mid
         roles: [coding, review]
-        status: current
+        status: legacy
         docs: [https://platform.claude.com/docs/en/about-claude/models/overview, https://www.anthropic.com/news/claude-sonnet-5]
-        verified: 2026-09-16
-        starter: examples/anthropic/starter-claude-sonnet-5.md
+        verified: 2026-09-29
       - id: claude-haiku-4-5
         name: Claude Haiku 4.5
         tier: fast
         roles: [bulk]
         status: current
         docs: [https://platform.claude.com/docs/en/about-claude/models/overview]
-        verified: 2026-08-02
+        verified: 2026-09-29
         starter: examples/anthropic/starter-claude-haiku-4-5.md
   - key: openai
     name: OpenAI
@@ -58,15 +78,39 @@ vendors:
         roles: [planning, plan-check, review]
         status: current
         docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-6-astra, https://developers.openai.com/codex/models]
-        verified: 2026-09-16
+        verified: 2026-09-25
         starter: examples/openai/starter-gpt-6-astra.md
+      - id: gpt-6.1-sol
+        name: GPT-6.1 Sol
+        tier: mid
+        roles: [coding, review]
+        status: current
+        docs: [https://developers.openai.com/api/docs/models/gpt-6.1-sol, https://developers.openai.com/api/docs/changelog, https://developers.openai.com/codex/models]
+        verified: 2026-10-24
+        starter: examples/openai/starter-gpt-6.1-sol.md
+      - id: gpt-6-sol
+        name: GPT-6 Sol
+        tier: mid
+        roles: [coding, review]
+        status: current
+        docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-6-sol, https://developers.openai.com/codex/models]
+        verified: 2026-10-24
+        starter: examples/openai/starter-gpt-6-sol.md
+      - id: gpt-6-luna
+        name: GPT-6 Luna
+        tier: fast
+        roles: [bulk]
+        status: current
+        docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-6-luna, https://developers.openai.com/codex/models]
+        verified: 2026-09-25
+        starter: examples/openai/starter-gpt-6-luna.md
       - id: gpt-5.6-sol
         name: GPT-5.6 Sol
         tier: frontier
         roles: [review]
         status: current
         docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-5.6-sol]
-        verified: 2026-09-16
+        verified: 2026-09-25
         starter: examples/openai/starter-gpt-5.6-sol.md
       - id: gpt-5.6-terra
         name: GPT-5.6 Terra
@@ -74,7 +118,7 @@ vendors:
         roles: [coding, review]
         status: current
         docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-5.6-terra]
-        verified: 2026-08-02
+        verified: 2026-09-25
         starter: examples/openai/starter-gpt-5.6-terra.md
       - id: gpt-5.6-luna
         name: GPT-5.6 Luna
@@ -82,42 +126,79 @@ vendors:
         roles: [bulk]
         status: current
         docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-5.6-luna]
-        verified: 2026-08-02
+        verified: 2026-09-25
         starter: examples/openai/starter-gpt-5.6-luna.md
+      - id: gpt-5.5
+        name: GPT-5.5
+        tier: frontier
+        roles: [planning, coding, review]
+        status: legacy
+        docs: [https://platform.openai.com/docs/models/gpt-5.5, https://developers.openai.com/codex/models]
+        verified: 2026-09-25
       - id: gpt-5.2
         name: GPT-5.2
         tier: frontier
         roles: [planning, coding, review]
         status: legacy
         docs: [https://developers.openai.com/codex/models]
-        verified: 2026-08-02
+        verified: 2026-09-25
   - key: google
     name: Google
     models:
+      - id: gemini-4-neon
+        name: Gemini 4 Neon
+        tier: frontier
+        roles: [planning, plan-check, review, coding]
+        status: current
+        docs: [https://ai.google.dev/gemini-api/docs/models/gemini-4-neon, https://ai.google.dev/gemini-api/docs/whats-new-gemini-4-neon, https://ai.google.dev/gemini-api/docs/choosing-a-model, https://ai.google.dev/gemini-api/docs/pricing]
+        verified: 2026-11-20
+        starter: examples/google/starter-gemini-4-neon.md
+      - id: gemini-4-carbon
+        name: Gemini 4 Carbon
+        tier: frontier
+        roles: [planning, plan-check, review]
+        status: current
+        docs: [https://ai.google.dev/gemini-api/docs/models/gemini-4-carbon, https://ai.google.dev/gemini-api/docs/choosing-a-model, https://ai.google.dev/gemini-api/docs/pricing]
+        verified: 2026-11-20
+        starter: examples/google/starter-gemini-4-carbon.md
+      - id: gemini-4-hydrogen
+        name: Gemini 4 Hydrogen
+        tier: mid
+        roles: [coding, review]
+        status: current
+        docs: [https://ai.google.dev/gemini-api/docs/models/gemini-4-hydrogen, https://ai.google.dev/gemini-api/docs/choosing-a-model, https://ai.google.dev/gemini-api/docs/pricing]
+        verified: 2026-11-20
+        starter: examples/google/starter-gemini-4-hydrogen.md
+      - id: gemini-4-argon
+        name: Gemini 4 Argon
+        tier: frontier
+        roles: [planning, plan-check, review]
+        status: current
+        docs: [https://ai.google.dev/gemini-api/docs/models/gemini-4-argon, https://ai.google.dev/gemini-api/docs/deprecations, https://ai.google.dev/gemini-api/docs/pricing]
+        verified: 2026-11-20
+        starter: examples/google/starter-gemini-4-argon.md
       - id: gemini-3.1-pro-preview
         name: Gemini 3.1 Pro Preview
         tier: frontier
         roles: [planning, plan-check, review]
-        status: current
-        docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview]
-        verified: 2026-09-16
-        starter: examples/google/starter-gemini-3.1-pro-preview.md
+        status: legacy
+        docs: [https://ai.google.dev/gemini-api/docs/choosing-a-model, https://ai.google.dev/gemini-api/docs/deprecations, https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview]
+        verified: 2026-11-20
       - id: gemini-3.8-flash
         name: Gemini 3.8 Flash
         tier: mid
         roles: [coding, review]
         status: current
-        docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash, https://ai.google.dev/gemini-api/docs/pricing]
-        verified: 2026-09-16
+        docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash, https://ai.google.dev/gemini-api/docs/choosing-a-model, https://ai.google.dev/gemini-api/docs/pricing]
+        verified: 2026-11-20
         starter: examples/google/starter-gemini-3.8-flash.md
       - id: gemini-3.7-flash
         name: Gemini 3.7 Flash
         tier: mid
         roles: [coding]
-        status: current
-        docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.7-flash, https://ai.google.dev/gemini-api/docs/pricing]
-        verified: 2026-09-16
-        starter: examples/google/starter-gemini-3.7-flash.md
+        status: legacy
+        docs: [https://ai.google.dev/gemini-api/docs/deprecations, https://ai.google.dev/gemini-api/docs/changelog]
+        verified: 2026-10-24
       - id: gemini-3.6-flash
         name: Gemini 3.6 Flash
         tier: mid
@@ -130,8 +211,8 @@ vendors:
         tier: fast
         roles: [bulk]
         status: current
-        docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite]
-        verified: 2026-09-16
+        docs: [https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite, https://ai.google.dev/gemini-api/docs/choosing-a-model]
+        verified: 2026-11-20
         starter: examples/google/starter-gemini-3.5-flash-lite.md
       - id: gemini-3-pro
         name: Gemini 3 Pro Preview
@@ -143,41 +224,55 @@ vendors:
   - key: kimi
     name: Kimi
     models:
+      - id: kimi-k3.1-pro
+        name: Kimi K3.1 Pro
+        tier: frontier
+        roles: [planning, plan-check, review, coding]
+        status: current
+        docs: [https://platform.kimi.ai/docs/models, https://platform.kimi.ai/docs/pricing/chat-k3, https://platform.kimi.ai/docs/guide/kimi-k3-1-pro-quickstart]
+        verified: 2026-10-24
+      - id: kimi-k3.1-pro-highspeed
+        name: Kimi K3.1 Pro High-Speed
+        tier: fast
+        roles: [coding, bulk]
+        status: current
+        docs: [https://platform.kimi.ai/docs/models, https://platform.kimi.ai/docs/pricing/chat-k3]
+        verified: 2026-10-24
       - id: kimi-k3
         name: Kimi K3
         tier: frontier
         roles: [planning, plan-check, review]
-        status: current
+        status: legacy
         docs: [https://platform.kimi.ai/docs/models, https://platform.kimi.ai/docs/pricing/chat-k3]
-        verified: 2026-08-02
+        verified: 2026-10-24
       - id: kimi-k2.7-code
         name: Kimi K2.7 Code
         tier: mid
         roles: [coding]
         status: current
         docs: [https://platform.kimi.ai/docs/models]
-        verified: 2026-08-02
+        verified: 2026-10-24
       - id: kimi-k2.7-code-highspeed
         name: Kimi K2.7 Code High-Speed
         tier: fast
         roles: [coding, bulk]
         status: current
         docs: [https://platform.kimi.ai/docs/models]
-        verified: 2026-08-02
+        verified: 2026-10-24
       - id: kimi-k2.6
         name: Kimi K2.6
         tier: mid
         roles: [coding, review]
         status: current
         docs: [https://platform.kimi.ai/docs/models]
-        verified: 2026-08-02
+        verified: 2026-10-24
       - id: kimi-k2.5
         name: Kimi K2.5
         tier: mid
         roles: [coding]
         status: legacy
         docs: [https://platform.kimi.ai/docs/models]
-        verified: 2026-08-02
+        verified: 2026-10-24
   - key: deepseek
     name: Deepseek
     models:
@@ -194,7 +289,7 @@ vendors:
         roles: [coding, bulk]
         status: current
         docs: [https://api-docs.deepseek.com/quick_start/pricing, https://api-docs.deepseek.com/news/news260910/]
-        verified: 2026-09-16
+        verified: 2026-10-24
       - id: deepseek-v4-flash
         name: DeepSeek V4 Flash
         tier: mid
@@ -205,13 +300,20 @@ vendors:
   - key: grok
     name: Grok
     models:
+      - id: grok-4.7
+        name: Grok 4.7
+        tier: frontier
+        roles: [planning, plan-check, review, coding]
+        status: current
+        docs: [https://docs.x.ai/developers/models, https://docs.x.ai/developers/models/grok-4.7, https://x.ai/news/grok-4-7]
+        verified: 2026-10-24
       - id: grok-4.6
         name: Grok 4.6
         tier: frontier
         roles: [planning, plan-check, review, coding]
-        status: current
+        status: legacy
         docs: [https://docs.x.ai/developers/models, https://docs.x.ai/developers/models/grok-4.6, https://x.ai/news/grok-4-6]
-        verified: 2026-09-16
+        verified: 2026-10-24
       - id: grok-build-0.1
         name: Grok Build 0.1
         tier: fast

@@ -1,0 +1,29 @@
+schema: 1
+name: deepseek-models
+version: 0.1.0
+description: Model selection guidance for DeepSeek. V4.1 Flash is the fast, cheap model for second opinions and triage, named by its DeepSeek API id and its OpenRouter ids, which serve two different releases. V4 Pro stays the planning and review model.
+
+rules:
+  - rules/model-selection.md
+
+catalog:
+  - name: DeepSeek V4.1 Flash, DeepSeek API (deepseek-flash)
+    category: model
+    status: preferred
+    notes: Fast, cheap second opinions, triage, coding, and bulk work. 1M context, 384K max output. $0.30/$1.20 per 1M tokens at peak, $0.15/$0.60 off-peak (2026-10-24). Served as model version DeepSeek-V4.1-Flash-1017.
+  - name: DeepSeek V4.1 Flash, OpenRouter (deepseek/deepseek-v4.1-flash)
+    category: model
+    status: preferred
+    notes: OpenRouter's alias, which resolves to the 2026-09-10 launch release, not the 2026-10-17 release DeepSeek's own API serves. Provider price $0.02/$1.00 per 1M tokens at all hours on 2026-10-24, far under DeepSeek's own list on input; a provider price that can end without notice. Set a spend cap on the OpenRouter key.
+  - name: DeepSeek V4.1 Flash, OpenRouter 2026-10-17 release (deepseek/deepseek-v4.1-flash-1017)
+    category: model
+    status: allowed
+    notes: The 2026-10-17 release, the one DeepSeek's own API serves as deepseek-flash. Use it where results must match DeepSeek's API. Provider price on 2026-10-24 $0.30/$1.20 per 1M tokens from 01:00 to 04:00 and 06:00 to 10:00 UTC Monday to Friday, $0.15/$0.60 at all other hours.
+  - name: DeepSeek V4 Pro (deepseek-v4-pro)
+    category: model
+    status: allowed
+    notes: The planning and review model, for its Think Max mode, until a V4.1 Pro ships. $1.32/$3.96 per 1M tokens at peak, $0.66/$1.98 off-peak (2026-10-24).
+  - name: Retired DeepSeek ids (deepseek-chat, deepseek-reasoner, deepseek-v4-flash, deepseek-v4-flash-vision-exp)
+    category: model
+    status: banned
+    notes: Retired 2026-07-24 (chat, reasoner) and 2026-09-10 (the V4 Flash pair, still routed to V4.1 Flash for now). Move configs to deepseek-flash or deepseek-v4-pro.

@@ -102,10 +102,10 @@ import (
 func TestRegistryRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	r := Registry{
-		Org:         Org{Name: "Caltech (demo)"},
+		Org:         Org{Name: "Example Institute (demo)"},
 		Departments: []Department{{ID: "phys", Name: "Physics"}},
-		Teams:       []Team{{ID: "ligo", Name: "LIGO Ops", DeptID: "phys"}},
-		Repos:       []Repo{{ID: "r1", Name: "ligo-pipeline", TeamID: "ligo", Governed: true}},
+		Teams:       []Team{{ID: "obs", Name: "Observatory Ops", DeptID: "phys"}},
+		Repos:       []Repo{{ID: "r1", Name: "obs-pipeline", TeamID: "obs", Governed: true}},
 	}
 	if err := SaveRegistry(dir, r); err != nil {
 		t.Fatal(err)
@@ -115,7 +115,7 @@ func TestRegistryRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := s.Registry()
-	if got.Org.Name != "Caltech (demo)" || len(got.Repos) != 1 || got.Repos[0].Name != "ligo-pipeline" {
+	if got.Org.Name != "Example Institute (demo)" || len(got.Repos) != 1 || got.Repos[0].Name != "obs-pipeline" {
 		t.Fatalf("registry mismatch: %+v", got)
 	}
 }
@@ -139,7 +139,7 @@ func TestEventsAppendRead(t *testing.T) {
 	ts := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
 	e1 := Event{TS: ts, Kind: "sync", RepoID: "r1", Drift: "in-sync",
 		Packs: []EventPack{{Name: "org-baseline", Version: "1.2.0", Signed: true}}}
-	e2 := Event{TS: ts.Add(time.Hour), Kind: "provider_usage", TeamID: "ligo",
+	e2 := Event{TS: ts.Add(time.Hour), Kind: "provider_usage", TeamID: "obs",
 		Model: "claude-sonnet-5", Tokens: &Tokens{Input: 1000, Output: 200, CostUSD: 0.42}}
 	for _, e := range []Event{e1, e2} {
 		if err := s.AppendEvent(e); err != nil {
@@ -384,11 +384,11 @@ func fixtureRegistry() Registry {
 		Org:         Org{Name: "Demo"},
 		Departments: []Department{{ID: "phys", Name: "Physics"}, {ID: "it", Name: "Central IT"}},
 		Teams: []Team{
-			{ID: "ligo", Name: "LIGO Ops", DeptID: "phys"},
+			{ID: "obs", Name: "Observatory Ops", DeptID: "phys"},
 			{ID: "web", Name: "Web Platform", DeptID: "it"},
 		},
 		Repos: []Repo{
-			{ID: "r1", Name: "ligo-pipeline", TeamID: "ligo", Governed: true},
+			{ID: "r1", Name: "obs-pipeline", TeamID: "obs", Governed: true},
 			{ID: "r2", Name: "campus-portal", TeamID: "web", Governed: true},
 			{ID: "r3", Name: "shadow-poc", TeamID: "web", Governed: false},
 		},
@@ -403,7 +403,7 @@ func fixtureEvents() []Event {
 			Packs: []EventPack{{Name: "org-baseline", Version: "1.2.0", Signed: true}}},
 		{TS: day(5), Kind: "sync", RepoID: "r2", Drift: "stale",
 			Packs: []EventPack{{Name: "org-baseline", Version: "1.1.0", Signed: true}}},
-		{TS: day(12), Kind: "provider_usage", TeamID: "ligo", Model: "claude-sonnet-5",
+		{TS: day(12), Kind: "provider_usage", TeamID: "obs", Model: "claude-sonnet-5",
 			Tokens: &Tokens{Input: 900, Output: 100, CostUSD: 0.5}},
 		{TS: day(13), Kind: "provider_usage", TeamID: "web", Model: "claude-haiku-4-5",
 			Tokens: &Tokens{Input: 400, Output: 100, CostUSD: 0.1}},
@@ -445,7 +445,7 @@ func TestFleetRows(t *testing.T) {
 	if rows[1].RepoName != "shadow-poc" || rows[1].Status != "ungoverned" {
 		t.Fatalf("row1=%+v", rows[1])
 	}
-	if rows[2].RepoName != "ligo-pipeline" || rows[2].Status != "drifted" ||
+	if rows[2].RepoName != "obs-pipeline" || rows[2].Status != "drifted" ||
 		rows[2].Packs[0] != "org-baseline@1.2.0" || rows[2].Tools[0] != "claude-code" {
 		t.Fatalf("row2=%+v", rows[2])
 	}
@@ -456,9 +456,9 @@ func TestUsageDaily(t *testing.T) {
 	if len(all) != 2 || all[0].Model != "claude-sonnet-5" || all[0].Tokens != 1000 {
 		t.Fatalf("all=%+v", all)
 	}
-	ligo := UsageDaily(fixtureEvents(), "ligo", "", day(1), day(14))
-	if len(ligo) != 1 || ligo[0].Cost != 0.5 {
-		t.Fatalf("ligo=%+v", ligo)
+	obs := UsageDaily(fixtureEvents(), "obs", "", day(1), day(14))
+	if len(obs) != 1 || obs[0].Cost != 0.5 {
+		t.Fatalf("obs=%+v", obs)
 	}
 	none := UsageDaily(fixtureEvents(), "", "gpt-x", day(1), day(14))
 	if len(none) != 0 {
@@ -928,7 +928,7 @@ func Demo(dataDir string, epoch time.Time) error
 ```
 
 Content requirements:
-- Org "Caltech Institute of Technology (demo)". 6 departments: Physics, Biology, Computer Science, Astronomy, Chemistry, Central IT. 15 teams (2–3 per dept, plausible names like "LIGO Ops", "Genomics Pipeline", "Campus Web"). 40 repos spread across teams.
+- Org "Example Institute of Technology (demo)". 6 departments: Physics, Biology, Computer Science, Astronomy, Chemistry, Central IT. 15 teams (2–3 per dept, plausible names like "Observatory Ops", "Genomics Pipeline", "Campus Web"). 40 repos spread across teams.
 - Adoption mix: 28 repos governed (posture events), 12 ungoverned (no posture events; ~half of those still get `provider_usage` — the "AI activity with zero governance" story).
 - Posture: of the 28 governed — 21 `in-sync`, 4 `drifted`, 3 `stale`. Packs: most repos `org-baseline@1.2.0` (signed), stale ones `org-baseline@1.1.0`, 6 repos add a team pack (e.g. `physics-hpc@0.3.0`).
 - First-sync dates staggered over the 60 days (adoption curve grows); each governed repo gets a recent `sync`/`status` event carrying its posture, plus periodic `update_check` events.
@@ -1074,7 +1074,7 @@ Expected: PASS (both tests). Determinism test is the gate — if it flakes, hunt
 ```bash
 gofmt -w internal/portal && go vet ./internal/portal/... && \
 git add internal/portal/seed && \
-git commit -m "feat(portal): deterministic demo seed — Caltech-shaped org, 60-day history"
+git commit -m "feat(portal): deterministic demo seed — research-university-shaped org, 60-day history"
 ```
 
 ---

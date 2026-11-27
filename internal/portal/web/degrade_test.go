@@ -84,7 +84,7 @@ func TestDiffEndpointFragmentRequiresHXHeader(t *testing.T) {
 
 func TestModelAdoptRendersFullPageWithoutHX(t *testing.T) {
 	h := newTestServerWithPacksAndGuidance(t).Handler()
-	body := get(t, h, "/models/anthropic/adopt?model=claude-sonnet-5", nil).Body.String()
+	body := get(t, h, "/models/anthropic/adopt?model=claude-sonnet-5-5", nil).Body.String()
 	if !strings.Contains(body, "<html") {
 		t.Fatal("adopt route must be a full page")
 	}

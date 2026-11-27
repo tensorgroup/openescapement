@@ -3,9 +3,9 @@ targets: [gemini, agents]
 ---
 # Gemini 3.1 Pro Preview governance (gemini-3.1-pro-preview)
 
-- Use `gemini-3.1-pro-preview` for planning, plan-checking, and reviewing multi-file changes (1,048,576-token input context).
-- Treat its preview label as a production caveat, not a reason to avoid it; it is Google's current frontier model.
-- Send day-to-day coding to `gemini-3.8-flash` and bulk work to `gemini-3.5-flash-lite`.
-- Require a human review gate before merging any change it produced with high autonomy (broad file access, destructive commands, or unsupervised multi-step runs).
+- Route planning, plan-checking, and review to `gemini-4-neon`. Google names Neon as the upgrade for `gemini-3.1-pro-preview` (or `gemini-4-carbon` for the hardest problems).
+- Keep `gemini-3.1-pro-preview` only where a workload depends on explicit context caching. No Gemini 4 model supports explicit caching.
+- Send day-to-day coding to `gemini-4-hydrogen` and bulk work to `gemini-3.5-flash-lite`.
+- Require a human review gate before merging any change `gemini-3.1-pro-preview` produced with high autonomy (broad file access, destructive commands, or unsupervised multi-step runs).
 
 See the Google model guidance page for sources and full governance notes.

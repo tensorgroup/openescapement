@@ -8,6 +8,124 @@ tagged releases begin.
 ## [Unreleased]
 
 ### Added
+- `examples/packs/google-models` 0.2.0 and the portal's Google guidance: the catalog adds
+  Gemini 4 Neon (`gemini-4-neon`, GA 2026-11-18, $3/$15), Gemini 4 Carbon
+  (`gemini-4-carbon`, GA 2026-11-10), and Gemini 4 Hydrogen (`gemini-4-hydrogen`, GA
+  2026-11-12, $1.50/$7.50), each with a starter. Neon is now the preferred pick for
+  planning, review, and agentic coding. Carbon is for the hardest deep work. Hydrogen is
+  for day-to-day coding, and Google names it the upgrade for 3.8 Flash. Argon stays
+  `current` in the registry (still served, no shutdown date) but drops from `preferred`
+  to `allowed` in the pack. Gemini 3.1 Pro Preview moves to legacy, because Google now
+  names Neon as its upgrade; it stays only for workloads that need explicit context
+  caching. Every Google starter and the routing example now route to Neon and Hydrogen.
+- `examples/packs/model-seats` 0.5.0: the Google seat entry moves from the 2026-10
+  `gemini-4-argon-high` trial to a 2026-11 stand-in seat on `gemini-4-neon-high` via agy.
+  It runs in place of the planning seat or the Kimi seat when their plans are capped,
+  is scored under its own name, and the capped seat is recorded absent (usage cap). The
+  Argon trial was paused on 2026-10-30 because its plan quota ran out repeatedly. The
+  seat policy's usage-cap rule now allows a stand-in seat from another plan.
+- A fifth catalog status, `reserved`: allowed, but held back for a deliberate
+  escalation, such as a frontier model too expensive to run by default. The entry's
+  notes say what earns the escalation. It renders between Preferred and Allowed in
+  the managed block and in `GOVERNANCE.md`. Packs that use it need this version of
+  `esc`; older binaries reject the status as invalid.
+- `examples/packs/anthropic-models` 0.5.0 and the portal's Anthropic guidance: Claude
+  Opus 5.5 is now `preferred` for all work, planning and review included, starting at
+  effort `medium`. Claude Fable 5.2 (`claude-fable-5-2`, released 2026-11-09, $8/$40)
+  is `reserved`: used only when a person asks, when the task is very hard or very
+  high-stakes, or when the work is stuck, after Opus 5.5's effort has been raised.
+  The reason is cost (twice Opus 5.5), and the reversal condition is logged review
+  outcomes in which Fable catches what Opus 5.5 at high effort misses. Fable 5.1 moves
+  to legacy; the Fable starter moves to 5.2.
+- `examples/packs/model-seats` 0.4.0: the blind same-vendor seat moves to Opus 5.5
+  with a fresh scoreboard; Fable 5.2 becomes a `reserved` escalation seat for deep
+  panels and stuck debugging; a cost-order rule fills default panels from the
+  cheapest seats that do the job; and a new `explanation-style` rule asks for
+  explanations in ASD-STE100 (Simplified Technical English) style. The on-demand
+  Opus seat entry is folded into the blind seat.
+- Portal Grok guidance: Grok 4.7 (`grok-4.7`, announced 2026-09-21, $2/$6, the same as
+  4.6) is the frontier choice for planning, plan-check, review, and coding, as xAI's
+  model guide now names it for every text role. Grok 4.6 moves to legacy. The note
+  records the Batch API (supported on both, 20% off), Grok 4.7 Fast (Cursor and Grok
+  Build only, at double the rate), and the SpaceXSI name on xAI's docs.
+- `examples/packs/openai-models` 0.3.0 and the portal's OpenAI guidance: GPT-6.1 Sol
+  (`gpt-6.1-sol`, released 2026-09-29, $2/$10, cached input $0.10) takes the coding
+  role, as OpenAI's featured models and Codex's recommendation now name it. It rejects
+  `none` and `minimal` reasoning effort, which the pack and its starter call out. GPT-6
+  Sol stays current (OpenAI has not deprecated it) as the fallback while GPT-6.1 Sol
+  rolls out to Codex accounts; the GPT-5.6 tiers stay the fallback behind it. The
+  registry adds GPT-6.1 Sol with a starter, every OpenAI starter and the routing
+  example re-point coding to it, and GPT-5.5's 2026-10-14 Codex retirement is now
+  past tense.
+- `docs/agent-tools.md`: the agent tools an org governs (the vendor CLIs, plans
+  versus metered keys, OpenRouter, nodeterm, cc-switch, nono and `sandbox-exec`, ACP
+  per runtime), each with what it costs and the setting that matters for governance,
+  linked from the README. Per-user setup stays in Balancewheel.
+- `examples/packs/model-seats` 0.3.0: a lead-rotation rule that defines a profile (a
+  project's ordered leads, per-checkpoint seats, required seats, and minimum seat count)
+  and rotates leads within it (leads in profile order,
+  containment verified both ways by attack, switch on an observed cap, return at a task
+  boundary after the reset, one writable lead per worktree, every switch logged, leads
+  scored from git, review findings, and the user's rating, with no composite score). The
+  seat policy defines the lead as the moderator, requires OS-level read-only
+  enforcement and a recorded moderator per panel, and seats the lead's own vendor only
+  as a fresh blind session. The decision-model rule gains an acting mode bounded by a
+  profile's required seats and minimum, coverage-based misses, and full-roster audits.
+  The catalog adds three trial seats (Google via agy, Kimi via Kimi Code under an OS
+  sandbox, a fast metered DeepSeek seat via OpenRouter) and a Claude lead on a Google
+  plan, all review-required. The usage-cap rule covers review seats; a capped lead
+  follows the lead-rotation rule. The ban on a writable seat names external review seats,
+  since the lead writes. The "planning lead" seat is renamed "planning seat" so
+  "lead" has one meaning.
+- `examples/packs/google-models` 0.1.0 (Gemini 4 Argon preferred for planning and
+  review, the Flash tiers by role, agy as the plan route, the deprecated 3.7 Flash and
+  retired 3 Pro Preview banned by name), `examples/packs/kimi-models` 0.1.0 (K3.1 Pro
+  preferred, High-Speed for fast reads, K3 and K2.7 Code review-required for existing
+  pins, every model priced, K2.5 banned, an OS sandbox required for
+  unattended Kimi Code runs), and `examples/packs/deepseek-models` 0.1.0 (V4.1 Flash
+  preferred for second opinions and triage under its DeepSeek id and OpenRouter's alias,
+  OpenRouter's `-1017` id allowed where results must match DeepSeek's own API, a spend
+  cap on the OpenRouter key).
+- Portal DeepSeek guidance: V4.1 Flash list prices re-verified (2026-10-24); the
+  OpenRouter ids are named with their provider prices and the releases they serve:
+  `deepseek/deepseek-v4.1-flash` is the 2026-09-10 release at a flat rate, and
+  `deepseek/deepseek-v4.1-flash-1017` is the 2026-10-17 release DeepSeek's own API
+  serves, with DeepSeek's weekday peak schedule. V4.1 Flash gains fast second opinions
+  and triage as a role.
+- Portal Kimi guidance: Kimi K3.1 Pro (frontier; planning, plan-check, review, coding) and
+  K3.1 Pro High-Speed (fast reads, bulk) added; K3 moves to legacy; the K2 series'
+  end of life (closed to new users 2026-10-31, retired by end of December 2026) noted,
+  with K2.7 Code, K2.7 Code High-Speed, and K2.6 list prices.
+  A governance bullet says Kimi Code's permission rules are not enforcement in `-p`
+  runs (auto permission mode, deny rules ignored in a 2026-10-24 test, fail-open hooks)
+  and that an OS sandbox is.
+- Portal Google guidance: Gemini 4 Argon (`gemini-4-argon`, GA 2026-10-13) is the
+  frontier choice for planning, plan-check, and review, with a starter. Gemini 3.1 Pro
+  Preview stays current (Google names no replacement) but is kept only for workloads that
+  need explicit context caching. Gemini 3.7 Flash moves to legacy after its 2026-10-08
+  deprecation. The routing example and every Google starter now route to Argon.
+- Portal model guidance: every vendor note gains an Access routes section (plan plus
+  the vendor's own CLI, direct API, OpenRouter) with prices dated 2026-10-24, the
+  vendor's stated plan limits, and break-even arithmetic for each plan whose price
+  is published (Kimi's note gives the formula, since the Kimi Code plan prices could not
+  be read on 2026-10-24).
+  Google's names agy as a route to Claude Opus 5.5 and Sonnet 5.5 on the Google plan.
+  `TestEveryVendorNoteHasAccessRoutes` requires it as a level-2 heading after Governance
+  and before Sources.
+- `examples/packs/model-seats` 0.2.0: a decision-model routing rule (pilot status).
+  A decision model's typed answers advise the model tier, reasoning effort, and review
+  depth per task. The rule is raise-only until calibrated on the org's own outcomes,
+  keeps thresholds in code, and derives tier from difficulty tail plus a high-stakes
+  signal. It also sends only redacted task text with zero-data-retention routing,
+  keeps routing out of headless review seats, and scores review findings in shadow.
+  The catalog names Jev 1.13 as the hosted reference and the self-hosted alternatives
+  as review-required, and bans routing that lowers a pin or skips a mandatory review.
+- Usage-cap fallback guidance: `examples/packs/anthropic-models` 0.3.1 and the
+  portal's Anthropic model-routing example route every Fable 5.1 slot to Opus 5.5
+  (never Opus 5) while a plan's Fable cap is spent, and pin the `opus` alias to
+  `claude-opus-5-5` so a fallback cannot resolve to a ruled-out model.
+  `examples/packs/model-seats` 0.1.3 adds the matching conduct rule: a capped seat
+  runs on its fallback, is scored under the fallback's id, and is logged absent.
 - `examples/packs/model-seats`: governance for multi-model agent collaboration.
   Seats are named by role (moderator, planning lead, peers, on-demand) with the
   models behind them a dated reference roster in the catalog; a dispute substance
@@ -193,6 +311,30 @@ tagged releases begin.
 - `examples/packs/zai-models` price notes state Z.ai's list price and the
   OpenRouter provider range with a date; the cheaper rate is a live per-provider
   discount, not an ended launch promotion.
+- `examples/packs/anthropic-models` 0.3.0: Opus 5.5 (`claude-opus-5-5`, $4/$20)
+  replaces Opus 4.8 as the Opus-tier choice, with its migration traps named
+  (default effort `medium`, thinking cannot be disabled, forced `tool_choice`
+  rejected); Opus 4.8 to review-required as legacy; Opus 5 stays review-required,
+  now as superseded. `model-seats` 0.1.2 re-points the on-demand same-vendor seat
+  to Opus 5.5 with a fresh scoreboard. The embedded model registry follows suit.
+- `examples/packs/openai-models` 0.2.0: GPT-6 Sol (`gpt-6-sol`, $2/$10) and GPT-6
+  Luna (`gpt-6-luna`, $0.10/$0.50) take the coding and bulk roles, with GPT-5.6
+  Terra and Luna kept as the fallback while the GPT-6 pair rolls out to Codex
+  accounts (a not-yet-rolled-out account gets a 400, not a retirement); GPT-5.5
+  review-required ahead of its 2026-10-14 Codex retirement. The embedded model
+  registry adds both models with starters, re-points the GPT-5.6 starters, and
+  registers GPT-5.5 as legacy so usage that still reports it is attributed.
+- `examples/packs/anthropic-models` 0.4.1: Opus 5 is marked legacy, since Anthropic
+  no longer lists it among current models (it stays review-required). The
+  embedded registry moves `claude-opus-5` to legacy and drops its starter, so the
+  current Anthropic entries match the vendor's overview exactly: Fable 5.1,
+  Opus 5.5, Sonnet 5.5, and Haiku 4.5.
+- `examples/packs/anthropic-models` 0.4.0: Sonnet 5.5 (`claude-sonnet-5-5`, $2/$10,
+  the same price as Sonnet 5) replaces Sonnet 5 as the Sonnet-tier choice, with
+  its migration traps named (disabled thinking and forced `tool_choice` rejected,
+  `between_tools` to keep thinking off, recalibrated effort levels) and the
+  `sonnet` alias pinned; Sonnet 5 to review-required as legacy. The embedded
+  model registry follows suit.
 - `examples/packs/anthropic-models` 0.2.0: Fable 5.1 preferred; Opus 4.8 the
   Opus-tier choice; Sonnet 5 at its now-permanent $2/$10; Opus 5 moved to
   review-required with the reason and a measurable reversal condition; Fable 5 to

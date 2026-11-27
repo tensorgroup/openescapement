@@ -17,12 +17,12 @@
 
 **Pricing principles:** per-developer (not per-repo — repos are what we *want* proliferating); free tier generous enough that a single team never hits a wall (the bottom-up motion depends on it); the paid line is aggregation, never core governance capability.
 
-**Services on-ramp:** governance discovery engagements (the Caltech Phase 1 shape) priced as consulting, delivering the product as the artifact. Early revenue, design-partner intimacy, reference stories. Guardrail: services must always end in product deployment, never bespoke PDFs — otherwise we become the consultancy we're replacing.
+**Services on-ramp:** governance discovery engagements (a phased discovery engagement) priced as consulting, delivering the product as the artifact. Early revenue, design-partner intimacy, reference stories. Guardrail: services must always end in product deployment, never bespoke PDFs — otherwise we become the consultancy we're replacing.
 
 ## Getting users
 
 **Phase 1 — design partners (now → +6 mo):**
-- Caltech as archetype federated institution (see product spec §10; independent IP, licensed in).
+- Research universities as the archetype federated institution (see product spec §10; independent IP, licensed in).
 - 2–3 more design partners from opposite corners: one 50–200-dev startup heavy on Claude Code/Cursor, one mid-size company with a platform team. Free Org tier for feedback + logo rights.
 
 **Phase 2 — community launch:**

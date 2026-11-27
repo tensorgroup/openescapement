@@ -761,37 +761,7 @@ func prospectiveContent(root string, a Artifact) ([]byte, error) {
 			return fmt.Errorf("%s: refusing to read or write through a symlink at %s; replace the symlink with a regular file or directory, or drop the target", rel, cur)
 ```
 Update the two engine/CLI assertions that pin the old substring to the new one (`refusing to read or write through a symlink`): `internal/engine/orphandir_test.go` ~505 and `internal/cli/custom_targets_test.go` ~274. (Leave `internal/cli/skillvendor.go` and `internal/cli/packupdate_symlink_test.go` alone — those use the `esc pack` author-command's own copy of the message, out of scope here.)
-- [ ] Update the two existing classify tests that call `classify(root, a, nil)` on a pre-existing `GOVERNANCE.md` and expect `Altered`; with the occupied gate, no lock entry now means `Occupied`. Give each a prior lock entry, exactly as the dir case at `internal/engine/classify_alteration_test.go` ~113-121 already does. In `internal/engine/classify_alteration_test.go` (~90-91), replace:
-```go
-		a := Artifact{Path: "GOVERNANCE.md", Kind: KindFile, Hash: esc.HashBytes([]byte("expected\n"))}
-		f := classify(root, a, nil)
-```
-with:
-```go
-		a := Artifact{Path: "GOVERNANCE.md", Kind: KindFile, Hash: esc.HashBytes([]byte("expected\n"))}
-		// A prior lock entry is required: with none, classify's occupied gate
-		// for whole files (mirroring Apply's SkipUnmanagedFileAtTarget) would
-		// intercept this pre-existing file before the mismatch branch.
-		lock := &lockfile.Lock{Artifacts: []lockfile.LockArtifact{
-			{Path: "GOVERNANCE.md", Kind: KindFile, Hash: "sha256:previoussync"},
-		}}
-		f := classify(root, a, lock)
-```
-In `internal/engine/classify_endings_test.go` (~73-74), replace:
-```go
-		a := Artifact{Path: "GOVERNANCE.md", Kind: KindFile, Hash: esc.HashBytes([]byte(content))}
-		f := classify(root, a, nil)
-```
-with:
-```go
-		a := Artifact{Path: "GOVERNANCE.md", Kind: KindFile, Hash: esc.HashBytes([]byte(content))}
-		lock := &lockfile.Lock{Artifacts: []lockfile.LockArtifact{
-			{Path: "GOVERNANCE.md", Kind: KindFile, Hash: "sha256:previoussync"},
-		}}
-		f := classify(root, a, lock)
-```
-Add `"github.com/tensorgroup/openescapement/internal/lockfile"` to each file's imports if it is not already there (classify_alteration_test.go already imports it for the dir case; check classify_endings_test.go).
-- [ ] Run `go test ./internal/engine/`. Expect PASS (all engine-side machinery now exists, and the two updated tests exercise the mismatch branch past the occupied gate).
+- [ ] Run `go test ./internal/engine/`. Expect PASS (all engine-side machinery now exists).
 - [ ] Add `skipHint` cases in `internal/cli/cli.go`:
 ```go
 	case engine.SkipUnmanagedFileAtTarget:
@@ -1912,7 +1882,6 @@ func writeSkillPack(t *testing.T, name string, skillFiles map[string]string) str
 
 func skillCfg(pd string, targetsList ...string) *config.Config {
 	return &config.Config{
-		Schema:  1, // config.Load rejects schema 0
 		Packs:   []config.PackRef{{Source: pd, Ref: "", Trust: "unsigned"}},
 		Targets: targetsList,
 	}

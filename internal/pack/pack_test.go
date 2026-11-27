@@ -46,6 +46,10 @@ catalog:
     category: hosting-exposure
     status: preferred
     notes: Org tailnet
+  - name: Dedicated GPU host
+    category: compute
+    status: reserved
+    notes: Escalate only
   - name: Raw port forwarding
     category: hosting-exposure
     status: banned
@@ -77,7 +81,7 @@ func TestLoadManifest(t *testing.T) {
 	if len(m.Rules) != 2 || len(m.Skills) != 1 {
 		t.Errorf("rules/skills wrong: %+v", m)
 	}
-	if len(m.Catalog) != 2 || m.Catalog[0].Status != "preferred" {
+	if len(m.Catalog) != 3 || m.Catalog[0].Status != "preferred" || m.Catalog[1].Status != "reserved" {
 		t.Errorf("catalog wrong: %+v", m.Catalog)
 	}
 	if m.Constraints.MaxFileBytes != 20000 || len(m.Constraints.ForbiddenPatterns) != 1 {

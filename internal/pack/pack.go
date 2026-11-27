@@ -92,7 +92,7 @@ type Pack struct {
 }
 
 var validCatalogStatus = map[string]bool{
-	"preferred": true, "allowed": true, "review-required": true, "banned": true,
+	"preferred": true, "reserved": true, "allowed": true, "review-required": true, "banned": true,
 }
 
 // ValidName constrains pack and skill names, which become filesystem path
@@ -225,7 +225,7 @@ func (m *Manifest) validate(dir string) error {
 			return fail("catalog entry missing name")
 		}
 		if !validCatalogStatus[c.Status] {
-			return fail("catalog entry %q: invalid status %q (want preferred|allowed|review-required|banned)", c.Name, c.Status)
+			return fail("catalog entry %q: invalid status %q (want preferred|reserved|allowed|review-required|banned)", c.Name, c.Status)
 		}
 	}
 	if m.UpdateCheck != nil {

@@ -1,0 +1,45 @@
+schema: 1
+name: google-models
+version: 0.2.0
+description: Model selection guidance for Google's Gemini family. Gemini 4 Neon is the frontier model for planning, review, and agentic coding; Gemini 4 Carbon takes the hardest deep work; Gemini 4 Hydrogen and 3.5 Flash-Lite cover day-to-day and bulk work. Prices are dated and move; bump the version when they do.
+
+rules:
+  - rules/model-selection.md
+
+catalog:
+  - name: Gemini 4 Neon (gemini-4-neon)
+    category: model
+    status: preferred
+    notes: Generally available since 2026-11-18. Planning, plan-check, review, and complex agentic coding. Google places it between Hydrogen and Carbon, with deeper reasoning than Hydrogen and faster task completion than Carbon. 1,048,576-token context shared by input and output (up to 512K in agy); thinking low, medium, high (default), or xhigh. $3/$15 per 1M tokens, no introductory price; Batch and Flex at half (2026-11-20). No explicit context caching; not on the Free tier. In the Antigravity CLI (agy) it is selected as gemini-4-neon-low, -medium, -high, or -xhigh, on paid Google AI Pro and on Ultra.
+  - name: Gemini 4 Carbon (gemini-4-carbon)
+    category: model
+    status: allowed
+    notes: Generally available since 2026-11-10. Google's strongest reasoning model. Use it for the hardest problems only, such as system architecture, multi-file debugging, and security audits, or when Neon gets stuck. It spends more thinking tokens per turn than Neon. Thinking low, medium (default), or high. $2/$10 per 1M tokens through 2026-11-30, then $4/$20; Batch and Flex at half (2026-11-20). In agy it is selected as gemini-4-carbon-low, -medium, or -high, on Google AI Ultra and Enterprise only.
+  - name: Gemini 4 Hydrogen (gemini-4-hydrogen)
+    category: model
+    status: preferred
+    notes: Generally available since 2026-11-12. Day-to-day coding, parallel worker agents, and lower-stakes review. The fastest and cheapest Gemini 4 model, and the only one on the Free tier. Thinking low, medium, high (default), or xhigh. $1.50/$7.50 per 1M tokens; Batch and Flex at half (2026-11-20). Google names it the upgrade for gemini-3.8-flash. In agy it is selected as gemini-4-hydrogen-low, -medium, -high, or -xhigh, on paid Google AI Pro and on Ultra.
+  - name: Gemini 4 Argon (gemini-4-argon)
+    category: model
+    status: allowed
+    notes: Generally available since 2026-10-13 and still served with no shutdown date, but no longer the recommended pick. Google's model-choice guide now leads with Neon, Carbon, and Hydrogen. Keep it where a workload is tuned to it; point new configuration at gemini-4-neon. Thinking low, medium (default), or high; no xhigh. $2/$10 per 1M tokens through 2026-11-30, then $4/$20 (2026-11-20).
+  - name: Gemini 3.8 Flash (gemini-3.8-flash)
+    category: model
+    status: allowed
+    notes: Google names gemini-4-hydrogen as its upgrade. Keep it where cost binds. $0.75/$3.75 per 1M tokens through 2026-12-31 (half Hydrogen's price), then $1.50/$7.50, the same as Hydrogen (2026-11-20). The only Gemini model on Antigravity's Free and Plus plans.
+  - name: Gemini 3.5 Flash-Lite (gemini-3.5-flash-lite)
+    category: model
+    status: allowed
+    notes: Bulk and mechanical work at scale. $0.30/$2.50 per 1M tokens, no introductory period (2026-11-20).
+  - name: Gemini 3.1 Pro Preview (gemini-3.1-pro-preview)
+    category: model
+    status: review-required
+    notes: Still served with no shutdown date, but Google now names gemini-4-neon as its upgrade (gemini-4-carbon for the hardest problems). Keep it only where a workload depends on explicit context caching, which no Gemini 4 model supports. $2/$12 per 1M tokens for prompts up to 200K tokens, $4/$18 above (2026-11-20). Reverses to banned when Google announces a shutdown date.
+  - name: Gemini 3.7 Flash (gemini-3.7-flash)
+    category: model
+    status: banned
+    notes: Deprecated 2026-10-08. Requests to it are served by gemini-3.8-flash, so a pin names a model that no longer does the work. Move the config to gemini-4-hydrogen.
+  - name: Gemini 3 Pro Preview (gemini-3-pro-preview)
+    category: model
+    status: banned
+    notes: Shut down 2026-03-09. Any config still naming it must move to gemini-4-neon.
