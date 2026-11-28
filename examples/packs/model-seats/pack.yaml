@@ -23,10 +23,10 @@ catalog:
     category: model-seat
     status: review-required
     notes: Third in the reference lead order. The first-party Claude lead runs while the Anthropic plan has quota, then the OpenAI lead, then this lead when both plans are capped. Runs with manual approval until the harness's hooks are verified. Lead quality not yet scored.
-  - name: Planning seat (reference roster, 2026-09, gpt-6-astra via a read-only Codex CLI config file)
+  - name: Planning seat (reference roster, 2026-11, gpt-6.2-astra via a read-only Codex CLI config file)
     category: model-seat
     status: preferred
-    notes: First voice on plan, design, and decision targets; equal peer on code review. Full peer status from a fresh scoreboard on 2026-09-11 when the seat changed model generation. The previous occupant's demotion (wording disputes, conceded substance) was that model's trait and did not carry over; re-demote only on logged dispute evidence.
+    notes: First voice on plan, design, and decision targets; equal peer on code review. Moved from gpt-6-astra to OpenAI's 6.2 generation on 2026-11-27. Full peer status from a fresh scoreboard on 2026-09-11 when the seat changed model generation. The previous occupant's demotion (wording disputes, conceded substance) was that model's trait and did not carry over; re-demote only on logged dispute evidence. The reference user runs gpt-6.2-sol as a driver (a working agent that the lead hands spec'd, mechanical work to on a budget), not as a seat. Sol shares this seat's vendor and model family, so its blind read would correlate with this seat's, and a panel gains more from a seat on another vendor.
   - name: Metered peer seat (reference roster, 2026-11, deepseek/deepseek-v4.1-flash via pi on OpenRouter behind a read-only agent, thinking medium)
     category: model-seat
     status: preferred

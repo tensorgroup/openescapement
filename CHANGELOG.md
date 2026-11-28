@@ -22,7 +22,18 @@ tagged releases begin.
   `glm-5.3-flash` to DeepSeek V4.1 Flash (`deepseek/deepseek-v4.1-flash` via pi on
   OpenRouter, thinking medium). The author's scoreboard showed DeepSeek doing the same job
   with far fewer timeouts and more unique catches. The 2026-10 DeepSeek trial entry is
-  folded into the seat.
+  folded into the seat. The planning seat moves from `gpt-6-astra` to `gpt-6.2-astra`
+  (seat name unchanged). Its note says the reference user runs `gpt-6.2-sol` as a driver
+  for spec'd, mechanical work on a budget, not as a seat: Sol shares Astra's vendor and
+  family, so its blind read would correlate with Astra's.
+- `examples/packs/openai-models` 0.4.0: refreshed for OpenAI's 6.2 generation. GPT-6.2
+  Astra (`gpt-6.2-astra`) is now `preferred` for planning, design, and review; GPT-6.2 Sol
+  (`gpt-6.2-sol`) is the day-to-day coding model; GPT-6.1 Terra (`gpt-6.1-terra`) is added
+  for visual understanding and computer use. The new models' notes quote OpenAI's own
+  one-line descriptions and point to OpenAI's pricing page for prices. GPT-6 Astra and
+  GPT-6.1 Sol are marked previous generation and drop to fallbacks (Astra from
+  `preferred` to `allowed`); GPT-6 Sol and the GPT-5.6 tiers are marked legacy. The
+  GPT-5.6 Sol promotional price, which ended 2026-11-21, is removed.
 - `examples/packs/model-seats` 0.5.0: the Google seat entry moves from the 2026-10
   `gemini-4-argon-high` trial to a 2026-11 stand-in seat on `gemini-4-neon-high` via agy.
   It runs in place of the planning seat or the Kimi seat when their plans are capped,
