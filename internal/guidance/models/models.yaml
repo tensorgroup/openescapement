@@ -72,13 +72,45 @@ vendors:
   - key: openai
     name: OpenAI
     models:
+      - id: gpt-6.2-astra
+        name: GPT-6.2 Astra
+        tier: frontier
+        roles: [planning, plan-check, review]
+        status: current
+        docs: [https://platform.openai.com/docs/models, https://developers.openai.com/codex/models]
+        verified: 2026-11-27
+        starter: examples/openai/starter-gpt-6.2-astra.md
+      - id: gpt-6.2-sol
+        name: GPT-6.2 Sol
+        tier: mid
+        roles: [coding, review]
+        status: current
+        docs: [https://platform.openai.com/docs/models, https://developers.openai.com/codex/models]
+        verified: 2026-11-27
+        starter: examples/openai/starter-gpt-6.2-sol.md
+      - id: gpt-6.1-terra
+        name: GPT-6.1 Terra
+        tier: mid
+        roles: [coding]
+        status: current
+        docs: [https://platform.openai.com/docs/models, https://developers.openai.com/codex/models]
+        verified: 2026-11-27
+        starter: examples/openai/starter-gpt-6.1-terra.md
+      - id: gpt-6-luna
+        name: GPT-6 Luna
+        tier: fast
+        roles: [bulk]
+        status: current
+        docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-6-luna, https://developers.openai.com/codex/models]
+        verified: 2026-11-27
+        starter: examples/openai/starter-gpt-6-luna.md
       - id: gpt-6-astra
         name: GPT-6 Astra
         tier: frontier
         roles: [planning, plan-check, review]
         status: current
         docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-6-astra, https://developers.openai.com/codex/models]
-        verified: 2026-09-25
+        verified: 2026-11-27
         starter: examples/openai/starter-gpt-6-astra.md
       - id: gpt-6.1-sol
         name: GPT-6.1 Sol
@@ -86,48 +118,36 @@ vendors:
         roles: [coding, review]
         status: current
         docs: [https://developers.openai.com/api/docs/models/gpt-6.1-sol, https://developers.openai.com/api/docs/changelog, https://developers.openai.com/codex/models]
-        verified: 2026-10-24
+        verified: 2026-11-27
         starter: examples/openai/starter-gpt-6.1-sol.md
       - id: gpt-6-sol
         name: GPT-6 Sol
         tier: mid
         roles: [coding, review]
-        status: current
+        status: legacy
         docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-6-sol, https://developers.openai.com/codex/models]
-        verified: 2026-10-24
-        starter: examples/openai/starter-gpt-6-sol.md
-      - id: gpt-6-luna
-        name: GPT-6 Luna
-        tier: fast
-        roles: [bulk]
-        status: current
-        docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-6-luna, https://developers.openai.com/codex/models]
-        verified: 2026-09-25
-        starter: examples/openai/starter-gpt-6-luna.md
+        verified: 2026-11-27
       - id: gpt-5.6-sol
         name: GPT-5.6 Sol
         tier: frontier
         roles: [review]
-        status: current
-        docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-5.6-sol]
-        verified: 2026-09-25
-        starter: examples/openai/starter-gpt-5.6-sol.md
+        status: legacy
+        docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-5.6-sol, https://developers.openai.com/codex/models]
+        verified: 2026-11-27
       - id: gpt-5.6-terra
         name: GPT-5.6 Terra
         tier: mid
         roles: [coding, review]
-        status: current
-        docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-5.6-terra]
-        verified: 2026-09-25
-        starter: examples/openai/starter-gpt-5.6-terra.md
+        status: legacy
+        docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-5.6-terra, https://developers.openai.com/codex/models]
+        verified: 2026-11-27
       - id: gpt-5.6-luna
         name: GPT-5.6 Luna
         tier: fast
         roles: [bulk]
-        status: current
-        docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-5.6-luna]
-        verified: 2026-09-25
-        starter: examples/openai/starter-gpt-5.6-luna.md
+        status: legacy
+        docs: [https://platform.openai.com/docs/models, https://platform.openai.com/docs/models/gpt-5.6-luna, https://developers.openai.com/codex/models]
+        verified: 2026-11-27
       - id: gpt-5.5
         name: GPT-5.5
         tier: frontier

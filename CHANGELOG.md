@@ -34,6 +34,11 @@ tagged releases begin.
   GPT-6.1 Sol are marked previous generation and drop to fallbacks (Astra from
   `preferred` to `allowed`); GPT-6 Sol and the GPT-5.6 tiers are marked legacy. The
   GPT-5.6 Sol promotional price, which ended 2026-11-21, is removed.
+- The portal's OpenAI guidance (`internal/guidance/models/`) matches `openai-models` 0.4.0.
+  GPT-6.2 Astra, GPT-6.2 Sol, and GPT-6.1 Terra are added with starters, and the routing
+  example moves judgment to GPT-6.2 Astra and coding to GPT-6.2 Sol. GPT-6 Astra and
+  GPT-6.1 Sol stay `current` as fallbacks. GPT-6 Sol and the GPT-5.6 models move to
+  `legacy`, and their starters are removed.
 - `examples/packs/model-seats` 0.5.0: the Google seat entry moves from the 2026-10
   `gemini-4-argon-high` trial to a 2026-11 stand-in seat on `gemini-4-neon-high` via agy.
   It runs in place of the planning seat or the Kimi seat when their plans are capped,
