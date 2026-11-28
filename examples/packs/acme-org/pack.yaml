@@ -1,6 +1,6 @@
 schema: 1
 name: acme-org
-version: 0.1.1
+version: 0.1.2
 description: Example org-wide AI governance baseline (copy and adapt)
 
 rules:
@@ -10,6 +10,7 @@ rules:
   - rules/sdlc.md
   - rules/agent-behavior.md
   - rules/paved-path.md
+  - rules/api-handlers.md
 
 skills:
   - skills/acme-vault

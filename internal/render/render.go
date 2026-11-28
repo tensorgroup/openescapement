@@ -4,18 +4,24 @@ package render
 
 import (
 	"fmt"
+	"path"
 	"strings"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/tensorgroup/openescapement/internal/pack"
+	"github.com/tensorgroup/openescapement/internal/targets"
 )
 
 const (
-	TargetClaude     = "claude"
-	TargetAgents     = "agents"
-	TargetGemini     = "gemini"
-	TargetGovernance = "governance"
-	TargetSkills     = "skills"
-	TargetMCP        = "mcp"
+	TargetClaude       = targets.NameClaude
+	TargetAgents       = targets.NameAgents
+	TargetGemini       = targets.NameGemini
+	TargetGovernance   = targets.NameGovernance
+	TargetSkills       = targets.NameSkills
+	TargetMCP          = targets.NameMCP
+	TargetRules        = targets.NameRules
+	TargetAgentsSkills = targets.NameAgentsSkills
 )
 
 // TargetFile maps agent-file targets to the file they render into.
@@ -106,6 +112,12 @@ func fragmentNamesTarget(f pack.Fragment, target string) bool {
 	return false
 }
 
+// FragmentNamesTarget reports whether f explicitly names target. An empty
+// target list never matches: rule and custom targets require explicit opt-in.
+func FragmentNamesTarget(f pack.Fragment, target string) bool {
+	return fragmentNamesTarget(f, target)
+}
+
 // composeCatalog renders all packs' catalog entries as concise directive
 // text, grouped by status in fixed severity order.
 func composeCatalog(packs []*pack.Pack) string {
@@ -130,6 +142,52 @@ func composeCatalog(packs []*pack.Pack) string {
 			b.WriteString("\n")
 		}
 	}
+	return b.String()
+}
+
+// RuleFileStem is a rules fragment's filename without the .md suffix.
+func RuleFileStem(f pack.Fragment) string {
+	return strings.TrimSuffix(path.Base(f.Path), ".md")
+}
+
+// RuleFileName is the on-disk filename (no directory) a rules fragment
+// renders to.
+func RuleFileName(packName string, f pack.Fragment) string {
+	return "esc-" + packName + "-" + RuleFileStem(f) + ".md"
+}
+
+// RuleFilePath is the repo-relative path a rules fragment renders to.
+func RuleFilePath(packName string, f pack.Fragment) string {
+	return path.Join(".claude", "rules", RuleFileName(packName, f))
+}
+
+// RenderRule renders one rules fragment to a whole .claude/rules file:
+// optional paths frontmatter (only when path-scoped, so frontmatter sits at
+// byte 0 as Claude Code's rules loader requires), a one-line ownership notice
+// (deliberately without the pack version, so a version bump does not rewrite
+// every rule file), a blank line, then the endings-normalized body run
+// through strings.TrimSpace (which trims leading as well as trailing
+// whitespace — a body whose first line is indented loses that indent, which
+// is deliberate, not just a trailing trim) plus exactly one newline.
+// Deterministic. The loader (internal/pack) rejects a rules fragment whose
+// body is empty after trimming, so this formula never has to special-case a
+// notice-only file with no body.
+func RenderRule(f pack.Fragment, packName string) string {
+	var b strings.Builder
+	if len(f.Paths) > 0 {
+		// yaml.Marshal cannot fail here: the value is a plain struct with a
+		// single []string field, no cyclic references and no custom
+		// MarshalYAML — the only error paths in yaml.v3's encoder.
+		fm, _ := yaml.Marshal(struct {
+			Paths []string `yaml:"paths"`
+		}{f.Paths})
+		b.WriteString("---\n")
+		b.Write(fm)
+		b.WriteString("---\n")
+	}
+	b.WriteString("<!-- Managed by escapement (pack " + packName + "). Do not edit. -->\n\n")
+	b.WriteString(strings.TrimSpace(string(NormalizeEndings([]byte(f.Body)))))
+	b.WriteString("\n")
 	return b.String()
 }
 

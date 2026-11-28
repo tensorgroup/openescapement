@@ -271,7 +271,7 @@ func TestCustomTargetSymlinkRefusal(t *testing.T) {
 	if code != 4 {
 		t.Fatalf("writing through a symlinked parent should fail exit 4, got %d:\n%s", code, out)
 	}
-	if !strings.Contains(out, "refusing to write through symlink") {
+	if !strings.Contains(out, "refusing to read or write through a symlink") {
 		t.Errorf("refusal must name the symlink:\n%s", out)
 	}
 	if _, err := os.Stat(filepath.Join(outside, "copilot-instructions.md")); !os.IsNotExist(err) {

@@ -352,7 +352,7 @@ func offerPlacement(ctx context.Context, root string, stdout io.Writer, detected
 	}
 	var eligible []Detected
 	for _, d := range orderDetected(detected) {
-		if !isFileTarget(d.Target) || d.HasBlock || d.HasPlaceholder {
+		if !isFileTarget(d.Target) || d.Target == render.TargetGovernance || d.HasBlock || d.HasPlaceholder {
 			continue
 		}
 		if inRepo {

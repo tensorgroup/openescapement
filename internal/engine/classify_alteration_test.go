@@ -88,7 +88,13 @@ func TestClassifyAlterationInvariant(t *testing.T) {
 			t.Fatal(err)
 		}
 		a := Artifact{Path: "GOVERNANCE.md", Kind: KindFile, Hash: esc.HashBytes([]byte("expected\n"))}
-		f := classify(root, a, nil)
+		// A prior lock entry is required: with none, classify's occupied gate
+		// for whole files (mirroring Apply's SkipUnmanagedFileAtTarget) would
+		// intercept this pre-existing file before the mismatch branch.
+		lock := &lockfile.Lock{Artifacts: []lockfile.LockArtifact{
+			{Path: "GOVERNANCE.md", Kind: KindFile, Hash: "sha256:previoussync"},
+		}}
+		f := classify(root, a, lock)
 		if f.State != Altered {
 			t.Fatalf("state = %q, want altered", f.State)
 		}

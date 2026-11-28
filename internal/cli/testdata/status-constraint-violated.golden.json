@@ -46,18 +46,18 @@
       "detail": "file does not exist — run `esc sync`"
     },
     {
-      "subject": ".claude/skills/esc-acme-org-vault-usage",
-      "kind": "dir",
-      "managed": "missing",
-      "local": "none",
-      "detail": "skill directory missing — run `esc sync`"
-    },
-    {
       "subject": ".mcp.json",
       "kind": "json-keys",
       "managed": "missing",
       "local": "none",
       "detail": "file does not exist — run `esc sync`"
+    },
+    {
+      "subject": ".claude/skills/esc-acme-org-vault-usage",
+      "kind": "dir",
+      "managed": "missing",
+      "local": "none",
+      "detail": "skill directory missing — run `esc sync`"
     },
     {
       "subject": "CLAUDE.md",

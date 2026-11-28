@@ -13,12 +13,14 @@ import (
 
 // Built-in target names.
 const (
-	NameClaude     = "claude"
-	NameAgents     = "agents"
-	NameGemini     = "gemini"
-	NameGovernance = "governance"
-	NameSkills     = "skills"
-	NameMCP        = "mcp"
+	NameClaude       = "claude"
+	NameAgents       = "agents"
+	NameGemini       = "gemini"
+	NameGovernance   = "governance"
+	NameSkills       = "skills"
+	NameMCP          = "mcp"
+	NameRules        = "rules"
+	NameAgentsSkills = "agents-skills"
 )
 
 // Target kinds.
@@ -27,6 +29,7 @@ const (
 	KindWholeFile    = "whole-file"
 	KindSkillsDir    = "skills-dir"
 	KindMCPConfig    = "mcp-config"
+	KindRulesDir     = "rules-dir"
 )
 
 // Info is one target's metadata. For Plan 1 only Name/File/Kind/BuiltIn/
@@ -41,7 +44,11 @@ type Info struct {
 	Description string   // one paragraph (Plan 2)
 	Suggestion  string   // esc's guidance (Plan 2)
 	BuiltIn     bool
-	OwnerPack   string // defining pack name; empty for built-ins
+	// OptIn marks a built-in that an empty targets: list does NOT expand to;
+	// a repo must name it explicitly. Zero value false keeps every existing
+	// row in the default set.
+	OptIn     bool
+	OwnerPack string // defining pack name; empty for built-ins
 }
 
 var builtIns = []Info{
@@ -49,8 +56,10 @@ var builtIns = []Info{
 	{Name: NameAgents, File: "AGENTS.md", Kind: KindManagedBlock, BuiltIn: true},
 	{Name: NameGemini, File: "GEMINI.md", Kind: KindManagedBlock, BuiltIn: true},
 	{Name: NameGovernance, File: "GOVERNANCE.md", Kind: KindWholeFile, BuiltIn: true},
-	{Name: NameSkills, File: "", Kind: KindSkillsDir, BuiltIn: true},
 	{Name: NameMCP, File: "", Kind: KindMCPConfig, BuiltIn: true},
+	{Name: NameSkills, File: "", Kind: KindSkillsDir, BuiltIn: true},
+	{Name: NameRules, File: "", Kind: KindRulesDir, BuiltIn: true},
+	{Name: NameAgentsSkills, File: "", Kind: KindSkillsDir, BuiltIn: true, OptIn: true},
 }
 
 // BuiltIns returns a copy of the compiled-in target table.
@@ -78,10 +87,23 @@ func IsBuiltInName(name string) bool {
 
 // IsFragmentTarget reports whether name is a built-in target a fragment may
 // name in front-matter (the markdown targets: claude, agents, gemini,
-// governance; not skills/mcp).
+// governance, rules; not skills/mcp/agents-skills).
 func IsFragmentTarget(name string) bool {
 	in, ok := ByName(name)
-	return ok && (in.Kind == KindManagedBlock || in.Kind == KindWholeFile)
+	return ok && (in.Kind == KindManagedBlock || in.Kind == KindWholeFile || in.Kind == KindRulesDir)
+}
+
+// Defaults returns the built-in target names an empty targets: list expands
+// to, in table order: every built-in that is not opt-in. agents-skills is the
+// one built-in excluded (OptIn), so a repo must list it explicitly.
+func Defaults() []string {
+	var out []string
+	for _, in := range builtIns {
+		if in.BuiltIn && !in.OptIn {
+			out = append(out, in.Name)
+		}
+	}
+	return out
 }
 
 var customName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)

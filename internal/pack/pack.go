@@ -16,6 +16,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/tensorgroup/openescapement/internal/esc"
+	"github.com/tensorgroup/openescapement/internal/targets"
 )
 
 // Manifest is the parsed pack.yaml.
@@ -144,7 +145,30 @@ func Load(dir string) (*Pack, error) {
 		}
 		p.Fragments = append(p.Fragments, *frag)
 	}
+	seenRule := map[string]string{} // lowercased esc-<pack>-<stem>.md -> rel
+	for _, f := range p.Fragments {
+		if !namesRulesTarget(f) {
+			continue
+		}
+		key := strings.ToLower("esc-" + m.Name + "-" + strings.TrimSuffix(filepath.Base(f.Path), ".md") + ".md")
+		if prev, ok := seenRule[key]; ok {
+			return nil, fmt.Errorf("%w: rules %q and %q both resolve to rule file %q", esc.ErrManifest, prev, f.Path, key)
+		}
+		seenRule[key] = f.Path
+	}
 	return p, nil
+}
+
+// namesRulesTarget reports whether f's targets include the built-in rules
+// target, which is what makes its stem become part of an on-disk filename
+// under .claude/rules/ and therefore subject to in-pack collision checking.
+func namesRulesTarget(f Fragment) bool {
+	for _, t := range f.Targets {
+		if t == targets.NameRules {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Manifest) validate(dir string) error {

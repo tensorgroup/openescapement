@@ -13,6 +13,7 @@ prints `+N lines local` (the portal says augmented), and `skipped[].cause` has a
 - [Publishing to the admin portal](#publishing-to-the-admin-portal)
 - [JSON output (`--json`)](#json-output---json)
 - [The GitHub Action](#the-github-action)
+- [Targets](#targets)
 - [Custom targets](#custom-targets)
 
 ## Adding `esc` to a repo that already has instruction files
@@ -21,10 +22,13 @@ Most first contact isn't a blank repo, it's one with a hand-written `CLAUDE.md` 
 `AGENTS.md` already in place. `esc init` handles that case explicitly:
 
 - **Detects** what's already there (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`,
-  `GOVERNANCE.md`, `.mcp.json`, `.claude/skills/`) and pre-fills `targets` in the
-  generated config with exactly what it found. A repo with `AGENTS.md` and no
-  `GEMINI.md` doesn't get `GEMINI.md` conjured into existence by its first sync.
-  Nothing detected leaves `targets` empty, which still means all targets.
+  `GOVERNANCE.md`, `.mcp.json`, `.claude/skills/`, `.agents/skills/`) and pre-fills
+  `targets` in the generated config with exactly what it found, plus `rules`: a
+  newly governed repo should still receive rule files by default, so an explicit
+  targets list always includes it even when nothing on disk implied it. A repo
+  with `AGENTS.md` and no `GEMINI.md` doesn't get `GEMINI.md` conjured into
+  existence by its first sync. Nothing detected leaves `targets` empty, which
+  still means all targets.
 - **Explains**, in the same vocabulary `esc status` uses, what the first `esc sync`
   will do to each detected file: your content is preserved byte for byte and
   reported as a local amendment. A file that already carries a managed block or the
@@ -144,7 +148,7 @@ structs:
 | `packs[]` | array | One entry per pinned pack: `source`, `ref`, `pinned` (resolved content hash), `latest` (omitted if unknown), `signed` |
 | `findings[]` | array | Every classified artifact, pack pin, or subsystem signal (see below) |
 | `collection` | object | `amendments` (`off` / `metrics` / `content`) and `source` (`default` / `pack` / `repo-override`): the resolved reporting level and where it came from |
-| `skipped[]` | array | `sync` only, always present (possibly `[]`); omitted entirely for `status`. What sync declined to write or remove: `subject`, `kind`, `cause`, `reason`, `expected_hash`, `actual_hash`. `cause` is the machine-readable discriminator (`hand-edited`, `orphan-dir-unmanaged`, `orphan-dir-edited`, `orphan-block-edited`, `unmanaged-dir-at-target`); `reason` is prose for a human and nothing should branch on it |
+| `skipped[]` | array | `sync` only, always present (possibly `[]`); omitted entirely for `status`. What sync declined to write or remove: `subject`, `kind`, `cause`, `reason`, `expected_hash`, `actual_hash`. `cause` is the machine-readable discriminator (`hand-edited`, `orphan-dir-unmanaged`, `orphan-dir-edited`, `orphan-block-edited`, `unmanaged-dir-at-target`, `unmanaged-file-at-target`, `orphan-file-edited`); `reason` is prose for a human and nothing should branch on it |
 
 Each `findings[]` entry carries `subject` (an artifact path, a pack source
 URL, or the literal `"update-check"`), `kind` (`block` / `file` / `dir` /
@@ -188,6 +192,12 @@ There's also a GitHub Action:
 ```
 
 
+
+## Targets
+
+`rules` (path-scoped files under `.claude/rules/`) and `agents-skills` (a second skills root under `.agents/skills/`) are built-in targets. `rules` is part of the default set: an empty `targets:` list renders every built-in except `agents-skills`, which is opt-in only. An explicit `targets:` list is an exhaustive filter, not an addition to the defaults, so a repo that sets one must list `rules` to keep receiving rule files and `agents-skills` to render the second skills root. A pack that ships a `targets: [rules]` fragment needs a repo running an `esc` new enough to know that target; an older binary rejects the fragment as an unknown target and exits 1.
+
+A rule fragment can opt into `targets: [rules]` to render as its own file under `.claude/rules/` instead of joining the shared managed block, and scope itself to part of the tree with `paths:`. See `docs/pack-authoring.md` for the full authoring reference.
 
 ## Custom targets
 

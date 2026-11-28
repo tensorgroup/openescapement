@@ -4,15 +4,18 @@ import "testing"
 
 func TestBuiltIns(t *testing.T) {
 	want := map[string]struct {
-		file string
-		kind string
+		file  string
+		kind  string
+		optIn bool
 	}{
-		"claude":     {"CLAUDE.md", KindManagedBlock},
-		"agents":     {"AGENTS.md", KindManagedBlock},
-		"gemini":     {"GEMINI.md", KindManagedBlock},
-		"governance": {"GOVERNANCE.md", KindWholeFile},
-		"skills":     {"", KindSkillsDir},
-		"mcp":        {"", KindMCPConfig},
+		"claude":        {"CLAUDE.md", KindManagedBlock, false},
+		"agents":        {"AGENTS.md", KindManagedBlock, false},
+		"gemini":        {"GEMINI.md", KindManagedBlock, false},
+		"governance":    {"GOVERNANCE.md", KindWholeFile, false},
+		"mcp":           {"", KindMCPConfig, false},
+		"skills":        {"", KindSkillsDir, false},
+		"rules":         {"", KindRulesDir, false},
+		"agents-skills": {"", KindSkillsDir, true},
 	}
 	got := BuiltIns()
 	if len(got) != len(want) {
@@ -24,15 +27,30 @@ func TestBuiltIns(t *testing.T) {
 			t.Errorf("unexpected built-in %q", in.Name)
 			continue
 		}
-		if in.File != w.file || in.Kind != w.kind || !in.BuiltIn || in.OwnerPack != "" {
+		if in.File != w.file || in.Kind != w.kind || in.OptIn != w.optIn || !in.BuiltIn || in.OwnerPack != "" {
 			t.Errorf("built-in %q wrong: %+v", in.Name, in)
 		}
 	}
-	if !IsFragmentTarget("claude") || !IsFragmentTarget("governance") {
-		t.Error("claude/governance must be fragment targets")
+	if !IsFragmentTarget("claude") || !IsFragmentTarget("governance") || !IsFragmentTarget("rules") {
+		t.Error("claude/governance/rules must be fragment targets")
 	}
-	if IsFragmentTarget("skills") || IsFragmentTarget("mcp") || IsFragmentTarget("copilot") {
-		t.Error("skills/mcp/custom must not be fragment targets")
+	if IsFragmentTarget("skills") || IsFragmentTarget("mcp") || IsFragmentTarget("agents-skills") || IsFragmentTarget("copilot") {
+		t.Error("skills/mcp/agents-skills/custom must not be fragment targets")
+	}
+}
+
+func TestDefaultsExcludesOptInIncludesRules(t *testing.T) {
+	seen := map[string]bool{}
+	for _, n := range Defaults() {
+		seen[n] = true
+	}
+	for _, w := range []string{NameClaude, NameAgents, NameGemini, NameGovernance, NameSkills, NameMCP, NameRules} {
+		if !seen[w] {
+			t.Errorf("Defaults() missing %q", w)
+		}
+	}
+	if seen[NameAgentsSkills] {
+		t.Error("Defaults() must exclude the opt-in agents-skills target")
 	}
 }
 

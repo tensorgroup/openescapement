@@ -5,7 +5,8 @@
 **Deterministic governance for your AI usage.**
 
 `esc` puts your organization's AI rules into the files that coding agents already read:
-`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.claude/skills/`, and `.mcp.json`. It also writes a
+`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.claude/skills/`, `.claude/rules/`, `.agents/skills/`,
+and `.mcp.json`. It also writes a
 `GOVERNANCE.md` for people. The rules come from a signed, versioned **rule pack**. One pack
 syncs to every repo, and CI tells you when a repo drifts from it.
 
@@ -60,17 +61,18 @@ go run ../../cmd/esc sync
 You see:
 
 ```text
-Synced 1 pack(s), 6 artifact(s) applied, 0 skipped:
+Synced 1 pack(s), 7 artifact(s) applied, 0 skipped:
   block      CLAUDE.md
   block      AGENTS.md
   block      GEMINI.md
   file       GOVERNANCE.md
-  dir        .claude/skills/esc-acme-org-acme-vault
   json-keys  .mcp.json
+  dir        .claude/skills/esc-acme-org-acme-vault
+  file       .claude/rules/esc-acme-org-api-handlers.md
 ```
 
-esc wrote a managed block into each instruction file. It also wrote `GOVERNANCE.md`, a skill,
-and an MCP server entry.
+esc wrote a managed block into each instruction file. It also wrote `GOVERNANCE.md`, an MCP
+server entry, a skill, and a rule file.
 
 **3. Check the repo against the pack.**
 
@@ -85,8 +87,9 @@ You see (exit code 0):
   ✓ AGENTS.md            in sync
   ✓ GEMINI.md            in sync
   ✓ GOVERNANCE.md        in sync
-  ✓ .claude/skills/esc-acme-org-acme-vault in sync
   ✓ .mcp.json            in sync
+  ✓ .claude/skills/esc-acme-org-acme-vault in sync
+  ✓ .claude/rules/esc-acme-org-api-handlers.md in sync
 All policy artifacts in sync.
 ```
 
@@ -120,7 +123,7 @@ go run ../../cmd/esc sync
 You see (exit code 0). esc skips `AGENTS.md` and tells you why:
 
 ```text
-Synced 1 pack(s), 5 artifact(s) applied, 1 skipped:
+Synced 1 pack(s), 6 artifact(s) applied, 1 skipped:
   ...
   skipped AGENTS.md: managed block was hand-edited (hash mismatch)
     `esc diff` to inspect · `esc sync --force` to overwrite
@@ -190,8 +193,8 @@ instruction files it found as targets. Details:
 [docs/reference.md](docs/reference.md#adding-esc-to-a-repo-that-already-has-instruction-files).
 
 **2. Point the config at a pack.** Edit `packs` in `.escapement/config.yaml`. Keep the
-`targets` list that `esc init` wrote: it names the files it found. This example repo has only
-`CLAUDE.md`:
+`targets` list that `esc init` wrote: it names the targets it found. This example repo has only
+`CLAUDE.md`, which finds the `claude` and `rules` targets:
 
 ```yaml
 schema: 1
@@ -201,6 +204,7 @@ packs:
 allowed_signers_file: .escapement/allowed_signers  # who may sign the tag
 targets:
   - claude
+  - rules
 ```
 
 No pack yet? Copy [`examples/packs/acme-org`](examples/packs/acme-org) into a repo of your
@@ -491,7 +495,7 @@ out. It is a regulator, not a firewall or a scanner.
 
 ## Status & roadmap
 
-**v0.1 (this release):** rule-pack format, renderer, git-native sync with signatures + lockfile, drift detection, CI gate, six render targets, example pack.
+**v0.1 (this release):** rule-pack format, renderer, git-native sync with signatures + lockfile, drift detection, CI gate, eight render targets, example pack.
 
 **Next:** self-service project registry with expiry (the shadow-IT map), MCP server surface (live policy queries: *"am I allowed to open a port?"*), usage telemetry and dashboard, SIEM export, review workflows. See `ai-governance-product-spec.md` for the full picture.
 

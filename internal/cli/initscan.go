@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/tensorgroup/openescapement/internal/render"
+	"github.com/tensorgroup/openescapement/internal/targets"
 )
 
 // Detected is one instruction file or directory already present in a repo
@@ -20,6 +21,28 @@ type Detected struct {
 	Bytes, Lines   int
 	HasBlock       bool // already carries a managed block
 	HasPlaceholder bool // already carries the placement marker
+}
+
+// skillsDirCandidate reports the absolute path of segments joined under root
+// (e.g. root, ".claude", "skills") and whether every segment along the way,
+// leaf included, is a real directory reached with no symlink standing in it
+// — the same shape the first `esc sync` would refuse at exit 4 (refuseSymlinks
+// walks every path component, not just the last one). os.Lstat on the full
+// joined path alone is not enough: it only refuses to follow the final
+// component's own symlink, so a symlinked ancestor (".agents" itself, say,
+// pointing at a real directory that happens to contain a real "skills" dir)
+// would report a real, non-symlink leaf and pre-fill a target the first sync
+// then refuses.
+func skillsDirCandidate(root string, segments ...string) (abs string, ok bool) {
+	cur := root
+	for _, seg := range segments {
+		cur = filepath.Join(cur, seg)
+		fi, err := os.Lstat(cur)
+		if err != nil || fi.Mode()&os.ModeSymlink != 0 || !fi.IsDir() {
+			return "", false
+		}
+	}
+	return cur, true
 }
 
 // detectExisting reports the instruction files a repo already has. It never
@@ -55,27 +78,34 @@ func detectExisting(root string) ([]Detected, error) {
 	if info, err := os.Stat(filepath.Join(root, ".mcp.json")); err == nil && !info.IsDir() {
 		out = append(out, Detected{Target: render.TargetMCP, Path: ".mcp.json", Bytes: int(info.Size())})
 	}
-	if entries, err := os.ReadDir(filepath.Join(root, ".claude", "skills")); err == nil && len(entries) > 0 {
-		out = append(out, Detected{Target: render.TargetSkills, Path: ".claude/skills"})
+	if abs, ok := skillsDirCandidate(root, ".claude", "skills"); ok {
+		if entries, err := os.ReadDir(abs); err == nil && len(entries) > 0 {
+			out = append(out, Detected{Target: render.TargetSkills, Path: ".claude/skills"})
+		}
+	}
+	if abs, ok := skillsDirCandidate(root, ".agents", "skills"); ok {
+		if entries, err := os.ReadDir(abs); err == nil && len(entries) > 0 {
+			out = append(out, Detected{Target: render.TargetAgentsSkills, Path: ".agents/skills"})
+		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out, nil
 }
 
-// targetOrder is the fixed presentation order for detected targets: the
-// file-based targets in the order render.TargetClaude/Agents/Gemini/Governance
-// are declared (map iteration over render.TargetFile has no order of its
-// own), then mcp, then skills. detectExisting's own result is sorted by Path
-// for stable lookups; this order is what the user actually reads and what
-// configTemplate's targets list is built from.
-//
-// Must stay in sync with render.TargetFile plus render.TargetMCP/TargetSkills
-// — see TestTargetOrderCoversAllTargets — or a newly added target silently
-// drops out of both the generated targets: list and the explanation even
-// though detectExisting still finds it.
-var targetOrder = []string{
-	render.TargetClaude, render.TargetAgents, render.TargetGemini, render.TargetGovernance,
-	render.TargetMCP, render.TargetSkills,
+// targetOrder is the fixed presentation order for detected targets: exactly
+// the built-in table order (see targets.BuiltIns), so there is one source of
+// truth and a newly added built-in can never silently drop out of the
+// generated targets: list or the explanation — TestTargetOrderCoversAllTargets
+// pins the equality.
+var targetOrder = builtInTargetOrder()
+
+func builtInTargetOrder() []string {
+	ins := targets.BuiltIns()
+	out := make([]string, len(ins))
+	for i, in := range ins {
+		out[i] = in.Name
+	}
+	return out
 }
 
 // orderDetected returns detected re-ordered per targetOrder. detectExisting
@@ -104,11 +134,20 @@ func orderDetected(detected []Detected) []Detected {
 func detectedTargets(detected []Detected) []string {
 	ordered := orderDetected(detected)
 	if len(ordered) == 0 {
-		return nil
+		return nil // greenfield: empty means all default targets (rules included)
 	}
-	out := make([]string, len(ordered))
-	for i, d := range ordered {
-		out[i] = d.Target
+	present := map[string]bool{}
+	for _, d := range ordered {
+		present[d.Target] = true
+	}
+	// A newly governed repo with an explicit list should still receive rule
+	// files by default; agents-skills only when it was actually detected.
+	present[render.TargetRules] = true
+	out := []string{}
+	for _, t := range targetOrder {
+		if present[t] {
+			out = append(out, t)
+		}
 	}
 	return out
 }
@@ -142,6 +181,10 @@ func detectedSyncClause(d Detected) string {
 		return "add pack MCP servers alongside your existing ones"
 	case render.TargetSkills:
 		return "add pack skills alongside yours in .claude/skills"
+	case render.TargetAgentsSkills:
+		return "add pack skills alongside yours in .agents/skills"
+	case render.TargetGovernance:
+		return "report GOVERNANCE.md as occupied and not overwrite it — move or delete it so escapement can own it"
 	default:
 		switch {
 		case d.HasBlock:
@@ -175,9 +218,14 @@ func explainDetection(w io.Writer, detected []Detected) {
 	labels := make([]string, len(ordered))
 	clauses := make([]string, len(ordered))
 	needsPlacementHint := false
+	governanceDetected := false
 	for i, d := range ordered {
 		labels[i] = detectedItemLabel(d)
 		clauses[i] = detectedSyncClause(d)
+		if d.Target == render.TargetGovernance {
+			governanceDetected = true
+			continue
+		}
 		if isFileTarget(d.Target) && !d.HasBlock && !d.HasPlaceholder {
 			needsPlacementHint = true
 		}
@@ -188,14 +236,22 @@ func explainDetection(w io.Writer, detected []Detected) {
 	// managed block at the top of" four times in a row, which is the exact
 	// case a first-contact explanation most needs to stay readable in.
 	const preserved = "Your current content is preserved byte for byte and reported as a local amendment."
+	const governanceNote = "A detected GOVERNANCE.md is a whole file escapement owns: it is reported occupied and left untouched until you move or delete it."
 	if len(clauses) == 1 {
-		fmt.Fprintf(w, "`esc sync` will %s. %s\n", clauses[0], preserved)
+		if governanceDetected {
+			fmt.Fprintf(w, "`esc sync` will %s.\n", clauses[0])
+		} else {
+			fmt.Fprintf(w, "`esc sync` will %s. %s\n", clauses[0], preserved)
+		}
 	} else {
 		fmt.Fprintln(w, "`esc sync` will:")
 		for _, c := range clauses {
 			fmt.Fprintf(w, "  - %s\n", c)
 		}
 		fmt.Fprintf(w, "\n%s\n", preserved)
+		if governanceDetected {
+			fmt.Fprintf(w, "%s\n", governanceNote)
+		}
 	}
 	if needsPlacementHint {
 		fmt.Fprintf(w, "\nTo place the block somewhere else, put %s where you want it before syncing.\n", render.Placeholder)

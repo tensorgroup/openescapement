@@ -10,6 +10,7 @@ import (
 
 	"github.com/tensorgroup/openescapement/internal/config"
 	"github.com/tensorgroup/openescapement/internal/render"
+	"github.com/tensorgroup/openescapement/internal/targets"
 )
 
 func TestDetectExisting(t *testing.T) {
@@ -115,31 +116,105 @@ func TestDetectExistingFindsCorruptBlock(t *testing.T) {
 	}
 }
 
-// TestTargetOrderCoversAllTargets guards against a target being added to
-// render.TargetFile (or a new non-file target constant) without updating
-// targetOrder: without this, orderDetected and detectedTargets would
-// silently drop it from both the generated targets: list and the
-// explanation even though detectExisting still finds it.
+// TestDetectExistingSkipsSymlinkedAgentsAncestor: os.Lstat(".agents/skills")
+// reports a real directory even when ".agents" itself (not "skills") is a
+// symlink, since Lstat only refuses to follow the final path component. A
+// pre-fill here would make the first `esc sync` refuse the ancestor at exit
+// 4 (refuseSymlinks walks every component). The "skills" leaf is real; only
+// the ".agents" ancestor is symlinked.
+func TestDetectExistingSkipsSymlinkedAgentsAncestor(t *testing.T) {
+	root := t.TempDir()
+	real := filepath.Join(root, "real-agents-dir")
+	if err := os.MkdirAll(filepath.Join(real, "skills", "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(real, "skills", "x", "SKILL.md"), []byte("y\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, filepath.Join(root, ".agents")); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	got, err := detectExisting(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range got {
+		if d.Target == render.TargetAgentsSkills {
+			t.Errorf("must not detect agents-skills through a symlinked .agents ancestor: %+v", got)
+		}
+	}
+}
+
+// TestDetectExistingSkipsSymlinkedClaudeAncestor is the .claude/skills parity
+// gap: detectExisting used plain os.ReadDir with no symlink check at all, so
+// it followed a symlinked ".claude" (or a symlinked "skills" leaf) straight
+// through to a real directory beyond it.
+func TestDetectExistingSkipsSymlinkedClaudeAncestor(t *testing.T) {
+	root := t.TempDir()
+	real := filepath.Join(root, "real-claude-dir")
+	if err := os.MkdirAll(filepath.Join(real, "skills", "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(real, "skills", "x", "SKILL.md"), []byte("y\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, filepath.Join(root, ".claude")); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	got, err := detectExisting(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range got {
+		if d.Target == render.TargetSkills {
+			t.Errorf("must not detect skills through a symlinked .claude ancestor: %+v", got)
+		}
+	}
+}
+
+// TestTargetOrderCoversAllTargets pins targetOrder to exactly the built-in
+// table order. It reads targets.BuiltIns() directly rather than through
+// builtInTargetOrder() — the very expression that initializes targetOrder —
+// so the assertion is not tautological: a stray or dropped entry in either
+// targetOrder or builtInTargetOrder would fail it. It also checks that
+// orderDetected preserves every target detectExisting can actually emit
+// (rules is never detected from disk, so it is intentionally excluded from
+// that half of the check).
 func TestTargetOrderCoversAllTargets(t *testing.T) {
-	want := map[string]bool{render.TargetMCP: true, render.TargetSkills: true}
-	for target := range render.TargetFile {
-		want[target] = true
+	ins := targets.BuiltIns()
+	want := make([]string, len(ins))
+	for i, in := range ins {
+		want[i] = in.Name
+	}
+	if len(targetOrder) != len(want) {
+		t.Fatalf("targetOrder length %d, want %d (%v vs %v)", len(targetOrder), len(want), targetOrder, want)
+	}
+	for i := range want {
+		if targetOrder[i] != want[i] {
+			t.Errorf("targetOrder[%d] = %q, want %q", i, targetOrder[i], want[i])
+		}
+	}
+
+	emittable := []string{
+		render.TargetClaude, render.TargetAgents, render.TargetGemini,
+		render.TargetGovernance, render.TargetMCP, render.TargetSkills,
+		render.TargetAgentsSkills,
+	}
+	detected := make([]Detected, len(emittable))
+	for i, target := range emittable {
+		detected[i] = Detected{Target: target}
+	}
+	ordered := orderDetected(detected)
+	if len(ordered) != len(emittable) {
+		t.Fatalf("orderDetected dropped entries: got %d want %d (%+v)", len(ordered), len(emittable), ordered)
 	}
 	seen := map[string]bool{}
-	for _, target := range targetOrder {
-		if seen[target] {
-			t.Errorf("targetOrder has duplicate entry %q", target)
-		}
-		seen[target] = true
+	for _, d := range ordered {
+		seen[d.Target] = true
 	}
-	for target := range want {
+	for _, target := range emittable {
 		if !seen[target] {
-			t.Errorf("targetOrder missing %q (present in render.TargetFile/TargetMCP/TargetSkills)", target)
-		}
-	}
-	for target := range seen {
-		if !want[target] {
-			t.Errorf("targetOrder has unknown entry %q not in render.TargetFile/TargetMCP/TargetSkills", target)
+			t.Errorf("orderDetected dropped target %q emitted by detectExisting", target)
 		}
 	}
 }
@@ -268,10 +343,11 @@ func TestInitExplainsAllSixDetectedTargets(t *testing.T) {
 			"  - insert a managed block at the top of CLAUDE.md\n"+
 			"  - insert a managed block at the top of AGENTS.md\n"+
 			"  - insert a managed block at the top of GEMINI.md\n"+
-			"  - insert a managed block at the top of GOVERNANCE.md\n"+
+			"  - report GOVERNANCE.md as occupied and not overwrite it — move or delete it so escapement can own it\n"+
 			"  - add pack MCP servers alongside your existing ones\n"+
 			"  - add pack skills alongside yours in .claude/skills\n\n"+
-			"Your current content is preserved byte for byte and reported as a local amendment.\n\n"+
+			"Your current content is preserved byte for byte and reported as a local amendment.\n"+
+			"A detected GOVERNANCE.md is a whole file escapement owns: it is reported occupied and left untouched until you move or delete it.\n\n"+
 			"To place the block somewhere else, put %s where you want it before syncing.\n",
 		config.Path(root), render.Placeholder)
 	if got := out.String(); got != want {

@@ -399,30 +399,33 @@ h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
 
   // ── real outputs ──
   const SYNC_OK = [
-    'Synced 1 pack(s), 6 artifact(s) applied, 0 skipped:',
+    'Synced 1 pack(s), 7 artifact(s) applied, 0 skipped:',
     '  block      CLAUDE.md',
     '  block      AGENTS.md',
     '  block      GEMINI.md',
     '  file       GOVERNANCE.md',
-    '  dir        .claude/skills/esc-acme-org-acme-vault',
     '  json-keys  .mcp.json',
+    '  dir        .claude/skills/esc-acme-org-acme-vault',
+    '  file       .claude/rules/esc-acme-org-api-handlers.md',
   ];
   const SYNC_SKIP = [
-    'Synced 1 pack(s), 5 artifact(s) applied, 1 skipped:',
+    'Synced 1 pack(s), 6 artifact(s) applied, 1 skipped:',
     '  block      CLAUDE.md',
     '  block      AGENTS.md  (skipped, see warning below)',
     '  block      GEMINI.md',
     '  file       GOVERNANCE.md',
-    '  dir        .claude/skills/esc-acme-org-acme-vault',
     '  json-keys  .mcp.json',
+    '  dir        .claude/skills/esc-acme-org-acme-vault',
+    '  file       .claude/rules/esc-acme-org-api-handlers.md',
     '  skipped AGENTS.md: managed block was hand-edited (hash mismatch)',
     '    `esc diff` to inspect · `esc sync --force` to overwrite',
   ];
   const OTHERS = [
     '  ✓ GEMINI.md            in sync',
     '  ✓ GOVERNANCE.md        in sync',
-    '  ✓ .claude/skills/esc-acme-org-acme-vault in sync',
     '  ✓ .mcp.json            in sync',
+    '  ✓ .claude/skills/esc-acme-org-acme-vault in sync',
+    '  ✓ .claude/rules/esc-acme-org-api-handlers.md in sync',
   ];
   function statusLines(local, altered) {
     const suffix = local ? '  ·  +' + local + ' lines local' : '';
@@ -438,12 +441,13 @@ h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
       'diff --git actual/AGENTS.md expected/AGENTS.md',
       '--- actual/AGENTS.md',
       '+++ expected/AGENTS.md',
-      '@@ -1,' + (5 + rogue) + ' +1,5 @@',
-      ' <!-- escapement:begin packs=acme-org@0.1.1 hash=sha256:4127f9f0… -->',
-      ' > Managed by escapement. Do not edit. Run `esc diff` to see source. Team content goes outside this block.',
+      '@@ -59,' + (4 + rogue) + ' +59,4 @@',
+      ' - **Review required:** Model-vendor hosting (Claude artifacts, OpenAI apps) (app-hosting) - Fine for demos; data-handling review before real user data',
+      ' - **Review required:** Self-hosted open-weights models (model) - Talk to #ml-platform about GPU pool and eval requirements',
+      ' - **Banned:** Raw port forwarding (hosting-exposure) - No direct exposure of local services to the internet',
     ];
     for (let k = 0; k < rogue; k += 1) out.push('-Always use port 8080.');
-    out.push(' ', ' ## Secrets & keys', ' ');
+    out.push(" <!-- escapement:end -->");
     return out;
   }
 
@@ -454,7 +458,7 @@ h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
       hasPrompts: true, code: 0, cwd: '~',
       meaning: 'The example has its own <code>.escapement/config.yaml</code>. It points at <code>examples/packs/acme-org</code>, a pack for a fictional company.' },
     { title: 'Sync the pack', cmd: 'go run ../../cmd/esc sync', out: SYNC_OK, code: 0,
-      meaning: '<b>esc wrote six artifacts.</b> Each instruction file got a managed block. esc also wrote <code>GOVERNANCE.md</code>, a skill, and an MCP server entry.' },
+      meaning: '<b>esc wrote seven artifacts.</b> Each instruction file got a managed block. esc also wrote <code>GOVERNANCE.md</code>, an MCP server entry, a skill, and a rule file.' },
     { title: 'Check for drift', cmd: 'go run ../../cmd/esc status --check', out: statusLines(0, false), code: 0,
       meaning: '<b>Exit 0: CI passes.</b> <code>+11 lines local</code> is the team\'s own text outside the block. esc keeps it and never counts it as drift.' },
     { title: 'Edit inside the block', cmd: '# add "Always use port 8080." inside the managed block of AGENTS.md\ngo run ../../cmd/esc status --check',
@@ -515,7 +519,7 @@ h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
   ];
   const LOCAL_LINES = ['Deploy on Fridays only after noon.', 'Ask #payments before changing the ledger.', 'Run make lint before every push.'];
   function renderDoc() {
-    const begin = '<span class="marker">&lt;!-- escapement:begin packs=acme-org@0.1.1 hash=sha256:4127f9f0… --&gt;</span>';
+    const begin = '<span class="marker">&lt;!-- escapement:begin packs=acme-org@0.1.2 hash=sha256:4127f9f0… --&gt;</span>';
     const end = '<span class="marker">&lt;!-- escapement:end --&gt;</span>';
     let body = PACK_TEXT.slice(0, 2).map(esc).join('\n') + '\n';
     for (let k = 0; k < pg.rogue; k += 1) body += '<span class="rogue">Always use port 8080.</span>\n';
@@ -552,7 +556,7 @@ h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -.01em; }
   const CHEAT = [
     ['Start governing a repo', 'esc init', 'Initialized <repo>/.escapement/config.yaml, then the files it found. It writes no policy.'],
     ['See the rules before they land', 'esc render --stdout', 'The Markdown each file will get. Skills and MCP entries are not shown.'],
-    ['Write the rules into the repo', 'esc sync', 'Synced 1 pack(s), 6 artifact(s) applied, 0 skipped:'],
+    ['Write the rules into the repo', 'esc sync', 'Synced 1 pack(s), 7 artifact(s) applied, 0 skipped:'],
     ['Check for drift (CI)', 'esc status --check', 'All policy artifacts in sync. and exit 0, or Drift detected. and exit 1'],
     ['See what changed', 'esc diff', 'A unified diff of the Markdown files: actual (-) against expected (+). Exit 1 when they differ.'],
     ['Review a new pack version first', 'esc diff --against v2.0.0', 'The policy change, before you move the pin.'],

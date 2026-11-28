@@ -502,7 +502,7 @@ func TestApplyOrphanDirSymlinkedPackFileFailsClosed(t *testing.T) {
 	if err == nil {
 		t.Fatalf("a symlinked manifest entry must fail closed, not become an exit-0 skip: %+v", res)
 	}
-	if !strings.Contains(err.Error(), "refusing to write through symlink") {
+	if !strings.Contains(err.Error(), "refusing to read or write through a symlink") {
 		t.Errorf("error must come from the symlink check, got %v", err)
 	}
 	if res != nil {

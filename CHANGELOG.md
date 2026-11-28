@@ -297,8 +297,26 @@ tagged releases begin.
   JavaScript is off; fragments are returned only for HX-Request requests. htmx
   runs under the strict CSP with eval, history, and injected indicator styles
   disabled, and hx-disable wrapping all pack-authored markdown.
+- `rules` target: one escapement-owned file per opt-in fragment under
+  `.claude/rules/esc-<pack>-<stem>.md`, carrying a verbatim `paths:` scope for
+  Claude Code (and read by Grok Build). Built-in and part of the default set;
+  an explicit `targets:` list must name it to receive rule files.
+- `agents-skills` target: the pack's skill directories rendered a second time
+  under `.agents/skills/<name>` for cross-tool agents (Kimi Code). Opt-in: an
+  empty `targets:` list does not include it.
+- Packs that ship a `targets: [rules]` fragment require an `esc` that knows the
+  target; an older binary rejects the fragment as an unknown target (exit 1).
 
 ### Changed
+- The whole-file occupied gate and orphan pass now cover every `KindFile`
+  artifact, `GOVERNANCE.md` included: a repo that already has its own
+  `GOVERNANCE.md` is reported `occupied` and is no longer overwritten silently
+  on first sync (move or delete it, or let escapement adopt a byte-identical
+  copy); a `GOVERNANCE.md` no longer in the effective set is reported `orphan`
+  and removed, or left in place if hand-edited.
+- Containment now runs before reads as well as writes: `esc status`, `esc diff`,
+  `esc render`, and `esc sync` refuse a symlinked instruction-file target (exit
+  4) instead of reading through it.
 - Portal model guidance refreshed to match the packs: Claude Fable 5.1 and Opus
   4.8 added, Fable 5 moved to legacy, Sonnet 5 at its permanent $2/$10, GPT-6
   Astra added with Sol narrowed to review; starters and routing fragments follow.
@@ -398,6 +416,23 @@ tagged releases begin.
 - Vendor guidance sweep cadence: weekly community scan plus a monthly deep check,
   replacing the quarterly check. DeepSeek and Z.ai join the source list for the
   model registry and model packs, not as render targets.
+- Fragment line endings are normalized to LF at load, so a CRLF-authored
+  fragment keeps its frontmatter and scope. This is not a one-time `stale`
+  for a repo upgrading from a release that predates this fix: a pack whose
+  CRLF frontmatter was previously never recognized had its raw frontmatter
+  text folded into the rendered body, so the old lockfile hash (computed
+  before line endings were normalized for hashing) matches neither the
+  now-normalized disk bytes nor the newly parsed output. `esc status`
+  reports the affected whole-file target `altered`, an ordinary `esc sync`
+  skips it, and `esc sync --force` is needed to converge.
+- `esc status --json` and `esc sync --json` findings order changed with the
+  targets table: `.mcp.json` now sorts before skills.
+- `esc init` no longer offers to place the managed-block marker in
+  `GOVERNANCE.md`: a whole-file target never carries a managed block, so
+  there is nowhere for the marker to go.
+- Whole-file artifacts, now including every rule file under `.claude/rules/`,
+  are rewritten on every sync even when their content is unchanged (no
+  hash-equal short-circuit), the same as `GOVERNANCE.md` already was.
 
 ### Fixed
 - CRLF instruction files: leading YAML frontmatter with CRLF line endings is

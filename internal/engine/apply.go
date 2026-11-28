@@ -56,7 +56,7 @@ func refuseSymlinks(root, rel string) error {
 			return err
 		}
 		if fi.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("%s: refusing to write through symlink %s", rel, cur)
+			return fmt.Errorf("%s: refusing to read or write through a symlink at %s; replace the symlink with a regular file or directory, or drop the target", rel, cur)
 		}
 	}
 	return nil
@@ -158,19 +158,28 @@ const (
 	// byte-for-byte match, adopted below instead of reaching this cause.
 	// There is nothing this cause protects when there is nothing to destroy.
 	SkipUnmanagedDirAtTarget SkipCause = "unmanaged-dir-at-target"
+	// SkipUnmanagedFileAtTarget: a file escapement never wrote already occupies
+	// a KindFile artifact's target path, with no prior lock entry. Like the dir
+	// case, sync declines and force does NOT override; the one exception is a
+	// byte-identical (endings-normalized) file, adopted instead of skipped.
+	SkipUnmanagedFileAtTarget SkipCause = "unmanaged-file-at-target"
+	// SkipOrphanFileEdited: a KindFile the effective set no longer contains was
+	// hand-edited since the last sync, so it was left in place, not removed.
+	SkipOrphanFileEdited SkipCause = "orphan-file-edited"
 )
 
 // SyncResult reports what a sync wrote and what it declined to write.
 type SyncResult struct {
 	Applied []string `json:"applied"`
-	// Adopted lists the repo-relative paths of KindDir artifacts where a
-	// pre-existing, unmanaged target directory turned out to be
-	// byte-for-byte identical to what the pack would have written
-	// (identicalDirContent). Apply records the lock entry and writes nothing
-	// to disk. Kept separate from Applied (nothing was actually written) and
-	// from Skipped (nothing was declined — the sync succeeded): a consumer
-	// asking "did this artifact converge" needs adoption to read as success,
-	// not as a decline that happens to carry no warning.
+	// Adopted lists the repo-relative paths of KindDir or KindFile artifacts
+	// where a pre-existing, unmanaged target (directory or whole file) turned
+	// out to be byte-for-byte identical to what the pack would have written
+	// (identicalDirContent, identicalFileContent). Apply records the lock
+	// entry and writes nothing to disk. Kept separate from Applied (nothing
+	// was actually written) and from Skipped (nothing was declined — the
+	// sync succeeded): a consumer asking "did this artifact converge" needs
+	// adoption to read as success, not as a decline that happens to carry no
+	// warning.
 	Adopted []string  `json:"adopted,omitempty"`
 	Skipped []Skipped `json:"skipped,omitempty"`
 }
@@ -272,11 +281,12 @@ func handEdited(f Finding, prev *lockfile.LockArtifact) bool {
 // skip gate above them).
 // ownedSkillPath reports whether a lockfile dir entry's repo-relative path is
 // one escapement could have written: exactly one path element below
-// .claude/skills. This replaces the old "esc-" name-prefix marker, which the
-// skill name override (pack.SkillEntry.Name) made unsound: a named skill has
-// no prefix, so retirement would refuse forever. Decided on the relative
-// path, never the absolute one, for the reason documented at the removal
-// pass.
+// .claude/skills or .agents/skills (the opt-in agents-skills target renders
+// pack skill directories a second time under the second root). This replaces
+// the old "esc-" name-prefix marker, which the skill name override
+// (pack.SkillEntry.Name) made unsound: a named skill has no prefix, so
+// retirement would refuse forever. Decided on the relative path, never the
+// absolute one, for the reason documented at the removal pass.
 //
 // What actually confines a hostile lockfile here is this check plus
 // manifest-only deletion — removal only ever deletes the paths prev.Files
@@ -289,7 +299,107 @@ func handEdited(f Finding, prev *lockfile.LockArtifact) bool {
 // pack-provided file after escapement last wrote it, so that edit isn't
 // silently deleted out from under them on retirement.
 func ownedSkillPath(rel string) bool {
-	return path.Dir(path.Clean(rel)) == ".claude/skills"
+	if !canonicalRel(rel) {
+		return false
+	}
+	d := path.Dir(path.Clean(rel))
+	return d == ".claude/skills" || d == ".agents/skills"
+}
+
+// canonicalRel reports whether rel is a plain, canonical, slash-separated
+// repo-relative path safe to compare against desired artifact paths and to
+// feed to the filesystem: no backslash, no leading slash, and path.Clean is a
+// no-op (no ".", "..", "//", or trailing slash). A lockfile is
+// attacker-controlled input, so a non-canonical entry is refused before it is
+// ever compared or read, not silently normalized into an owned path.
+func canonicalRel(rel string) bool {
+	if rel == "" || strings.ContainsRune(rel, '\\') || strings.HasPrefix(rel, "/") {
+		return false
+	}
+	return path.Clean(rel) == rel
+}
+
+// ownedFilePath reports whether a lockfile KindFile entry is one escapement
+// could have written: the built-in GOVERNANCE.md path exactly, or a rule file
+// under .claude/rules with the reserved esc- prefix. Non-canonical paths are
+// refused outright. Decided on the repo-relative path, never the absolute one,
+// and confines what a hostile lockfile can delete — the same ruling AGENTS.md
+// records for skill directories. The prefix is a reserved namespace, not proof
+// escapement created the file.
+func ownedFilePath(rel string) bool {
+	if !canonicalRel(rel) {
+		return false
+	}
+	return rel == render.TargetFile[render.TargetGovernance] || ownedRulePath(rel)
+}
+
+// ownedRulePath reports whether rel is exactly one canonical element below
+// .claude/rules carrying the reserved esc- prefix.
+func ownedRulePath(rel string) bool {
+	if !canonicalRel(rel) {
+		return false
+	}
+	base := path.Base(rel)
+	// Longer than the bare prefix: "esc-" alone names nothing after the
+	// reserved marker, so it is not a namespaced file escapement could have
+	// written.
+	return path.Dir(rel) == ".claude/rules" && strings.HasPrefix(base, "esc-") && len(base) > len("esc-")
+}
+
+// identicalFileContent reports whether the file at abs, endings-normalized,
+// hashes to wantHash — the ONLY condition under which the KindFile occupied
+// gate adopts rather than skips (nothing to destroy). It Lstats first and
+// refuses a symlink itself: classify's occupied branch does not run
+// refuseSymlinks, so a symlink whose target hashes equal must never read as an
+// adoptable match.
+func identicalFileContent(abs, wantHash string) bool {
+	fi, err := os.Lstat(abs)
+	if err != nil || fi.Mode()&os.ModeSymlink != 0 {
+		return false
+	}
+	got, err := os.ReadFile(abs)
+	if err != nil {
+		return false
+	}
+	return esc.HashBytes(render.NormalizeEndings(got)) == wantHash
+}
+
+// inspectOrphanFile resolves and inspects one lockfile KindFile entry the
+// effective set no longer contains — the read-only work shared by Apply's
+// orphan-file removal pass and Status's orphan-file finding pass. It refuses
+// a non-canonical or unowned path (checked before any read), resolves
+// containment, refuses a symlink anywhere along the path, and reads the
+// file's current endings-normalized hash.
+//
+// gone reports the file having already been removed (os.IsNotExist): abs and
+// actualHash are unset and err is nil, matching what both passes previously
+// did with their own "continue // already gone" line. Any other error
+// (unowned path, containment, symlink, or an unreadable file) is returned
+// as-is: both callers propagate it as a hard error (exit 4) rather than
+// downgrade it to a finding, per the containment-refusal ruling in
+// AGENTS.md — an unowned or hostile lockfile path is not routine, self-
+// healing drift.
+func inspectOrphanFile(root string, prev lockfile.LockArtifact) (abs, actualHash string, gone bool, err error) {
+	// ownedFilePath already rejects any non-canonical path before it is
+	// compared or read.
+	if !ownedFilePath(prev.Path) {
+		return "", "", false, fmt.Errorf("not an escapement-owned file: %q", prev.Path)
+	}
+	abs, err = containedPath(root, prev.Path)
+	if err != nil {
+		return "", "", false, err
+	}
+	if err := refuseSymlinks(root, prev.Path); err != nil {
+		return "", "", false, err
+	}
+	content, err := os.ReadFile(abs)
+	if os.IsNotExist(err) {
+		return "", "", true, nil
+	}
+	if err != nil {
+		return "", "", false, err
+	}
+	return abs, esc.HashBytes(render.NormalizeEndings(content)), false, nil
 }
 
 func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
@@ -344,6 +454,27 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 						ExpectedHash: a.Hash,
 					})
 					continue // no lock entry appended: nothing was adopted
+				}
+			}
+		}
+		if a.Kind == KindFile {
+			// Same never-adopt gate as KindDir, and the same one exception: a
+			// pre-existing file with no lock entry is skipped (force does not
+			// override), UNLESS its normalized bytes already equal what we would
+			// write, in which case there is nothing to destroy and we adopt.
+			if prevLock.Artifact(a.Path) == nil {
+				if _, statErr := os.Lstat(abs); statErr == nil {
+					if identicalFileContent(abs, a.Hash) {
+						arts = append(arts, lockfile.LockArtifact{Path: a.Path, Kind: a.Kind, Hash: a.Hash})
+						res.Adopted = append(res.Adopted, a.Path)
+						continue
+					}
+					res.Skipped = append(res.Skipped, Skipped{
+						Subject: a.Path, Kind: a.Kind, Cause: SkipUnmanagedFileAtTarget,
+						Reason:       "an unmanaged file or directory already occupies this path",
+						ExpectedHash: a.Hash,
+					})
+					continue
 				}
 			}
 		}
@@ -436,8 +567,8 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 			// ".claude/skills" satisfies it for every lockfile entry, so a
 			// hostile lockfile could aim these removals at any in-repo path.
 			// Skill dirs always sit exactly one path element below
-			// .claude/skills (engine.go's TargetSkills case, via
-			// pack.SkillEntry.DirName) — checked by ownedSkillPath, so a
+			// .claude/skills or .agents/skills (engine.go's planSkillDirs,
+			// via pack.SkillEntry.DirName) — checked by ownedSkillPath, so a
 			// team-owned dir nested under an owned one
 			// (".claude/skills/brainstorming/team-notes") can never match
 			// either.
@@ -644,6 +775,48 @@ func Apply(root string, p *PlanResult, force bool) (*SyncResult, error) {
 			}
 			if err := atomicWrite(abs, out); err != nil {
 				return nil, err
+			}
+		}
+	}
+
+	// Remove owned whole files (GOVERNANCE.md, rule files) the effective set no
+	// longer contains — same carry-forward semantics as the block/dir passes.
+	desiredFiles := map[string]bool{}
+	for _, a := range p.Artifacts {
+		if a.Kind == KindFile {
+			desiredFiles[a.Path] = true
+		}
+	}
+	if prevLock != nil {
+		for _, prev := range prevLock.Artifacts {
+			if prev.Kind != KindFile || desiredFiles[prev.Path] {
+				continue
+			}
+			abs, actual, gone, err := inspectOrphanFile(root, prev)
+			if err != nil {
+				return nil, err
+			}
+			if gone {
+				continue
+			}
+			if !force && actual != prev.Hash {
+				res.Skipped = append(res.Skipped, Skipped{
+					Subject: prev.Path, Kind: prev.Kind, Cause: SkipOrphanFileEdited,
+					Reason:       "no longer provided by any pack but hand-edited since the last sync; left in place instead of being removed",
+					ExpectedHash: prev.Hash, ActualHash: actual,
+				})
+				arts = append(arts, prev) // carry forward, like the orphan-block pass
+				continue
+			}
+			if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
+				return nil, err
+			}
+			// Best-effort: drop a now-empty .claude/rules directory, as the
+			// skill-dir pass drops an emptied skill directory. os.Remove only
+			// succeeds on an empty dir, and GOVERNANCE.md's parent is the repo
+			// root (never a rule path), so this is gated on ownedRulePath.
+			if ownedRulePath(prev.Path) {
+				_ = os.Remove(filepath.Join(root, ".claude", "rules"))
 			}
 		}
 	}

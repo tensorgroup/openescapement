@@ -54,19 +54,20 @@ type Artifact struct {
 }
 
 // PlanResult is the desired state computed from config + packs, plus any
-// constraint violations that must block Apply.
+// constraint violations that must block Apply and any non-fatal Notices to
+// surface to the operator.
 type PlanResult struct {
 	Config     *config.Config
 	Packs      []lockfile.LockPack
 	PackObjs   []*pack.Pack
 	Artifacts  []Artifact
 	Violations []render.Violation
+	// Notices are non-fatal, exit-code-neutral messages the CLI prints to
+	// stderr (e.g. a pack targets rules but the repo's filter excludes it).
+	Notices []string
 }
 
-var allTargets = []string{
-	render.TargetClaude, render.TargetAgents, render.TargetGemini,
-	render.TargetGovernance, render.TargetSkills, render.TargetMCP,
-}
+var allTargets = targets.Defaults()
 
 // CacheDir resolves the pack cache location (ESC_CACHE_DIR overrides).
 func CacheDir() (string, error) {
@@ -190,6 +191,21 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 		targets = append(append([]string{}, allTargets...), sortedNames(rendered)...)
 	}
 
+	// Filter-excludes-rules notice: an explicit targets: list is an
+	// exhaustive filter (§3), so a pack that targets rules while the repo's
+	// filter excludes it is not a violation — just worth a stderr line. Never
+	// a Violation and never changes the exit code.
+	if !selected(targets, render.TargetRules) {
+		for _, p := range res.PackObjs {
+			for _, f := range p.Fragments {
+				if render.FragmentNamesTarget(f, render.TargetRules) {
+					res.Notices = append(res.Notices, fmt.Sprintf("pack %s targets rules; this repo's targets list excludes it", p.Manifest.Name))
+					break
+				}
+			}
+		}
+	}
+
 	for _, t := range targets {
 		// Custom target names are lowercase-only by construction
 		// (targets.ValidateCustom), and rendered/allDeclared are keyed
@@ -221,44 +237,47 @@ func planFromConfig(ctx context.Context, root string, cfg *config.Config) (*Plan
 		case render.TargetGovernance:
 			content := render.Governance(res.PackObjs)
 			res.Artifacts = append(res.Artifacts, Artifact{
-				Path: render.TargetFile[t], Kind: KindFile, Hash: esc.HashBytes([]byte(content)), Body: content,
+				Path: render.TargetFile[t], Kind: KindFile,
+				Hash: esc.HashBytes(render.NormalizeEndings([]byte(content))), Body: content,
 			})
 		case render.TargetSkills:
-			// Conflicts are first-class and fail closed (spec §3): two entries
-			// across all configured packs resolving to the same on-disk path is
-			// a config-combination problem — no single manifest is invalid, so
-			// this is ErrConfig (exit 2), not ErrManifest, and certainly not
-			// exit 1: a CI gate reads exit 1 as routine and self-healing, and
-			// no amount of syncing resolves a name collision.
-			skillOwner := map[string]string{} // target path -> pack name
-			for _, p := range res.PackObjs {
-				for _, e := range p.Manifest.Skills {
-					src := filepath.Join(p.Dir, filepath.FromSlash(e.Path))
-					// One walk (pack.DirFiles) produces the file list that
-					// both the hash and Files are built from, so the two
-					// cannot disagree by construction — a second, ad hoc
-					// walk here previously skipped neither .git nor
-					// symlinks the way DirFiles does, which let Hash and
-					// Files diverge on a tree containing a nested .git
-					// directory and made a pristine sync report altered.
-					files, err := pack.DirFiles(src)
-					if err != nil {
-						return nil, err
+			if err := planSkillDirs(res, ".claude"); err != nil {
+				return nil, err
+			}
+		case render.TargetAgentsSkills:
+			if err := planSkillDirs(res, ".agents"); err != nil {
+				return nil, err
+			}
+		case render.TargetRules:
+			// In-pack collisions are caught in pack.Load. Here the map is
+			// cross-pack, keyed by pack index (two sources may share a
+			// manifest name), case-folded: a repo path produced by two
+			// different packs is ErrConfig naming both.
+			ruleOwner := map[string]int{} // lowercased repo path -> pack index
+			for i, p := range res.PackObjs {
+				for _, f := range p.Fragments {
+					if !render.FragmentNamesTarget(f, render.TargetRules) {
+						continue
 					}
-					h, err := pack.DirHashOf(src, files)
-					if err != nil {
-						return nil, err
+					relPath := render.RuleFilePath(p.Manifest.Name, f)
+					lc := strings.ToLower(relPath)
+					if owner, ok := ruleOwner[lc]; ok && owner != i {
+						// res.Packs and res.PackObjs are appended in lockstep in
+						// the fetch loop above, so index i names the same pack
+						// in both; include each pack's source (not just its
+						// manifest name) since two different sources can share
+						// a manifest name — that is exactly what makes this
+						// check cross-pack rather than in-pack.
+						return nil, fmt.Errorf("%w: rule file %s is produced by packs %s (%s) and %s (%s); rename one fragment",
+							esc.ErrConfig, relPath,
+							res.PackObjs[owner].Manifest.Name, res.Packs[owner].Source,
+							p.Manifest.Name, res.Packs[i].Source)
 					}
-					name := e.DirName(p.Manifest.Name)
-					target := path.Join(".claude", "skills", name)
-					if owner, ok := skillOwner[target]; ok {
-						return nil, fmt.Errorf("%w: skill directory %s is declared by packs %s and %s; rename one entry (skills: {path, name}) so they do not collide",
-							esc.ErrConfig, target, owner, p.Manifest.Name)
-					}
-					skillOwner[target] = p.Manifest.Name
+					ruleOwner[lc] = i
+					content := render.RenderRule(f, p.Manifest.Name)
 					res.Artifacts = append(res.Artifacts, Artifact{
-						Path: target,
-						Kind: KindDir, Hash: h, SrcDir: src, Files: files,
+						Path: relPath, Kind: KindFile,
+						Hash: esc.HashBytes(render.NormalizeEndings([]byte(content))), Body: content,
 					})
 				}
 			}
@@ -360,6 +379,9 @@ func checkVersionRef(ref, version, src string) error {
 // prospectiveContent computes what an artifact's file would contain after
 // apply, without writing.
 func prospectiveContent(root string, a Artifact) ([]byte, error) {
+	if err := refuseSymlinks(root, a.Path); err != nil {
+		return nil, err
+	}
 	existing, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(a.Path)))
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
@@ -410,8 +432,65 @@ func collectCustomTargets(packs []*pack.Pack) (map[string]custom, map[string]boo
 }
 
 func isBuiltInTarget(name string) bool {
-	for _, t := range allTargets {
-		if t == name {
+	return targets.IsBuiltInName(name)
+}
+
+// planSkillDirs appends a KindDir artifact per pack skill entry under
+// rootDir/skills (rootDir is ".claude" or ".agents"). Each call keeps its own
+// collision map, so a name may exist once per root — the two roots are
+// planned independently by two calls (render.TargetSkills and
+// render.TargetAgentsSkills), so a name colliding within one root is
+// ErrConfig but the same name existing in both roots is expected and fine.
+// Keys are lowercased because macOS/Windows fold case.
+//
+// Conflicts are first-class and fail closed (spec §3): two entries across all
+// configured packs resolving to the same on-disk path is a config-combination
+// problem — no single manifest is invalid, so this is ErrConfig (exit 2), not
+// ErrManifest, and certainly not exit 1: a CI gate reads exit 1 as routine and
+// self-healing, and no amount of syncing resolves a name collision.
+func planSkillDirs(res *PlanResult, rootDir string) error {
+	skillOwner := map[string]string{} // lowercased target path -> pack name
+	for _, p := range res.PackObjs {
+		for _, e := range p.Manifest.Skills {
+			src := filepath.Join(p.Dir, filepath.FromSlash(e.Path))
+			// One walk (pack.DirFiles) produces the file list that both the
+			// hash and Files are built from, so the two cannot disagree by
+			// construction — a second, ad hoc walk here previously skipped
+			// neither .git nor symlinks the way DirFiles does, which let Hash
+			// and Files diverge on a tree containing a nested .git directory
+			// and made a pristine sync report altered.
+			files, err := pack.DirFiles(src)
+			if err != nil {
+				return err
+			}
+			h, err := pack.DirHashOf(src, files)
+			if err != nil {
+				return err
+			}
+			target := path.Join(rootDir, "skills", e.DirName(p.Manifest.Name))
+			lc := strings.ToLower(target)
+			if owner, ok := skillOwner[lc]; ok {
+				return fmt.Errorf("%w: skill directory %s is declared by packs %s and %s; rename one entry (skills: {path, name}) so they do not collide",
+					esc.ErrConfig, target, owner, p.Manifest.Name)
+			}
+			skillOwner[lc] = p.Manifest.Name
+			res.Artifacts = append(res.Artifacts, Artifact{
+				Path: target, Kind: KindDir, Hash: h, SrcDir: src, Files: files,
+			})
+		}
+	}
+	return nil
+}
+
+// selected reports whether name (already canonical lowercase — every
+// built-in and custom target name is) appears in targetsList case-foldedly.
+// targetsList comes straight from config.Config.Targets, user-typed and not
+// guaranteed canonical case, so every "is this one built-in in the resolved
+// targets list" check compares the same way — the same idiom the render
+// loop below applies per-element via its own strings.ToLower(t).
+func selected(targetsList []string, name string) bool {
+	for _, t := range targetsList {
+		if strings.ToLower(t) == name {
 			return true
 		}
 	}
